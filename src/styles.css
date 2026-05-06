@@ -33,6 +33,16 @@ body,
   font-size: 13px;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-open-btn {
+  padding: 4px 10px;
+}
+
 .app-body {
   flex: 1;
   display: flex;
@@ -88,24 +98,93 @@ body,
   gap: 10px;
 }
 
+.success-banner {
+  border: 1px solid #2d6f55;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #163a2e;
+  color: #a7e9cb;
+  font-size: 13px;
+}
+
 .org-actions {
   display: flex;
+  gap: 8px;
   justify-content: flex-end;
+}
+
+.org-search {
+  min-width: 280px;
+  border: 1px solid #33425d;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #131a27;
+  color: #f3f6ff;
+}
+
+.org-search::placeholder {
+  color: #7f8ca8;
+}
+
+.org-login-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #2f3443;
+  border-radius: 10px;
+  background: #171c28;
+  padding: 10px;
+}
+
+.org-form-input,
+.org-form-select {
+  border: 1px solid #33425d;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #131a27;
+  color: #f3f6ff;
+}
+
+.org-form-input {
+  min-width: 220px;
 }
 
 .org-card {
   border: 1px solid #2f3443;
   border-radius: 10px;
   padding: 12px;
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   background: #171c28;
 }
 
+.org-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.org-name-block {
+  min-width: 0;
+}
+
 .org-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
+}
+
+.org-default-tag {
+  border-radius: 999px;
+  border: 1px solid #3773f8;
+  background: #1f345f;
+  color: #9dbdff;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
 }
 
 .org-sub {
@@ -114,14 +193,45 @@ body,
 }
 
 .org-type {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 4px 8px;
   text-transform: uppercase;
   font-size: 11px;
-  color: #8fb2ff;
+  font-weight: 600;
+}
+
+.org-type-scratch {
+  color: #8af7ca;
+  background: #123628;
+  border-color: #225b44;
+}
+
+.org-type-sandbox {
+  color: #ffd08d;
+  background: #3f2d15;
+  border-color: #66461f;
+}
+
+.org-type-production {
+  color: #9fc0ff;
+  background: #1d2d56;
+  border-color: #2d4a8e;
+}
+
+.org-type-developer {
+  color: #d8bbff;
+  background: #352050;
+  border-color: #553184;
 }
 
 .org-buttons {
   display: flex;
   gap: 8px;
+}
+
+.org-card-bottom {
+  justify-content: flex-end;
 }
 
 button {

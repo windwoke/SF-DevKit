@@ -20,6 +20,7 @@ pub fn run() {
             commands::org::set_default_org,
             commands::org::logout_org,
             commands::org::login_org,
+            commands::org::open_org,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start SF DevKit");
