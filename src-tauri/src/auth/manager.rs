@@ -84,7 +84,7 @@ pub async fn sync_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
 pub async fn list_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
     let rows = sqlx::query_as::<_, OrgAuth>(
         r#"
-        SELECT id, alias, instance_url, org_type, is_default, expires_at, last_used
+        SELECT id, alias, instance_url, org_type, is_default, expires_at, last_used, linked_project_path
         FROM org_auth
         ORDER BY is_default DESC, datetime(last_used) DESC
         "#,
@@ -137,6 +137,131 @@ pub async fn login_org_web(alias: Option<String>, login_domain: &str) -> anyhow:
 pub async fn open_org(username: &str) -> anyhow::Result<()> {
     run_command(&["org", "open", "--target-org", username], false).await?;
     Ok(())
+}
+
+pub fn pick_project_directory() -> anyhow::Result<Option<String>> {
+    Ok(rfd::FileDialog::new()
+        .pick_folder()
+        .map(|p| p.to_string_lossy().into_owned()))
+}
+
+pub async fn set_org_linked_project_path(
+    pool: &SqlitePool,
+    org_id: &str,
+    path: Option<String>,
+) -> anyhow::Result<()> {
+    let normalized = path
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty());
+    let res = sqlx::query(
+        r#"
+        UPDATE org_auth
+        SET linked_project_path = ?1
+        WHERE id = ?2
+        "#,
+    )
+    .bind(normalized)
+    .bind(org_id)
+    .execute(pool)
+    .await?;
+    if res.rows_affected() == 0 {
+        anyhow::bail!("未找到 Org：{}", org_id);
+    }
+    Ok(())
+}
+
+pub async fn open_org_linked_project_in_ide(pool: &SqlitePool, org_id: &str) -> anyhow::Result<()> {
+    let row = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT linked_project_path FROM org_auth WHERE id = ?1",
+    )
+    .bind(org_id)
+    .fetch_optional(pool)
+    .await?;
+    let Some(linked) = row else {
+        anyhow::bail!("未找到 Org：{}", org_id);
+    };
+    let Some(path) = linked.filter(|p| !p.trim().is_empty()) else {
+        anyhow::bail!("该 Org 尚未关联本地项目路径");
+    };
+    open_path_in_ide(path.trim()).await
+}
+
+async fn open_path_in_ide(path: &str) -> anyhow::Result<()> {
+    use std::path::Path;
+    use tokio::process::Command;
+
+    let p = Path::new(path);
+    if !p.exists() {
+        anyhow::bail!("路径不存在：{}", path);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        for bin in ["cursor", "code"] {
+            if which::which(bin).is_ok() {
+                if Command::new(bin)
+                    .arg(path)
+                    .status()
+                    .await
+                    .is_ok_and(|s| s.success())
+                {
+                    return Ok(());
+                }
+            }
+        }
+        let status = Command::new("open").arg(path).status().await?;
+        if status.success() {
+            return Ok(());
+        }
+        anyhow::bail!("无法在 Finder 中打开该路径");
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        for bin in ["cursor", "code", "code.cmd"] {
+            if which::which(bin).is_ok() {
+                if Command::new(bin)
+                    .arg(path)
+                    .status()
+                    .await
+                    .is_ok_and(|s| s.success())
+                {
+                    return Ok(());
+                }
+            }
+        }
+        let status = Command::new("explorer").arg(path).status().await?;
+        if status.success() {
+            return Ok(());
+        }
+        anyhow::bail!("无法打开该路径");
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for bin in ["cursor", "code", "codium", "code-oss"] {
+            if which::which(bin).is_ok() {
+                if Command::new(bin)
+                    .arg(path)
+                    .status()
+                    .await
+                    .is_ok_and(|s| s.success())
+                {
+                    return Ok(());
+                }
+            }
+        }
+        let status = Command::new("xdg-open").arg(path).status().await?;
+        if status.success() {
+            return Ok(());
+        }
+        anyhow::bail!("xdg-open 失败");
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        anyhow::bail!("当前平台不支持从应用内打开 IDE");
+    }
 }
 
 fn login_instance_url(login_domain: &str) -> &'static str {

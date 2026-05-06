@@ -47,3 +47,29 @@ pub async fn login_org(
 pub async fn open_org(username: String) -> Result<(), String> {
     manager::open_org(&username).await.map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn pick_project_directory() -> Result<Option<String>, String> {
+    manager::pick_project_directory().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_org_linked_project_path(
+    state: State<'_, DbState>,
+    org_id: String,
+    path: Option<String>,
+) -> Result<(), String> {
+    manager::set_org_linked_project_path(&state.0, &org_id, path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn open_org_linked_project_in_ide(
+    state: State<'_, DbState>,
+    org_id: String,
+) -> Result<(), String> {
+    manager::open_org_linked_project_in_ide(&state.0, &org_id)
+        .await
+        .map_err(|e| e.to_string())
+}

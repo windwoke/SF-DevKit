@@ -55,6 +55,17 @@ export function OrgList() {
     mutationFn: (username: string) => tauriApi.openOrg(username),
   });
 
+  const openIdeMutation = useMutation({
+    mutationFn: (orgId: string) => tauriApi.openOrgLinkedProjectInIde(orgId),
+    onError: (e) => {
+      const message = e instanceof Error ? e.message : String(e);
+      setNotice({ text: `无法在 IDE 中打开：${message}`, autoHide: true, variant: "error" });
+    },
+    onSuccess: () => {
+      setNotice({ text: "已在 IDE 中打开关联项目。", autoHide: true, variant: "success" });
+    },
+  });
+
   const refreshMutation = useMutation({
     mutationFn: () => tauriApi.syncOrgs(),
     onSuccess: (orgs) => {
@@ -98,6 +109,30 @@ export function OrgList() {
       }
     } finally {
       setLoginBusy(false);
+    }
+  };
+
+  const linkLocalProject = async (orgId: string) => {
+    try {
+      const picked = await tauriApi.pickProjectDirectory();
+      if (picked == null) return;
+      await tauriApi.setOrgLinkedProjectPath(orgId, picked);
+      await queryClient.invalidateQueries({ queryKey: ["orgs"] });
+      setNotice({ text: "已保存本地项目路径。", autoHide: true, variant: "success" });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setNotice({ text: `关联路径失败：${message}`, autoHide: true, variant: "error" });
+    }
+  };
+
+  const clearLinkedProject = async (orgId: string) => {
+    try {
+      await tauriApi.setOrgLinkedProjectPath(orgId, null);
+      await queryClient.invalidateQueries({ queryKey: ["orgs"] });
+      setNotice({ text: "已清除本地项目关联。", autoHide: true, variant: "success" });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setNotice({ text: `清除失败：${message}`, autoHide: true, variant: "error" });
     }
   };
 
@@ -179,6 +214,37 @@ export function OrgList() {
                   <span className={`org-type org-type-${org.org_type}`}>{org.org_type}</span>
                 </div>
                 <div className="org-sub">{org.instance_url}</div>
+              </div>
+            </div>
+            <div className="org-linked-row">
+              <span className="org-linked-label">本地项目</span>
+              <div
+                className="org-linked-path-wrap"
+                title={org.linked_project_path?.trim() ? org.linked_project_path : undefined}
+              >
+                <span className="org-linked-path">
+                  {org.linked_project_path?.trim() ? org.linked_project_path : "未关联"}
+                </span>
+              </div>
+              <div className="org-linked-actions">
+                <button type="button" onClick={() => void linkLocalProject(org.id)}>
+                  选择文件夹…
+                </button>
+                <button
+                  type="button"
+                  disabled={!org.linked_project_path?.trim() || openIdeMutation.isPending}
+                  onClick={() => openIdeMutation.mutate(org.id)}
+                >
+                  {openIdeMutation.isPending ? "打开中…" : "在 IDE 中打开"}
+                </button>
+                <button
+                  type="button"
+                  className="org-link-clear"
+                  disabled={!org.linked_project_path?.trim()}
+                  onClick={() => void clearLinkedProject(org.id)}
+                >
+                  清除
+                </button>
               </div>
             </div>
             <div className="org-buttons org-card-bottom">

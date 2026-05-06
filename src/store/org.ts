@@ -7,7 +7,9 @@ export interface OrgAuth {
   org_type: string;
   is_default: boolean;
   expires_at: string | null;
-  last_used: string;
+  last_used: string | null;
+  /** Local folder linked to this org (from SQLite). */
+  linked_project_path: string | null;
 }
 
 interface OrgState {

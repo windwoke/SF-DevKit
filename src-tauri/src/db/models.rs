@@ -10,6 +10,8 @@ pub struct OrgAuth {
     pub is_default: i64,
     pub expires_at: Option<String>,
     pub last_used: Option<String>,
+    /// Local workspace folder associated with this org (optional).
+    pub linked_project_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

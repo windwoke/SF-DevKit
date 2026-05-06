@@ -35,6 +35,7 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
               is_default INTEGER DEFAULT 0,
               expires_at TEXT,
               last_used TEXT,
+              linked_project_path TEXT,
               created_at TEXT DEFAULT (datetime('now'))
             );
             "#,
@@ -112,6 +113,82 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
         )
         .execute(&pool)
         .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS metadata_types (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              org_id TEXT NOT NULL,
+              xml_name TEXT NOT NULL,
+              directory_name TEXT,
+              suffix TEXT,
+              in_folder INTEGER DEFAULT 0,
+              meta_file INTEGER DEFAULT 1,
+              last_synced TEXT NOT NULL,
+              UNIQUE(org_id, xml_name)
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS metadata_components (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              org_id TEXT NOT NULL,
+              metadata_type TEXT NOT NULL,
+              full_name TEXT NOT NULL,
+              file_name TEXT,
+              last_modified TEXT,
+              created_by_name TEXT,
+              last_synced TEXT NOT NULL,
+              UNIQUE(org_id, metadata_type, full_name)
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS retrieve_history (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              org_id TEXT NOT NULL,
+              selections_json TEXT NOT NULL,
+              output_dir TEXT NOT NULL,
+              api_version TEXT NOT NULL,
+              output_mode TEXT NOT NULL,
+              status TEXT NOT NULL,
+              duration_ms INTEGER,
+              log_text TEXT,
+              executed_at TEXT DEFAULT (datetime('now'))
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_components_type ON metadata_components(org_id, metadata_type);",
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_components_name ON metadata_components(org_id, full_name);",
+        )
+        .execute(&pool)
+        .await?;
+
+        if let Err(e) = sqlx::query("ALTER TABLE org_auth ADD COLUMN linked_project_path TEXT")
+            .execute(&pool)
+            .await
+        {
+            let msg = e.to_string();
+            if !msg.contains("duplicate column") {
+                return Err(anyhow::Error::from(e).context("failed to migrate org_auth.linked_project_path"));
+            }
+        }
 
         Ok::<SqlitePool, anyhow::Error>(pool)
     })?;

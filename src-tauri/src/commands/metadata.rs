@@ -1,0 +1,92 @@
+use tauri::State;
+
+use crate::db::DbState;
+use crate::metadata::models::{ComponentMeta, MetadataTypeMeta, RetrieveResult, SelectionItem};
+use crate::metadata::retrieve::RetrieveRunner;
+use crate::metadata::service::MetadataService;
+
+#[tauri::command]
+pub async fn list_metadata_types(
+    state: State<'_, DbState>,
+    org_id: String,
+    force_refresh: bool,
+) -> Result<Vec<MetadataTypeMeta>, String> {
+    let svc = MetadataService::new(state.0.clone());
+    svc.get_types(&org_id, force_refresh).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_metadata_components(
+    state: State<'_, DbState>,
+    org_id: String,
+    metadata_type: String,
+    force_refresh: bool,
+) -> Result<Vec<ComponentMeta>, String> {
+    let svc = MetadataService::new(state.0.clone());
+    svc.get_components(&org_id, &metadata_type, force_refresh)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn retrieve_metadata(
+    app: tauri::AppHandle,
+    state: State<'_, DbState>,
+    org_id: String,
+    selections: Vec<SelectionItem>,
+    output_dir: String,
+    output_mode: String,
+    api_version: String,
+    event_id: String,
+) -> Result<RetrieveResult, String> {
+    let runner = RetrieveRunner::new(state.0.clone());
+    runner
+        .execute(
+            app,
+            &org_id,
+            selections,
+            &output_dir,
+            &output_mode,
+            &api_version,
+            &event_id,
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn cancel_retrieve(event_id: String) -> Result<(), String> {
+    RetrieveRunner::cancel(&event_id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn reveal_in_finder(path: String) -> Result<(), String> {
+    use tokio::process::Command;
+
+    #[cfg(target_os = "macos")]
+    let status = Command::new("open")
+        .args(["-R", &path])
+        .status()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "windows")]
+    let status = Command::new("explorer")
+        .arg(&path)
+        .status()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "linux")]
+    let status = Command::new("xdg-open")
+        .arg(&path)
+        .status()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err("无法打开目录".to_string())
+    }
+}
