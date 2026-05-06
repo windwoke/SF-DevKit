@@ -1,4 +1,5 @@
 import type { ModuleId } from "../../store/ui";
+import { SidebarModuleIcon } from "./SidebarIcons";
 
 interface ModuleItem {
   id: ModuleId;
@@ -14,15 +15,21 @@ interface SidebarProps {
 export function Sidebar({ modules, active, onSelect }: SidebarProps) {
   return (
     <aside className="sidebar">
-      <h1 className="sidebar-title">SF DevKit</h1>
-      <nav className="sidebar-nav">
+      <div className="sidebar-brand" title="SF DevKit">
+        <span className="sidebar-brand-text">SF</span>
+      </div>
+      <nav className="sidebar-nav" aria-label="主功能">
         {modules.map((m) => (
           <button
             key={m.id}
+            type="button"
             className={m.id === active ? "nav-item active" : "nav-item"}
+            aria-label={m.label}
+            title={m.label}
+            aria-current={m.id === active ? "page" : undefined}
             onClick={() => onSelect(m.id)}
           >
-            {m.label}
+            <SidebarModuleIcon id={m.id} />
           </button>
         ))}
       </nav>

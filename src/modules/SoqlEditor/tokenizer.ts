@@ -5,6 +5,28 @@ export function registerSoqlLanguage(): void {
   monaco.languages.register({ id: "soql" });
 }
 
+/** 仅将 ASCII 标识符视为「词」，避免中文等非 SOQL 标识符被补全范围吞掉导致光标跳动 */
+export function registerSoqlLanguageConfiguration(): void {
+  monaco.languages.setLanguageConfiguration("soql", {
+    wordPattern: /[A-Za-z_][A-Za-z0-9_]*/g,
+    comments: { lineComment: "--" },
+    brackets: [
+      ["(", ")"],
+      ["{", "}"],
+    ],
+    autoClosingPairs: [
+      { open: "(", close: ")" },
+      { open: "'", close: "'" },
+      { open: '"', close: '"' },
+    ],
+    surroundingPairs: [
+      { open: "(", close: ")" },
+      { open: "'", close: "'" },
+      { open: '"', close: '"' },
+    ],
+  });
+}
+
 export function registerSoqlTokenizer(): void {
   monaco.languages.setMonarchTokensProvider("soql", {
     ignoreCase: true,

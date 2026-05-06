@@ -1,12 +1,14 @@
 import { useMutation } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { tauriApi } from "../../lib/tauri";
 import { useOrgStore } from "../../store/org";
 import { useSoqlStore } from "../../store/soql";
 import { SoqlMonacoEditor } from "./SoqlMonacoEditor";
 import { extractFromObject } from "./contextParser";
 import { clearSoqlCompletionCache } from "./soqlCompletion";
+import { formatSoql } from "./soqlFormat";
+import { IconCopy, IconExport, IconFormat, IconRefresh, IconRun } from "./SoqlToolbarIcons";
 
 interface SoqlLogEntry {
   id: number;
@@ -15,14 +17,73 @@ interface SoqlLogEntry {
   message: string;
 }
 
+interface QuerySummary {
+  orgId: string;
+  totalSize: number;
+  displayedRows: number;
+  durationMs: number;
+  executedAt: string;
+}
+
+interface ClassifiedError {
+  category: string;
+  title: string;
+  suggestion: string;
+  raw: string;
+}
+
+type SortDirection = "asc" | "desc";
+type SortState = { column: string | null; direction: SortDirection };
+
+type RecordsTable = { cols: string[]; rows: Record<string, unknown>[] };
+
+/** 解析 result.records（含空数组）；解析失败返回 null */
+function parseRecordsTableFromResultJson(resultJson: string): RecordsTable | null {
+  try {
+    const data = JSON.parse(resultJson) as { result?: { records?: Record<string, unknown>[] } };
+    const records = data.result?.records;
+    if (!Array.isArray(records)) return null;
+    const colSet = new Set<string>();
+    for (const row of records) {
+      if (row && typeof row === "object") Object.keys(row as object).forEach((c) => colSet.add(c));
+    }
+    return { cols: [...colSet], rows: [...records] };
+  } catch {
+    return null;
+  }
+}
+
 export function SoqlEditor() {
   const { currentOrg } = useOrgStore();
   const { draft: soql, setDraft: setSoql, history, pushHistory, clearHistory } = useSoqlStore();
   const [resultJson, setResultJson] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ClassifiedError | null>(null);
+  const [summary, setSummary] = useState<QuerySummary | null>(null);
+  const [sortState, setSortState] = useState<SortState>({ column: null, direction: "asc" });
   const [completionLoading, setCompletionLoading] = useState<string | null>(null);
   const [logs, setLogs] = useState<SoqlLogEntry[]>([]);
   const [logCounter, setLogCounter] = useState(0);
+  const startedAtRef = useRef<number>(0);
+  const [resultCopyUi, setResultCopyUi] = useState<"idle" | "ok" | "err">("idle");
+  const [exportUi, setExportUi] = useState<"idle" | "loading" | "ok" | "err">("idle");
+  const copyUiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exportUiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyUiTimerRef.current) clearTimeout(copyUiTimerRef.current);
+      if (exportUiTimerRef.current) clearTimeout(exportUiTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (copyUiTimerRef.current) clearTimeout(copyUiTimerRef.current);
+    if (exportUiTimerRef.current) clearTimeout(exportUiTimerRef.current);
+    copyUiTimerRef.current = null;
+    exportUiTimerRef.current = null;
+    setResultCopyUi("idle");
+    setExportUi("idle");
+  }, [resultJson]);
 
   const pushLog = useCallback((level: SoqlLogEntry["level"], message: string) => {
     setLogCounter((prev) => {
@@ -50,6 +111,7 @@ export function SoqlEditor() {
   const runMutation = useMutation({
     mutationFn: async () => {
       if (!currentOrg) throw new Error("请先选择或登录 Org");
+      startedAtRef.current = performance.now();
       pushHistory(soql);
       pushLog("info", `开始执行 SOQL，Org=${currentOrg}`);
       pushLog("info", `Query: ${soql.replace(/\s+/g, " ").slice(0, 240)}`);
@@ -59,16 +121,23 @@ export function SoqlEditor() {
       setError(null);
       const pretty = JSON.stringify(data, null, 2);
       setResultJson(pretty);
-      const rows =
-        (data as { result?: { records?: unknown[]; totalSize?: number } })?.result?.records?.length ??
-        (data as { result?: { totalSize?: number } })?.result?.totalSize ??
-        0;
-      pushLog("info", `执行成功，返回记录数=${rows}`);
+      const records = (data as { result?: { records?: unknown[] } })?.result?.records ?? [];
+      const totalSize = (data as { result?: { totalSize?: number } })?.result?.totalSize ?? records.length ?? 0;
+      const durationMs = Math.max(0, Math.round(performance.now() - startedAtRef.current));
+      setSummary({
+        orgId: currentOrg ?? "-",
+        totalSize,
+        displayedRows: records.length,
+        durationMs,
+        executedAt: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
+      });
+      pushLog("info", `执行成功，返回记录数=${totalSize}，耗时=${durationMs}ms`);
     },
     onError: (e) => {
       setResultJson(null);
       const message = e instanceof Error ? e.message : String(e);
-      setError(message);
+      setSummary(null);
+      setError(classifySoqlError(message));
       pushLog("error", `执行失败: ${message}`);
     },
   });
@@ -91,18 +160,108 @@ export function SoqlEditor() {
     },
   });
 
+  const parsedTable = useMemo(() => (resultJson ? parseRecordsTableFromResultJson(resultJson) : null), [resultJson]);
+
   const table = useMemo(() => {
-    if (!resultJson) return null;
-    try {
-      const data = JSON.parse(resultJson) as { result?: { records?: Record<string, unknown>[] } };
-      const records = data.result?.records;
-      if (!records?.length) return null;
-      const cols = Object.keys(records[0]);
-      return { cols, rows: records };
-    } catch {
-      return null;
+    if (!parsedTable || parsedTable.rows.length === 0) return null;
+    const rows = [...parsedTable.rows];
+    if (sortState.column) {
+      const col = sortState.column;
+      const dir = sortState.direction === "asc" ? 1 : -1;
+      rows.sort((a, b) => compareCell(a[col], b[col]) * dir);
     }
-  }, [resultJson]);
+    return { cols: parsedTable.cols, rows };
+  }, [parsedTable, sortState]);
+
+  const toggleSort = (column: string) => {
+    setSortState((prev) => {
+      if (prev.column !== column) return { column, direction: "asc" };
+      return { column, direction: prev.direction === "asc" ? "desc" : "asc" };
+    });
+  };
+
+  const handleFormatSoql = useCallback(() => {
+    setSoql(formatSoql(soql));
+    pushLog("info", "已格式化 SOQL");
+  }, [soql, setSoql, pushLog]);
+
+  const handleCopySoql = useCallback(async () => {
+    const text = soql.trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      pushLog("info", "SOQL 已复制到剪贴板");
+    } catch {
+      pushLog("error", "复制失败（请检查应用剪贴板权限）");
+    }
+  }, [soql, pushLog]);
+
+  const scheduleCopyUiReset = useCallback(() => {
+    if (copyUiTimerRef.current) clearTimeout(copyUiTimerRef.current);
+    copyUiTimerRef.current = setTimeout(() => {
+      setResultCopyUi("idle");
+      copyUiTimerRef.current = null;
+    }, 2200);
+  }, []);
+
+  const scheduleExportUiReset = useCallback(() => {
+    if (exportUiTimerRef.current) clearTimeout(exportUiTimerRef.current);
+    exportUiTimerRef.current = setTimeout(() => {
+      setExportUi("idle");
+      exportUiTimerRef.current = null;
+    }, 2200);
+  }, []);
+
+  const handleCopyResults = useCallback(async () => {
+    if (!resultJson) return;
+    const text = buildExcelClipboardText(resultJson, table, parsedTable);
+    try {
+      await navigator.clipboard.writeText(text);
+      setResultCopyUi("ok");
+      scheduleCopyUiReset();
+      pushLog("info", "已复制为表格格式（可直接粘贴到 Excel）");
+    } catch {
+      setResultCopyUi("err");
+      scheduleCopyUiReset();
+      pushLog("error", "复制失败（请检查剪贴板权限）");
+    }
+  }, [resultJson, table, parsedTable, pushLog, scheduleCopyUiReset]);
+
+  const handleExportResults = useCallback(async () => {
+    if (!resultJson) return;
+    const ts = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "");
+    const hasRows = Boolean(table && table.rows.length > 0);
+    const defaultName = hasRows ? `soql-result-${ts}.csv` : `soql-result-${ts}.json`;
+    const content = hasRows ? recordsToCsv(table!.cols, table!.rows) : resultJson;
+    const mime = hasRows ? "text/csv;charset=utf-8" : "application/json;charset=utf-8";
+
+    setExportUi("loading");
+    try {
+      await invoke("save_export_file", { defaultName, content });
+      setExportUi("ok");
+      scheduleExportUiReset();
+      pushLog("info", hasRows ? `已保存 CSV（${table!.rows.length} 行）` : "已保存 JSON 文件");
+    } catch (e) {
+      if (isExportCancelled(e)) {
+        setExportUi("idle");
+        pushLog("info", "已取消保存");
+        return;
+      }
+      try {
+        downloadTextFile(defaultName, content, mime);
+        setExportUi("ok");
+        scheduleExportUiReset();
+        pushLog("info", "已通过浏览器下载保存（若未弹出另存为，请查看下载目录）");
+      } catch (e2) {
+        setExportUi("err");
+        scheduleExportUiReset();
+        const msg = e2 instanceof Error ? e2.message : String(e2);
+        pushLog("error", `导出失败: ${msg}`);
+      }
+    }
+  }, [resultJson, table, pushLog, scheduleExportUiReset]);
+
+  const hasExportableResult = Boolean(resultJson && !error);
 
   return (
     <section className="module soql-module">
@@ -140,39 +299,126 @@ export function SoqlEditor() {
             onChange={setSoql}
             onLog={handleCompletionLog}
             onLoading={setCompletionLoading}
+            onRun={() => runMutation.mutate()}
+            runDisabled={runMutation.isPending || !currentOrg}
           />
           <div className="soql-toolbar">
             {completionLoading ? <span className="soql-completion-loading">{completionLoading}</span> : null}
-            <button
-              type="button"
-              onClick={() => refreshCacheMutation.mutate()}
-              disabled={!currentOrg || refreshCacheMutation.isPending}
-            >
-              {refreshCacheMutation.isPending ? "刷新缓存中…" : "刷新缓存"}
-            </button>
-            <button type="button" onClick={() => runMutation.mutate()} disabled={runMutation.isPending || !currentOrg}>
-              {runMutation.isPending ? "执行中…" : "执行 SOQL"}
-            </button>
+            <div className="soql-toolbar-actions">
+              <button
+                type="button"
+                className="soql-icon-btn"
+                title="格式化 SOQL"
+                aria-label="格式化 SOQL"
+                onClick={handleFormatSoql}
+                disabled={!soql.trim()}
+              >
+                <IconFormat />
+              </button>
+              <button
+                type="button"
+                className="soql-icon-btn"
+                title="复制 SOQL"
+                aria-label="复制 SOQL"
+                onClick={() => void handleCopySoql()}
+                disabled={!soql.trim()}
+              >
+                <IconCopy />
+              </button>
+              <button
+                type="button"
+                className={`soql-icon-btn${refreshCacheMutation.isPending ? " soql-icon-btn--busy" : ""}`}
+                title="刷新模式缓存（当前 FROM 对象或全量列表）"
+                aria-label="刷新缓存"
+                onClick={() => refreshCacheMutation.mutate()}
+                disabled={!currentOrg || refreshCacheMutation.isPending}
+              >
+                <IconRefresh />
+              </button>
+              <button
+                type="button"
+                className={`soql-icon-btn soql-icon-btn--primary${runMutation.isPending ? " soql-icon-btn--pulse" : ""}`}
+                title="执行 SOQL（⌘↩ 或 Ctrl+Enter）"
+                aria-label="执行 SOQL"
+                onClick={() => runMutation.mutate()}
+                disabled={runMutation.isPending || !currentOrg}
+              >
+                <IconRun />
+              </button>
+            </div>
           </div>
         </div>
         <div className="soql-results">
-          <h3 className="soql-results-title">结果</h3>
-          {error ? <div className="empty-state error">{error}</div> : null}
+          <div className="soql-results-header">
+            <h3 className="soql-results-title">结果</h3>
+            {hasExportableResult ? (
+              <div className="soql-results-actions">
+                <button
+                  type="button"
+                  className={`soql-results-btn${resultCopyUi === "ok" ? " soql-results-btn--ok" : ""}${resultCopyUi === "err" ? " soql-results-btn--err" : ""}`}
+                  title="复制为制表符分隔（粘贴到 Excel）"
+                  onClick={() => void handleCopyResults()}
+                >
+                  <IconCopy />
+                  <span>{resultCopyUi === "ok" ? "已复制" : resultCopyUi === "err" ? "失败" : "复制"}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`soql-results-btn${exportUi === "ok" ? " soql-results-btn--ok" : ""}${exportUi === "err" ? " soql-results-btn--err" : ""}`}
+                  title={table ? "导出当前表格为 CSV" : "导出 JSON"}
+                  disabled={exportUi === "loading"}
+                  onClick={() => void handleExportResults()}
+                >
+                  <IconExport />
+                  <span>
+                    {exportUi === "loading" ? "保存中…" : exportUi === "ok" ? "已保存" : exportUi === "err" ? "失败" : "导出"}
+                  </span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+          {summary ? (
+            <div className="soql-summary">
+              <span>总记录数: {summary.totalSize}</span>
+              <span>当前展示: {summary.displayedRows}</span>
+              <span>耗时: {summary.durationMs}ms</span>
+              <span>Org: {summary.orgId}</span>
+              <span>执行时间: {summary.executedAt}</span>
+            </div>
+          ) : null}
+          {error ? (
+            <div className="soql-error-card">
+              <div className="soql-error-title">{error.title}</div>
+              <div className="soql-error-subtitle">{error.category}</div>
+              <div className="soql-error-suggestion">{error.suggestion}</div>
+              <details>
+                <summary>错误详情</summary>
+                <pre className="soql-error-raw">{error.raw}</pre>
+              </details>
+            </div>
+          ) : null}
           {table ? (
             <div className="soql-table-scroll">
               <table className="soql-table">
                 <thead>
                   <tr>
+                    <th className="soql-th-rownum">#</th>
                     {table.cols.map((c) => (
-                      <th key={c}>{c}</th>
+                      <th key={c} className="soql-sortable-th" onClick={() => toggleSort(c)}>
+                        <span>{c}</span>
+                        {sortState.column === c ? <span>{sortState.direction === "asc" ? "▲" : "▼"}</span> : null}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {table.rows.map((row, i) => (
                     <tr key={i}>
+                      <td className="soql-td-rownum">{i + 1}</td>
                       {table.cols.map((c) => (
-                        <td key={c}>{formatCell(row[c])}</td>
+                        <td key={c} title={formatCell(row[c])}>
+                          <span className="soql-cell-text">{formatCell(row[c])}</span>
+                        </td>
                       ))}
                     </tr>
                   ))}
@@ -209,8 +455,121 @@ export function SoqlEditor() {
   );
 }
 
+function compareCell(a: unknown, b: unknown): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return -1;
+  if (b == null) return 1;
+  const na = typeof a === "number" ? a : Number(a);
+  const nb = typeof b === "number" ? b : Number(b);
+  if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+  return String(a).localeCompare(String(b), "zh-CN", { sensitivity: "base" });
+}
+
+function classifySoqlError(raw: string): ClassifiedError {
+  const lower = raw.toLowerCase();
+  if (lower.includes("malformed_query") || lower.includes("unexpected token") || lower.includes("syntax")) {
+    return {
+      category: "SOQL 语法错误",
+      title: "查询语法有问题",
+      suggestion: "检查关键字顺序、括号闭合、逗号以及字段拼写。",
+      raw,
+    };
+  }
+  if (lower.includes("insufficient_access") || lower.includes("insufficient permissions") || lower.includes("no such column")) {
+    return {
+      category: "权限或字段可见性问题",
+      title: "字段或对象不可访问",
+      suggestion: "确认当前 Org 权限，并尝试改用可见字段（可先用 SELECT FIELDS(STANDARD)）。",
+      raw,
+    };
+  }
+  if (lower.includes("session") || lower.includes("not authorized") || lower.includes("expired")) {
+    return {
+      category: "登录会话问题",
+      title: "Org 会话可能失效",
+      suggestion: "请回到 Org 管理刷新登录状态后重试。",
+      raw,
+    };
+  }
+  if (lower.includes("sf") || lower.includes("command failed") || lower.includes("network")) {
+    return {
+      category: "CLI/网络问题",
+      title: "执行环境异常",
+      suggestion: "检查 Salesforce CLI 可用性与网络连接，必要时重试。",
+      raw,
+    };
+  }
+  return {
+    category: "未知错误",
+    title: "执行失败",
+    suggestion: "请查看错误详情并重试。",
+    raw,
+  };
+}
+
 function formatCell(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
+}
+
+function isExportCancelled(e: unknown): boolean {
+  if (typeof e === "string") return e.toLowerCase().includes("cancelled");
+  if (e && typeof e === "object" && "message" in e) {
+    return String((e as { message: unknown }).message).toLowerCase().includes("cancelled");
+  }
+  return String(e).toLowerCase().includes("cancelled");
+}
+
+/** 单元格内换行/制表符会破坏 TSV 列对齐，替换为空格 */
+function formatCellForExcel(v: unknown): string {
+  return formatCell(v).replace(/\r\n|\n|\r/g, " ").replace(/\t/g, " ");
+}
+
+function recordsToTsv(cols: string[], rows: Record<string, unknown>[]): string {
+  if (cols.length === 0) return "";
+  const header = cols.map(formatCellForExcel).join("\t");
+  if (rows.length === 0) return header;
+  return [header, ...rows.map((row) => cols.map((c) => formatCellForExcel(row[c])).join("\t"))].join("\n");
+}
+
+function collapseLinesForSingleCell(s: string): string {
+  return s.replace(/\r\n|\n|\r/g, " ").slice(0, 32760);
+}
+
+function buildExcelClipboardText(resultJson: string, table: RecordsTable | null, parsed: RecordsTable | null): string {
+  if (table) return recordsToTsv(table.cols, table.rows);
+  if (parsed?.rows.length === 0) {
+    if (parsed.cols.length > 0) return recordsToTsv(parsed.cols, []);
+    return "提示\t无数据行（可在 JSON 中查看 totalSize）";
+  }
+  if (parsed && parsed.rows.length > 0) return recordsToTsv(parsed.cols, parsed.rows);
+  return collapseLinesForSingleCell(resultJson);
+}
+
+function escapeCsvField(s: string): string {
+  if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function recordsToCsv(cols: string[], rows: Record<string, unknown>[]): string {
+  const header = cols.map((c) => escapeCsvField(c)).join(",");
+  const lines = rows.map((row) => cols.map((c) => escapeCsvField(formatCell(row[c]))).join(","));
+  return `\uFEFF${header}\n${lines.join("\n")}`;
+}
+
+function downloadTextFile(filename: string, content: string, mime: string): void {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1500);
 }

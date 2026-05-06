@@ -16,6 +16,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::export::save_export_file,
             commands::org::sync_orgs,
             commands::org::list_orgs,
             commands::org::set_default_org,

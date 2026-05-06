@@ -1,6 +1,6 @@
 import * as monaco from "monaco-editor";
 import { invoke } from "@tauri-apps/api/core";
-import { extractFromObject, parseCompletionContext } from "./contextParser";
+import { extractFromObject, getSubqueryFromObjectBeforeCursor, parseCompletionContext } from "./contextParser";
 import { parseRelationshipPath, type FieldMeta } from "./relationshipParser";
 
 export type CompletionLogFn = (message: string, level?: "info" | "error") => void;
@@ -106,7 +106,7 @@ async function getObjectsCached(orgId: string, onLoading?: CompletionLoadingFn):
   const cached = objectCache.get(orgId);
   if (isFresh(cached, OBJECT_CACHE_TTL_MS)) return cached.data;
   const inflight = objectInflight.get(orgId);
-  if (inflight) return withLoadingIndicator(inflight, onLoading, "正在加载对象列表…");
+  if (inflight) return inflight;
 
   const request = invoke<unknown>("get_objects", { orgId })
     .then((raw) => {
@@ -126,7 +126,7 @@ async function getFieldsCached(orgId: string, objectName: string, onLoading?: Co
   const cached = fieldCache.get(key);
   if (isFresh(cached, FIELD_CACHE_TTL_MS)) return cached.data;
   const inflight = fieldInflight.get(key);
-  if (inflight) return withLoadingIndicator(inflight, onLoading, `正在加载字段: ${objectName}…`);
+  if (inflight) return inflight;
 
   const request = invoke<unknown>("get_fields", { orgId, objectName })
     .then((raw) => {
@@ -150,7 +150,7 @@ async function getChildRelationshipsCached(
   const cached = childRelCache.get(key);
   if (isFresh(cached, CHILD_REL_CACHE_TTL_MS)) return cached.data;
   const inflight = childRelInflight.get(key);
-  if (inflight) return withLoadingIndicator(inflight, onLoading, `正在加载子关系: ${objectName}…`);
+  if (inflight) return inflight;
 
   const request = invoke<unknown>("get_child_relationships", { orgId, objectName })
     .then((raw) => {
@@ -175,7 +175,7 @@ async function getPicklistValuesCached(
   const cached = picklistCache.get(key);
   if (isFresh(cached, PICKLIST_CACHE_TTL_MS)) return cached.data;
   const inflight = picklistInflight.get(key);
-  if (inflight) return withLoadingIndicator(inflight, onLoading, `正在加载选项值: ${fieldName}…`);
+  if (inflight) return inflight;
 
   const request = invoke<unknown>("get_picklist_values", { orgId, objectName, fieldName })
     .then((raw) => {
@@ -426,7 +426,7 @@ async function handleSubqueryCompletion(
     }));
   }
   if (ctx.clause === "SUBQUERY_SELECT") {
-    const fromToken = getSubqueryFromTokenAtCursor(fullSoql, cursorOffset) ?? ctx.subquery?.childRelationshipName ?? null;
+    const fromToken = getSubqueryFromObjectBeforeCursor(fullSoql, cursorOffset);
     if (!fromToken) return [];
     const childObject = await resolveSubqueryObjectName(orgId, ctx.primaryObject, fromToken, onLoading);
     if (!childObject) return [];
@@ -436,63 +436,27 @@ async function handleSubqueryCompletion(
   return [];
 }
 
-function getSubqueryFromTokenAtCursor(fullSoql: string, cursorOffset: number): string | null {
-  const openIdx = findNearestSubqueryOpen(fullSoql, cursorOffset);
-  if (openIdx === -1) return null;
-  const closeIdx = findSubqueryClose(fullSoql, openIdx);
-  const end = closeIdx === -1 ? fullSoql.length : closeIdx;
-  const subqueryInner = fullSoql.slice(openIdx + 1, end);
-  const fromMatch = subqueryInner.match(/\bFROM\s+([A-Za-z][A-Za-z0-9_]*)/i);
-  return fromMatch?.[1] ?? null;
-}
-
-function findNearestSubqueryOpen(fullSoql: string, cursorOffset: number): number {
-  let depth = 0;
-  for (let i = cursorOffset - 1; i >= 0; i--) {
-    const c = fullSoql[i];
-    if (c === ")") {
-      depth += 1;
-      continue;
-    }
-    if (c !== "(") continue;
-    if (depth > 0) {
-      depth -= 1;
-      continue;
-    }
-    const after = fullSoql.slice(i + 1);
-    if (/^\s*SELECT\b/i.test(after)) return i;
-  }
-  return -1;
-}
-
-function findSubqueryClose(fullSoql: string, openIdx: number): number {
-  let depth = 0;
-  for (let i = openIdx + 1; i < fullSoql.length; i++) {
-    const c = fullSoql[i];
-    if (c === "(") depth += 1;
-    if (c === ")") {
-      if (depth === 0) return i;
-      depth -= 1;
-    }
-  }
-  return -1;
-}
-
 async function resolveSubqueryObjectName(
   orgId: string,
   parentObject: string,
   fromToken: string,
   onLoading?: CompletionLoadingFn,
 ): Promise<string | null> {
-  const directFields = await getFieldsCached(orgId, fromToken, onLoading).catch(() => []);
-  if (directFields.length > 0) return fromToken;
+  const t = fromToken.trim();
+  if (!t) return null;
 
   const childRels = await getChildRelationshipsCached(orgId, parentObject, onLoading);
-  const matchByRelName = childRels.find((r) => r.relationship_name.toLowerCase() === fromToken.toLowerCase());
+  const matchByRelName = childRels.find((r) => r.relationship_name.toLowerCase() === t.toLowerCase());
   if (matchByRelName) return matchByRelName.child_object;
 
-  const matchByObject = childRels.find((r) => r.child_object.toLowerCase() === fromToken.toLowerCase());
+  const matchByObject = childRels.find((r) => r.child_object.toLowerCase() === t.toLowerCase());
   if (matchByObject) return matchByObject.child_object;
+
+  // 避免输入过程中对短 token 反复 describe；__c 自定义对象可短一些
+  if (t.length < 4 && !t.endsWith("__c")) return null;
+
+  const directFields = await getFieldsCached(orgId, t, onLoading).catch(() => []);
+  if (directFields.length > 0) return t;
 
   return null;
 }

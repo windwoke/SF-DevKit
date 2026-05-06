@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseCompletionContext } from "../contextParser";
+import { findNearestSubqueryOpenParen, getSubqueryFromObjectBeforeCursor, parseCompletionContext } from "../contextParser";
 
 describe("parseCompletionContext", () => {
   test("SELECT 后空格 → FIELD 补全", () => {
@@ -104,5 +104,42 @@ describe("parseCompletionContext", () => {
     expect(ctx.clause).toBe("TYPEOF_THEN");
     expect(ctx.triggerKind).toBe("FIELD");
     expect(ctx.typeof?.whenObject).toBe("Contact");
+  });
+});
+
+describe("findNearestSubqueryOpenParen", () => {
+  test("子查询已闭合且光标在主查询末尾时返回 -1", () => {
+    const q = "SELECT Id, (SELECT Name FROM Contact) FROM Account";
+    expect(findNearestSubqueryOpenParen(q, q.length)).toBe(-1);
+  });
+
+  test("未闭合子查询可定位到 (", () => {
+    const q = "SELECT Id, (SELECT Name, CreatedDate FROM ";
+    const open = findNearestSubqueryOpenParen(q, q.length);
+    expect(open).toBeGreaterThanOrEqual(0);
+    expect(q.slice(open, open + 10)).toMatch(/^\(\s*SELECT/i);
+  });
+});
+
+describe("getSubqueryFromObjectBeforeCursor", () => {
+  test("光标在子查询 SELECT 列表时不会误用主查询的 FROM", () => {
+    const q = `SELECT Id, (SELECT Name, x
+FROM account
+LIMIT 10`;
+    const cursor = q.indexOf("x") + 1;
+    expect(getSubqueryFromObjectBeforeCursor(q, cursor)).toBeNull();
+  });
+
+  test("光标在子查询 WHERE 前可解析出子查询 FROM 对象", () => {
+    const q = "SELECT Id, (SELECT Name FROM Contact WHERE Id = '1'";
+    const cursor = q.indexOf("WHERE");
+    expect(getSubqueryFromObjectBeforeCursor(q, cursor)).toBe("Contact");
+  });
+
+  test("已闭合子查询：光标在 FROM 之前的 SELECT 列表仍能解析 FROM 后对象", () => {
+    const q =
+      "SELECT Id, Name, (select id, 输入 from AccountContactRelations)\nFROM Account\nLIMIT 20";
+    const cursor = q.indexOf("输入") + "输入".length;
+    expect(getSubqueryFromObjectBeforeCursor(q, cursor)).toBe("AccountContactRelations");
   });
 });

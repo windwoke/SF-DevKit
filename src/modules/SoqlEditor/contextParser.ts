@@ -150,30 +150,66 @@ function parseTypeofContext(soql: string): CompletionContext | null {
   return null;
 }
 
-function findInnermostOpenSubquery(soql: string): { inner: string; parenIdx: number } | null {
+/**
+ * 从 cursorOffset 向左找：光标所在的那一段 `( SELECT …` 子查询的起始 `(` 下标。
+ * 光标须在子查询括号对内（闭括号右侧的主查询区域会返回 -1）。
+ */
+export function findNearestSubqueryOpenParen(fullSoql: string, cursorOffset: number): number {
   let depth = 0;
-  let subStart = -1;
-  for (let i = soql.length - 1; i >= 0; i--) {
-    const c = soql[i];
-    if (c === ")") depth++;
-    else if (c === "(") {
-      if (depth === 0) {
-        subStart = i;
-        break;
-      }
-      depth--;
+  for (let i = cursorOffset - 1; i >= 0; i--) {
+    const c = fullSoql[i];
+    if (c === ")") {
+      depth += 1;
+      continue;
+    }
+    if (c !== "(") continue;
+    if (depth > 0) {
+      depth -= 1;
+      continue;
+    }
+    const after = fullSoql.slice(i + 1, Math.min(i + 32, fullSoql.length));
+    if (/^\s*SELECT\b/i.test(after)) return i;
+  }
+  return -1;
+}
+
+/** 与 `openParenIdx` 处的 `(` 配对的闭括号下标；未闭合则 -1。 */
+export function findSubqueryClosingParen(fullSoql: string, openParenIdx: number): number {
+  let depth = 0;
+  for (let i = openParenIdx + 1; i < fullSoql.length; i++) {
+    const c = fullSoql[i];
+    if (c === "(") depth += 1;
+    else if (c === ")") {
+      if (depth === 0) return i;
+      depth -= 1;
     }
   }
-  if (subStart === -1) return null;
-  const inner = soql.slice(subStart + 1);
-  if (!/^\s*SELECT\b/i.test(inner)) return null;
-  return { inner, parenIdx: subStart };
+  return -1;
+}
+
+/**
+ * 子查询里用于字段补全的 `FROM` 后对象/关系名（仅 [A-Za-z0-9_]）。
+ * - 子查询**已闭合**且光标在括号内：在整段子查询文本中查找 `FROM`，故可在 `FROM` 左侧编辑 SELECT 列表时仍解析到子对象。
+ * - 子查询**未闭合**：只扫描到光标，避免把主查询的 `FROM Account` 误当作子查询的 FROM。
+ */
+export function getSubqueryFromObjectBeforeCursor(fullSoql: string, cursorOffset: number): string | null {
+  const openIdx = findNearestSubqueryOpenParen(fullSoql, cursorOffset);
+  if (openIdx === -1 || cursorOffset <= openIdx + 1) return null;
+
+  const closeIdx = findSubqueryClosingParen(fullSoql, openIdx);
+  const closedAndCursorInside = closeIdx !== -1 && cursorOffset < closeIdx;
+  const sliceEnd = closedAndCursorInside ? closeIdx : Math.min(cursorOffset, fullSoql.length);
+  const slice = fullSoql.slice(openIdx + 1, Math.max(openIdx + 1, sliceEnd));
+  const fromMatches = [...slice.matchAll(/\bFROM\s+([A-Za-z][A-Za-z0-9_]*)/gi)];
+  if (fromMatches.length === 0) return null;
+  return fromMatches[fromMatches.length - 1][1] ?? null;
 }
 
 function parseSubqueryContext(soql: string): CompletionContext | null {
-  const found = findInnermostOpenSubquery(soql);
-  if (!found) return null;
-  const { inner } = found;
+  const openIdx = findNearestSubqueryOpenParen(soql, soql.length);
+  if (openIdx === -1) return null;
+  const inner = soql.slice(openIdx + 1);
+  if (!/^\s*SELECT\b/i.test(inner)) return null;
   const fromMatches = [...inner.matchAll(/\bFROM\b/gi)];
   const lastFrom = fromMatches.length > 0 ? fromMatches[fromMatches.length - 1] : null;
   if (lastFrom) {
