@@ -18,6 +18,7 @@ impl MetadataService {
         org_id: &str,
         force_refresh: bool,
     ) -> anyhow::Result<Vec<MetadataTypeMeta>> {
+        eprintln!("[metadata.service] get_types enter org_id={} force_refresh={}", org_id, force_refresh);
         if !force_refresh {
             let cached = sqlx::query_as::<_, MetadataTypeMeta>(
                 r#"
@@ -36,13 +37,20 @@ impl MetadataService {
             .bind(org_id)
             .fetch_all(&self.pool)
             .await?;
+            eprintln!("[metadata.service] get_types cache rows={}", cached.len());
             if !cached.is_empty() {
                 return Ok(attach_groups(cached));
             }
         }
 
         let output = run_command(&["org", "list", "metadata-types", "--target-org", org_id], true).await?;
-        let parsed: serde_json::Value = serde_json::from_str(&output.stdout)?;
+        eprintln!(
+            "[metadata.service] get_types cli stdout_len={} stderr_len={} exit={}",
+            output.stdout.len(),
+            output.stderr.len(),
+            output.exit_code
+        );
+        let parsed = parse_cli_json(&output.stdout)?;
         let list = parsed["result"]["metadataObjects"]
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("解析 metadata types 失败"))?;
@@ -89,6 +97,7 @@ impl MetadataService {
             });
         }
 
+        eprintln!("[metadata.service] get_types fetched types={}", types.len());
         Ok(attach_groups(types))
     }
 
@@ -98,6 +107,10 @@ impl MetadataService {
         metadata_type: &str,
         force_refresh: bool,
     ) -> anyhow::Result<Vec<ComponentMeta>> {
+        eprintln!(
+            "[metadata.service] get_components enter org_id={} type={} force_refresh={}",
+            org_id, metadata_type, force_refresh
+        );
         if !force_refresh {
             let cached = sqlx::query_as::<_, ComponentMeta>(
                 r#"
@@ -113,6 +126,10 @@ impl MetadataService {
             .bind(metadata_type)
             .fetch_all(&self.pool)
             .await?;
+            eprintln!(
+                "[metadata.service] get_components cache rows={} org_id={} type={}",
+                cached.len(), org_id, metadata_type
+            );
             if !cached.is_empty() {
                 return Ok(cached);
             }
@@ -131,8 +148,16 @@ impl MetadataService {
             true,
         )
         .await?;
+        eprintln!(
+            "[metadata.service] get_components cli stdout_len={} stderr_len={} exit={} org_id={} type={}",
+            output.stdout.len(),
+            output.stderr.len(),
+            output.exit_code,
+            org_id,
+            metadata_type
+        );
 
-        let parsed: serde_json::Value = serde_json::from_str(&output.stdout)?;
+        let parsed = parse_cli_json(&output.stdout)?;
         let list = parsed["result"]
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("解析 metadata components 失败"))?;
@@ -176,6 +201,10 @@ impl MetadataService {
             });
         }
 
+        eprintln!(
+            "[metadata.service] get_components fetched rows={} org_id={} type={}",
+            out.len(), org_id, metadata_type
+        );
         Ok(out)
     }
 }
@@ -188,4 +217,27 @@ fn attach_groups(items: Vec<MetadataTypeMeta>) -> Vec<MetadataTypeMeta> {
             item
         })
         .collect()
+}
+
+fn parse_cli_json(stdout: &str) -> anyhow::Result<serde_json::Value> {
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!("CLI 没有返回 JSON 内容");
+    }
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return Ok(value);
+    }
+
+    let first_json_idx = trimmed
+        .find('{')
+        .or_else(|| trimmed.find('['))
+        .ok_or_else(|| anyhow::anyhow!("CLI 输出中未找到 JSON 起始字符"))?;
+    let json_part = &trimmed[first_json_idx..];
+    eprintln!(
+        "[metadata.service] parse_cli_json fallback used, prefix_len={}, total_len={}",
+        first_json_idx,
+        trimmed.len()
+    );
+    serde_json::from_str::<serde_json::Value>(json_part)
+        .map_err(|e| anyhow::anyhow!("解析 CLI JSON 失败: {}", e))
 }

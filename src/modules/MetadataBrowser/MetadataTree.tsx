@@ -10,9 +10,15 @@ export function MetadataTree() {
   const { searchQuery } = useMetadataStore();
   const typesQuery = useQuery({
     queryKey: ["metadata-types", currentOrg],
-    queryFn: () => tauriApi.listMetadataTypes({ orgId: currentOrg!, forceRefresh: false }),
+    queryFn: async () => {
+      console.log("[MetadataTree] listMetadataTypes:start", { orgId: currentOrg });
+      const data = await tauriApi.listMetadataTypes({ orgId: currentOrg!, forceRefresh: false });
+      console.log("[MetadataTree] listMetadataTypes:success", { count: data.length, orgId: currentOrg });
+      return data;
+    },
     enabled: !!currentOrg,
     staleTime: 24 * 60 * 60 * 1000,
+    retry: false,
   });
 
   const grouped = useMemo(() => {
@@ -29,7 +35,15 @@ export function MetadataTree() {
 
   if (!currentOrg) return <div className="empty-state">请先在 Org 管理中选择一个 Org。</div>;
   if (typesQuery.isLoading) return <div className="empty-state">正在加载 Metadata Types…</div>;
-  if (typesQuery.isError) return <div className="empty-state error">加载失败：{(typesQuery.error as Error).message}</div>;
+  if (typesQuery.isError) {
+    const msg = (typesQuery.error as Error).message;
+    console.error("[MetadataTree] listMetadataTypes:error", {
+      orgId: currentOrg,
+      message: msg,
+      fullError: typesQuery.error,
+    });
+    return <div className="empty-state error">加载失败：{msg}</div>;
+  }
 
   return (
     <section className="metadata-pane metadata-tree-pane">
@@ -60,10 +74,35 @@ function TypeRow({ item }: { item: MetadataTypeMeta }) {
   const isExpanded = expandedTypes.includes(item.xml_name);
   const compQuery = useQuery({
     queryKey: ["metadata-components", currentOrg, item.xml_name],
-    queryFn: () => tauriApi.listMetadataComponents({ orgId: currentOrg!, metadataType: item.xml_name, forceRefresh: false }),
+    queryFn: async () => {
+      console.log("[MetadataTree] listMetadataComponents:start", {
+        orgId: currentOrg,
+        metadataType: item.xml_name,
+      });
+      const data = await tauriApi.listMetadataComponents({
+        orgId: currentOrg!,
+        metadataType: item.xml_name,
+        forceRefresh: false,
+      });
+      console.log("[MetadataTree] listMetadataComponents:success", {
+        orgId: currentOrg,
+        metadataType: item.xml_name,
+        count: data.length,
+      });
+      return data;
+    },
     enabled: !!currentOrg && isExpanded,
     staleTime: 10 * 60 * 1000,
+    retry: false,
   });
+  if (compQuery.isError) {
+    console.error("[MetadataTree] listMetadataComponents:error", {
+      orgId: currentOrg,
+      metadataType: item.xml_name,
+      message: (compQuery.error as Error).message,
+      fullError: compQuery.error,
+    });
+  }
 
   const members = (compQuery.data ?? []).map((c) => c.full_name);
   const selectionState = getTypeSelectionState(item.xml_name, members);

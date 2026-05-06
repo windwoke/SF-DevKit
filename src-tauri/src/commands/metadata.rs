@@ -11,8 +11,21 @@ pub async fn list_metadata_types(
     org_id: String,
     force_refresh: bool,
 ) -> Result<Vec<MetadataTypeMeta>, String> {
+    eprintln!(
+        "[metadata] list_metadata_types start org_id={} force_refresh={}",
+        org_id, force_refresh
+    );
     let svc = MetadataService::new(state.0.clone());
-    svc.get_types(&org_id, force_refresh).await.map_err(|e| e.to_string())
+    match svc.get_types(&org_id, force_refresh).await {
+        Ok(items) => {
+            eprintln!("[metadata] list_metadata_types success org_id={} count={}", org_id, items.len());
+            Ok(items)
+        }
+        Err(e) => {
+            eprintln!("[metadata] list_metadata_types error org_id={} err={}", org_id, e);
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
@@ -22,10 +35,29 @@ pub async fn list_metadata_components(
     metadata_type: String,
     force_refresh: bool,
 ) -> Result<Vec<ComponentMeta>, String> {
+    eprintln!(
+        "[metadata] list_metadata_components start org_id={} type={} force_refresh={}",
+        org_id, metadata_type, force_refresh
+    );
     let svc = MetadataService::new(state.0.clone());
-    svc.get_components(&org_id, &metadata_type, force_refresh)
-        .await
-        .map_err(|e| e.to_string())
+    match svc.get_components(&org_id, &metadata_type, force_refresh).await {
+        Ok(items) => {
+            eprintln!(
+                "[metadata] list_metadata_components success org_id={} type={} count={}",
+                org_id,
+                metadata_type,
+                items.len()
+            );
+            Ok(items)
+        }
+        Err(e) => {
+            eprintln!(
+                "[metadata] list_metadata_components error org_id={} type={} err={}",
+                org_id, metadata_type, e
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]

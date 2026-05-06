@@ -180,6 +180,27 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
         .execute(&pool)
         .await?;
 
+        for ddl in [
+            "ALTER TABLE metadata_types ADD COLUMN directory_name TEXT",
+            "ALTER TABLE metadata_types ADD COLUMN suffix TEXT",
+            "ALTER TABLE metadata_types ADD COLUMN in_folder INTEGER DEFAULT 0",
+            "ALTER TABLE metadata_types ADD COLUMN meta_file INTEGER DEFAULT 1",
+            "ALTER TABLE metadata_types ADD COLUMN last_synced TEXT",
+            "ALTER TABLE metadata_components ADD COLUMN file_name TEXT",
+            "ALTER TABLE metadata_components ADD COLUMN last_modified TEXT",
+            "ALTER TABLE metadata_components ADD COLUMN created_by_name TEXT",
+            "ALTER TABLE metadata_components ADD COLUMN last_synced TEXT",
+            "ALTER TABLE retrieve_history ADD COLUMN log_text TEXT",
+            "ALTER TABLE retrieve_history ADD COLUMN executed_at TEXT",
+        ] {
+            if let Err(e) = sqlx::query(ddl).execute(&pool).await {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column") {
+                    return Err(anyhow::Error::from(e).context(format!("failed migration: {}", ddl)));
+                }
+            }
+        }
+
         if let Err(e) = sqlx::query("ALTER TABLE org_auth ADD COLUMN linked_project_path TEXT")
             .execute(&pool)
             .await
