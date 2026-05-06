@@ -11,6 +11,8 @@ export type ClauseType =
   | "HAVING"
   | "LIMIT"
   | "OFFSET"
+  | "TYPEOF_WHEN"
+  | "TYPEOF_THEN"
   | "SUBQUERY_SELECT"
   | "SUBQUERY_FROM"
   | "UNKNOWN";
@@ -29,6 +31,10 @@ export type TriggerKind =
 export interface CompletionContext {
   clause: ClauseType;
   primaryObject: string | null;
+  typeof?: {
+    fieldName: string | null;
+    whenObject: string | null;
+  };
   subquery?: {
     childRelationshipName: string | null;
     childObject: string | null;
@@ -98,6 +104,52 @@ export function extractRelationshipPath(soqlBefore: string): string[] {
   return parts.slice(0, -1);
 }
 
+function parseTypeofContext(soql: string): CompletionContext | null {
+  const upper = soql.toUpperCase();
+  const typeofIdx = upper.lastIndexOf("TYPEOF");
+  if (typeofIdx === -1) return null;
+  const segment = soql.slice(typeofIdx);
+  if (/\bEND\b/i.test(segment)) return null;
+
+  const fieldName = segment.match(/\bTYPEOF\s+([A-Za-z][A-Za-z0-9_]*)/i)?.[1] ?? null;
+  if (!fieldName) return null;
+
+  const segUpper = segment.toUpperCase();
+  const lastWhenIdx = segUpper.lastIndexOf("WHEN");
+  const lastThenIdx = segUpper.lastIndexOf("THEN");
+  if (lastWhenIdx === -1) return null;
+
+  if (lastWhenIdx > lastThenIdx) {
+    return {
+      clause: "TYPEOF_WHEN",
+      primaryObject: extractFromObject(soql),
+      typeof: { fieldName, whenObject: null },
+      relationshipPath: [],
+      prevToken: null,
+      whereField: null,
+      whereOperator: null,
+      triggerKind: "OBJECT",
+    };
+  }
+
+  if (lastThenIdx > -1) {
+    const whenThenMatches = [...segment.matchAll(/\bWHEN\s+([A-Za-z][A-Za-z0-9_]*)\s+THEN\b/gi)];
+    const whenObject = whenThenMatches.length > 0 ? whenThenMatches[whenThenMatches.length - 1][1] : null;
+    return {
+      clause: "TYPEOF_THEN",
+      primaryObject: extractFromObject(soql),
+      typeof: { fieldName, whenObject },
+      relationshipPath: [],
+      prevToken: null,
+      whereField: null,
+      whereOperator: null,
+      triggerKind: "FIELD",
+    };
+  }
+
+  return null;
+}
+
 function findInnermostOpenSubquery(soql: string): { inner: string; parenIdx: number } | null {
   let depth = 0;
   let subStart = -1;
@@ -122,21 +174,27 @@ function parseSubqueryContext(soql: string): CompletionContext | null {
   const found = findInnermostOpenSubquery(soql);
   if (!found) return null;
   const { inner } = found;
-  const innerU = inner.toUpperCase();
-  const fromInInner = /\bFROM\b/i.exec(inner);
-  if (fromInInner && innerU.trimEnd().endsWith("FROM")) {
-    return {
-      clause: "SUBQUERY_FROM",
-      primaryObject: extractFromObject(soql),
-      relationshipPath: [],
-      prevToken: null,
-      whereField: null,
-      whereOperator: null,
-      triggerKind: "OBJECT",
-      subquery: { childRelationshipName: null, childObject: null },
-    };
+  const fromMatches = [...inner.matchAll(/\bFROM\b/gi)];
+  const lastFrom = fromMatches.length > 0 ? fromMatches[fromMatches.length - 1] : null;
+  if (lastFrom) {
+    const afterFrom = inner.slice(lastFrom.index + lastFrom[0].length);
+    const hasNextClause = /\b(?:WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|OFFSET)\b/i.test(afterFrom);
+    if (!hasNextClause) {
+      const relationToken = afterFrom.trim().match(/^([A-Za-z][A-Za-z0-9_]*)/)?.[1] ?? null;
+      return {
+        clause: "SUBQUERY_FROM",
+        primaryObject: extractFromObject(soql),
+        relationshipPath: [],
+        prevToken: null,
+        whereField: null,
+        whereOperator: null,
+        triggerKind: "OBJECT",
+        subquery: { childRelationshipName: relationToken, childObject: null },
+      };
+    }
   }
-  if (!fromInInner) {
+
+  if (!lastFrom) {
     return {
       clause: "SUBQUERY_SELECT",
       primaryObject: extractFromObject(soql),
@@ -232,6 +290,8 @@ function detectTriggerKind(
 ): TriggerKind {
   if (soql.endsWith(".") && relationshipPath.length > 0) return "RELATIONSHIP_FIELD";
   if (clause === "FROM") return "OBJECT";
+  if (clause === "HAVING") return "AGGREGATE";
+  if (clause === "LIMIT" || clause === "OFFSET") return "KEYWORD";
   if (clause === "WHERE") {
     const w = extractWhereContext(soql);
     if (w.whereField && w.whereOperator) return "VALUE";
@@ -245,6 +305,9 @@ function detectTriggerKind(
 }
 
 export function parseCompletionContext(soqlBefore: string): CompletionContext {
+  const typeOfCtx = parseTypeofContext(soqlBefore);
+  if (typeOfCtx) return typeOfCtx;
+
   const sub = parseSubqueryContext(soqlBefore);
   if (sub) return sub;
 

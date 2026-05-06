@@ -15,4 +15,9 @@ export const tauriApi = {
       login_domain: payload.loginDomain,
     }),
   openOrg: (username: string) => invoke<void>("open_org", { username }),
+  refreshSchemaCache: (payload: { orgId: string; objectName?: string | null }) =>
+    invoke<void>("refresh_schema_cache", {
+      orgId: payload.orgId,
+      objectName: payload.objectName ?? null,
+    }),
 };

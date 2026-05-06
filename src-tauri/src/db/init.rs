@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::Context;
 use sqlx::sqlite::SqlitePoolOptions;
@@ -18,7 +19,8 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
     let rt = tokio::runtime::Runtime::new().context("failed to create runtime for DB init")?;
     let pool = rt.block_on(async move {
         let pool = SqlitePoolOptions::new()
-            .max_connections(5)
+            .max_connections(20)
+            .acquire_timeout(Duration::from_secs(30))
             .connect(&db_url)
             .await
             .context("failed to connect sqlite")?;
@@ -87,6 +89,24 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
               field_name TEXT NOT NULL,
               last_synced TEXT NOT NULL,
               UNIQUE(org_id, parent_object, relationship_name)
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS schema_picklist_values (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              org_id TEXT NOT NULL,
+              object_api_name TEXT NOT NULL,
+              field_api_name TEXT NOT NULL,
+              label TEXT NOT NULL,
+              value TEXT NOT NULL,
+              active INTEGER DEFAULT 1,
+              last_synced TEXT NOT NULL,
+              UNIQUE(org_id, object_api_name, field_api_name, value)
             );
             "#,
         )

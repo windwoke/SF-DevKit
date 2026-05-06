@@ -1,8 +1,18 @@
+use serde::Serialize;
 use serde_json::Value;
 use sqlx::SqlitePool;
 
 use crate::cli::runner::run_command;
 use crate::db::models::{ChildRelationship, FieldMeta, ObjectMeta};
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PicklistValue {
+    pub label: String,
+    pub value: String,
+    pub active: bool,
+}
+
+const SCHEMA_CACHE_TTL_HOURS: i64 = 24;
 
 pub async fn get_objects(pool: &SqlitePool, org_id: &str) -> anyhow::Result<Vec<ObjectMeta>> {
     let rows = sqlx::query_as::<_, ObjectMeta>(
@@ -10,11 +20,12 @@ pub async fn get_objects(pool: &SqlitePool, org_id: &str) -> anyhow::Result<Vec<
         SELECT api_name, label, is_custom
         FROM schema_objects
         WHERE org_id = ?1
-          AND datetime(last_synced, '+24 hours') > datetime('now')
+          AND datetime(last_synced, '+' || ?2 || ' hours') > datetime('now')
         ORDER BY api_name
         "#,
     )
     .bind(org_id)
+    .bind(SCHEMA_CACHE_TTL_HOURS)
     .fetch_all(pool)
     .await?;
 
@@ -84,12 +95,13 @@ pub async fn get_fields(pool: &SqlitePool, org_id: &str, object_name: &str) -> a
         SELECT api_name, label, field_type, reference_to, relationship_name, is_nillable
         FROM schema_fields
         WHERE org_id = ?1 AND object_api_name = ?2
-          AND datetime(last_synced, '+24 hours') > datetime('now')
+          AND datetime(last_synced, '+' || ?3 || ' hours') > datetime('now')
         ORDER BY api_name
         "#,
     )
     .bind(org_id)
     .bind(object_name)
+    .bind(SCHEMA_CACHE_TTL_HOURS)
     .fetch_all(pool)
     .await?;
 
@@ -236,7 +248,7 @@ pub async fn get_child_relationships(
 ) -> anyhow::Result<Vec<ChildRelationship>> {
     let _ = get_fields(pool, org_id, object_name).await?;
 
-    let rows = sqlx::query_as::<_, ChildRelationship>(
+    let mut rows = sqlx::query_as::<_, ChildRelationship>(
         r#"
         SELECT relationship_name, child_object
         FROM schema_child_relationships
@@ -249,7 +261,200 @@ pub async fn get_child_relationships(
     .fetch_all(pool)
     .await?;
 
+    if rows.is_empty() {
+        let _ = fetch_and_cache_fields(pool, org_id, object_name).await?;
+        rows = sqlx::query_as::<_, ChildRelationship>(
+            r#"
+            SELECT relationship_name, child_object
+            FROM schema_child_relationships
+            WHERE org_id = ?1 AND parent_object = ?2
+            ORDER BY relationship_name
+            "#,
+        )
+        .bind(org_id)
+        .bind(object_name)
+        .fetch_all(pool)
+        .await?;
+    }
+
     Ok(rows)
+}
+
+pub async fn get_picklist_values(
+    pool: &SqlitePool,
+    org_id: &str,
+    object_name: &str,
+    field_name: &str,
+) -> anyhow::Result<Vec<PicklistValue>> {
+    let cached = sqlx::query_as::<_, (String, String, i64)>(
+        r#"
+        SELECT label, value, active
+        FROM schema_picklist_values
+        WHERE org_id = ?1
+          AND object_api_name = ?2
+          AND field_api_name = ?3
+          AND datetime(last_synced, '+' || ?4 || ' hours') > datetime('now')
+        ORDER BY value
+        "#,
+    )
+    .bind(org_id)
+    .bind(object_name)
+    .bind(field_name)
+    .bind(SCHEMA_CACHE_TTL_HOURS)
+    .fetch_all(pool)
+    .await?;
+    if !cached.is_empty() {
+        return Ok(cached
+            .into_iter()
+            .map(|(label, value, active)| PicklistValue {
+                label,
+                value,
+                active: active != 0,
+            })
+            .collect());
+    }
+
+    let output = run_command(
+        &[
+            "sobject",
+            "describe",
+            "--sobject",
+            object_name,
+            "--target-org",
+            org_id,
+        ],
+        true,
+    )
+    .await?;
+
+    let json: Value = serde_json::from_str(&output.stdout)?;
+    let fields = json["result"]["fields"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("invalid describe response"))?;
+
+    let target_field = fields.iter().find(|f| {
+        f["name"]
+            .as_str()
+            .map(|name| name.eq_ignore_ascii_case(field_name))
+            .unwrap_or(false)
+    });
+    let Some(target_field) = target_field else {
+        return Ok(vec![]);
+    };
+
+    let Some(values) = target_field["picklistValues"].as_array() else {
+        return Ok(vec![]);
+    };
+
+    sqlx::query(
+        r#"
+        DELETE FROM schema_picklist_values
+        WHERE org_id = ?1 AND object_api_name = ?2 AND field_api_name = ?3
+        "#,
+    )
+    .bind(org_id)
+    .bind(object_name)
+    .bind(field_name)
+    .execute(pool)
+    .await?;
+
+    let mut result = Vec::new();
+    for item in values {
+        let value = item["value"].as_str().unwrap_or_default().to_string();
+        if value.is_empty() {
+            continue;
+        }
+        let label = item["label"].as_str().unwrap_or(&value).to_string();
+        let active = item["active"].as_bool().unwrap_or(true);
+        sqlx::query(
+            r#"
+            INSERT INTO schema_picklist_values
+              (org_id, object_api_name, field_api_name, label, value, active, last_synced)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
+            ON CONFLICT(org_id, object_api_name, field_api_name, value) DO UPDATE SET
+              label = excluded.label,
+              active = excluded.active,
+              last_synced = datetime('now')
+            "#,
+        )
+        .bind(org_id)
+        .bind(object_name)
+        .bind(field_name)
+        .bind(&label)
+        .bind(&value)
+        .bind(if active { 1_i64 } else { 0_i64 })
+        .execute(pool)
+        .await?;
+        result.push(PicklistValue {
+            label,
+            value,
+            active,
+        });
+    }
+    Ok(result)
+}
+
+pub async fn refresh_schema_cache(
+    pool: &SqlitePool,
+    org_id: &str,
+    object_name: Option<&str>,
+) -> anyhow::Result<()> {
+    if let Some(obj) = object_name {
+        sqlx::query(
+            r#"
+            DELETE FROM schema_fields
+            WHERE org_id = ?1 AND object_api_name = ?2
+            "#,
+        )
+        .bind(org_id)
+        .bind(obj)
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            DELETE FROM schema_child_relationships
+            WHERE org_id = ?1 AND parent_object = ?2
+            "#,
+        )
+        .bind(org_id)
+        .bind(obj)
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            DELETE FROM schema_picklist_values
+            WHERE org_id = ?1 AND object_api_name = ?2
+            "#,
+        )
+        .bind(org_id)
+        .bind(obj)
+        .execute(pool)
+        .await?;
+
+        let _ = fetch_and_cache_fields(pool, org_id, obj).await?;
+    } else {
+        sqlx::query("DELETE FROM schema_objects WHERE org_id = ?1")
+            .bind(org_id)
+            .execute(pool)
+            .await?;
+        sqlx::query("DELETE FROM schema_fields WHERE org_id = ?1")
+            .bind(org_id)
+            .execute(pool)
+            .await?;
+        sqlx::query("DELETE FROM schema_child_relationships WHERE org_id = ?1")
+            .bind(org_id)
+            .execute(pool)
+            .await?;
+        sqlx::query("DELETE FROM schema_picklist_values WHERE org_id = ?1")
+            .bind(org_id)
+            .execute(pool)
+            .await?;
+        let _ = fetch_and_cache_objects(pool, org_id).await?;
+    }
+
+    Ok(())
 }
 
 pub async fn run_soql_query(org_id: &str, query: &str) -> anyhow::Result<Value> {

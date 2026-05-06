@@ -26,6 +26,7 @@ pub fn run() {
             commands::schema::get_fields,
             commands::schema::get_child_relationships,
             commands::schema::get_picklist_values,
+            commands::schema::refresh_schema_cache,
             commands::soql::run_soql_query,
         ])
         .run(tauri::generate_context!())

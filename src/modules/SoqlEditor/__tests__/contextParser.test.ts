@@ -68,6 +68,19 @@ describe("parseCompletionContext", () => {
     expect(ctx.clause).toBe("SUBQUERY_FROM");
   });
 
+  test("子查询 FROM 输入中仍走关系名补全", () => {
+    const ctx = parseCompletionContext("SELECT Id, (SELECT Id FROM Acc");
+    expect(ctx.clause).toBe("SUBQUERY_FROM");
+    expect(ctx.triggerKind).toBe("OBJECT");
+    expect(ctx.subquery?.childRelationshipName).toBe("Acc");
+  });
+
+  test("复杂主查询中首个子查询 FROM 仍可补全", () => {
+    const ctx = parseCompletionContext("SELECT Id, Name, Industry, (Select id, AccountId,CreatedDate  from ");
+    expect(ctx.clause).toBe("SUBQUERY_FROM");
+    expect(ctx.triggerKind).toBe("OBJECT");
+  });
+
   test("子查询字段补全", () => {
     const ctx = parseCompletionContext("SELECT Id, (SELECT ");
     expect(ctx.clause).toBe("SUBQUERY_SELECT");
@@ -77,5 +90,19 @@ describe("parseCompletionContext", () => {
     const ctx = parseCompletionContext("SELECT Id FROM Account ORDER BY ");
     expect(ctx.clause).toBe("ORDER_BY");
     expect(ctx.triggerKind).toBe("FIELD");
+  });
+
+  test("TYPEOF WHEN 对象补全", () => {
+    const ctx = parseCompletionContext("SELECT TYPEOF Who WHEN  FROM Task");
+    expect(ctx.clause).toBe("TYPEOF_WHEN");
+    expect(ctx.triggerKind).toBe("OBJECT");
+    expect(ctx.typeof?.fieldName).toBe("Who");
+  });
+
+  test("TYPEOF THEN 字段补全", () => {
+    const ctx = parseCompletionContext("SELECT TYPEOF Who WHEN Contact THEN  FROM Task");
+    expect(ctx.clause).toBe("TYPEOF_THEN");
+    expect(ctx.triggerKind).toBe("FIELD");
+    expect(ctx.typeof?.whenObject).toBe("Contact");
   });
 });
