@@ -305,3 +305,73 @@ button.danger {
 .empty-state.error {
   color: #ffb2b2;
 }
+
+.soql-module .soql-hint {
+  font-size: 12px;
+  color: #9aa3ba;
+}
+
+.soql-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.soql-editor-wrap {
+  border: 1px solid #2f3443;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0d1117;
+}
+
+.soql-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px;
+  border-top: 1px solid #2f3443;
+  background: #141821;
+}
+
+.soql-results-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.soql-table-scroll {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid #2f3443;
+  border-radius: 8px;
+}
+
+.soql-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.soql-table th,
+.soql-table td {
+  border: 1px solid #2a2d37;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.soql-table th {
+  background: #1a2130;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.soql-json {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #0d1117;
+  border: 1px solid #2f3443;
+  font-size: 11px;
+  overflow: auto;
+  max-height: 320px;
+}

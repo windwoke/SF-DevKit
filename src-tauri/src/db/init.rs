@@ -40,6 +40,59 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
         .execute(&pool)
         .await?;
 
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS schema_objects (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              org_id TEXT NOT NULL,
+              api_name TEXT NOT NULL,
+              label TEXT NOT NULL,
+              is_custom INTEGER DEFAULT 0,
+              last_synced TEXT NOT NULL,
+              UNIQUE(org_id, api_name)
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS schema_fields (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              org_id TEXT NOT NULL,
+              object_api_name TEXT NOT NULL,
+              api_name TEXT NOT NULL,
+              label TEXT NOT NULL,
+              field_type TEXT NOT NULL,
+              reference_to TEXT,
+              relationship_name TEXT,
+              is_nillable INTEGER DEFAULT 1,
+              last_synced TEXT NOT NULL,
+              UNIQUE(org_id, object_api_name, api_name)
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS schema_child_relationships (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              org_id TEXT NOT NULL,
+              parent_object TEXT NOT NULL,
+              relationship_name TEXT NOT NULL,
+              child_object TEXT NOT NULL,
+              field_name TEXT NOT NULL,
+              last_synced TEXT NOT NULL,
+              UNIQUE(org_id, parent_object, relationship_name)
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
         Ok::<SqlitePool, anyhow::Error>(pool)
     })?;
 
