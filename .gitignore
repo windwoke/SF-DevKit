@@ -1,0 +1,17 @@
+node_modules
+dist
+build
+.DS_Store
+src-tauri/target
+target
+**/target
+src-tauri/gen
+src-tauri/build
+*.db
+
+# 设计文档
+*-Design.md
+SF-DevKit-Design.md
+SOQL-Completion-Design.md
+PackageXml-Completion-Design.md
+Metadata-Browser-Design.md
