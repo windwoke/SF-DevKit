@@ -1,13 +1,20 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { tauriApi, type MetadataComponentMeta, type MetadataTypeMeta } from "../../lib/tauri";
 import { useMetadataStore } from "../../store/metadata";
 import { useOrgStore } from "../../store/org";
 import { GROUP_ORDER } from "./constants";
 
 export function MetadataTree() {
+  const queryClient = useQueryClient();
   const { currentOrg } = useOrgStore();
-  const { searchQuery } = useMetadataStore();
+  const { searchQuery, setSearchQuery, selectedCount } = useMetadataStore();
+  const refresh = () => {
+    if (!currentOrg) return;
+    queryClient.invalidateQueries({ queryKey: ["metadata-types", currentOrg] });
+    queryClient.invalidateQueries({ queryKey: ["metadata-components", currentOrg] });
+  };
   const typesQuery = useQuery({
     queryKey: ["metadata-types", currentOrg],
     queryFn: async () => {
@@ -49,6 +56,18 @@ export function MetadataTree() {
     <section className="metadata-pane metadata-tree-pane">
       <header className="metadata-pane-header">
         <h3>元数据树</h3>
+        <div className="metadata-tree-tools">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜索 Metadata Type 或组件名…"
+          />
+          <span className="metadata-selected-chip">已选 {selectedCount()}</span>
+          <button type="button" onClick={refresh}>
+            刷新
+          </button>
+        </div>
       </header>
       <div className="metadata-tree-body">
         {GROUP_ORDER.map((group) => {
@@ -70,8 +89,9 @@ export function MetadataTree() {
 
 function TypeRow({ item }: { item: MetadataTypeMeta }) {
   const { currentOrg } = useOrgStore();
-  const { expandedTypes, toggleExpand, searchQuery, getTypeSelectionState, toggleType } = useMetadataStore();
+  const { expandedTypes, toggleExpand, getTypeSelectionState, toggleType, selection, toggleComponent } = useMetadataStore();
   const isExpanded = expandedTypes.includes(item.xml_name);
+  const [childQuery, setChildQuery] = useState("");
   const compQuery = useQuery({
     queryKey: ["metadata-components", currentOrg, item.xml_name],
     queryFn: async () => {
@@ -106,7 +126,30 @@ function TypeRow({ item }: { item: MetadataTypeMeta }) {
 
   const members = (compQuery.data ?? []).map((c) => c.full_name);
   const selectionState = getTypeSelectionState(item.xml_name, members);
-  const filtered = filterComponents(compQuery.data ?? [], searchQuery);
+  const filtered = filterComponents(compQuery.data ?? [], childQuery);
+  const filteredNames = filtered.map((item) => item.full_name);
+  const selectedSet = new Set(selection[item.xml_name] ?? []);
+  const hasLoadedMembers = !!compQuery.data;
+  const totalLabel = hasLoadedMembers ? members.length.toString() : "";
+  const selectedLabel = selectedSet.size.toString();
+  const allFilteredSelected = filteredNames.length > 0 && filteredNames.every((name) => selectedSet.has(name));
+  const hasAnyFilteredSelected = filteredNames.some((name) => selectedSet.has(name));
+
+  const handleSelectFiltered = () => {
+    for (const name of filteredNames) {
+      if (!selectedSet.has(name)) {
+        toggleComponent(item.xml_name, name);
+      }
+    }
+  };
+
+  const handleUnselectFiltered = () => {
+    for (const name of filteredNames) {
+      if (selectedSet.has(name)) {
+        toggleComponent(item.xml_name, name);
+      }
+    }
+  };
 
   return (
     <div className="metadata-type-block">
@@ -122,10 +165,32 @@ function TypeRow({ item }: { item: MetadataTypeMeta }) {
           onChange={() => toggleType(item.xml_name, members)}
         />
         <span className="metadata-type-name">{item.xml_name}</span>
-        <span className="metadata-count">{compQuery.isFetching ? "…" : members.length || ""}</span>
+        <span className="metadata-count">
+          {compQuery.isFetching ? "…" : hasLoadedMembers ? `${selectedLabel}/${totalLabel}` : ""}
+        </span>
       </div>
       {isExpanded ? (
         <div className="metadata-component-list">
+          <div className="metadata-type-tools">
+            <div className="metadata-type-search-row">
+              <input
+                type="search"
+                value={childQuery}
+                onChange={(e) => setChildQuery(e.target.value)}
+                placeholder="搜索当前类型子项…"
+              />
+            </div>
+            {childQuery.trim() ? (
+              <div className="metadata-type-action-row">
+                <button type="button" onClick={handleSelectFiltered} disabled={filteredNames.length === 0 || allFilteredSelected}>
+                  全选结果
+                </button>
+                <button type="button" onClick={handleUnselectFiltered} disabled={filteredNames.length === 0 || !hasAnyFilteredSelected}>
+                  取消全选
+                </button>
+              </div>
+            ) : null}
+          </div>
           {compQuery.isLoading ? <div className="metadata-muted">加载中…</div> : null}
           {filtered.map((component) => (
             <ComponentRow key={component.full_name} metadataType={item.xml_name} item={component} />

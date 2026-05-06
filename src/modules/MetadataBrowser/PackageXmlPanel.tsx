@@ -4,8 +4,8 @@ import { useMetadataStore } from "../../store/metadata";
 import { generatePackageXml } from "./packageXml";
 
 export function PackageXmlPanel() {
-  const { apiVersion, toSelectionList } = useMetadataStore();
-  const packageXml = useMemo(() => generatePackageXml(toSelectionList(), apiVersion), [toSelectionList, apiVersion]);
+  const { apiVersion, selection, toSelectionList } = useMetadataStore();
+  const packageXml = useMemo(() => generatePackageXml(toSelectionList(), apiVersion), [selection, apiVersion, toSelectionList]);
 
   return (
     <section className="metadata-pane">
