@@ -375,3 +375,46 @@ button.danger {
   overflow: auto;
   max-height: 320px;
 }
+
+.soql-log-panel {
+  border: 1px solid #2f3443;
+  border-radius: 10px;
+  padding: 10px;
+  background: #111620;
+}
+
+.soql-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.soql-log-list {
+  max-height: 220px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.soql-log-item {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: #b7d6ff;
+  background: #182235;
+  border: 1px solid #243553;
+  border-radius: 6px;
+  padding: 6px 8px;
+  line-height: 1.45;
+}
+
+.soql-log-item.error {
+  color: #ffd0d0;
+  background: #361d26;
+  border-color: #5e2f3e;
+}
+
+.soql-log-time {
+  color: #9cb2d4;
+}

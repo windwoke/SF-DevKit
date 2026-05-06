@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { parseCompletionContext } from "./contextParser";
 import { parseRelationshipPath, type FieldMeta } from "./relationshipParser";
 
+export type CompletionLogFn = (message: string, level?: "info" | "error") => void;
+
 export interface ObjectMeta {
   api_name: string;
   label: string;
@@ -208,8 +210,8 @@ async function handleSubqueryCompletion(
   if (!ctx.primaryObject) return [];
   if (ctx.clause === "SUBQUERY_FROM") {
     const childRels = await invoke<ChildRelRow[]>("get_child_relationships", {
-      org_id: orgId,
-      object_name: ctx.primaryObject,
+      orgId,
+      objectName: ctx.primaryObject,
     });
     return childRels.map((rel) => ({
       label: rel.relationship_name,
@@ -221,8 +223,8 @@ async function handleSubqueryCompletion(
   }
   if (ctx.clause === "SUBQUERY_SELECT" && ctx.subquery?.childObject) {
     const fields = await invoke<FieldMeta[]>("get_fields", {
-      org_id: orgId,
-      object_name: ctx.subquery.childObject,
+      orgId,
+      objectName: ctx.subquery.childObject,
     });
     return fields.map((f) => fieldToCompletion(f, range));
   }
@@ -239,7 +241,7 @@ async function handleOperatorCompletion(
 ): Promise<monaco.languages.CompletionItem[]> {
   if (!ctx.primaryObject || !ctx.whereField) return [];
   const fieldName = ctx.whereField.includes(".") ? ctx.whereField.split(".").pop()! : ctx.whereField;
-  const fields = await invoke<FieldMeta[]>("get_fields", { org_id: orgId, object_name: ctx.primaryObject });
+  const fields = await invoke<FieldMeta[]>("get_fields", { orgId, objectName: ctx.primaryObject });
   const field = fields.find((f) => f.api_name.toLowerCase() === fieldName.toLowerCase());
   if (!field) return [];
   const ops = OPERATORS_BY_TYPE[field.field_type] ?? OPERATORS_BY_TYPE.STRING;
@@ -261,7 +263,7 @@ async function handleValueCompletion(
   if (!ctx.primaryObject || !ctx.whereField) return [];
   const picklistValues = await invoke<Array<{ label: string; value: string; active: boolean }>>(
     "get_picklist_values",
-    { org_id: orgId, object_name: ctx.primaryObject, field_name: ctx.whereField },
+    { orgId, objectName: ctx.primaryObject, fieldName: ctx.whereField },
   ).catch(() => []);
   if (picklistValues.length > 0) {
     return picklistValues.map((v) => ({
@@ -281,106 +283,116 @@ async function handleValueCompletion(
   }));
 }
 
-export function registerSoqlCompletion(orgId: string | null): monaco.IDisposable[] {
+export function registerSoqlCompletion(orgId: string | null, onLog?: CompletionLogFn): monaco.IDisposable[] {
   if (!orgId) return [];
 
   const getFieldsFn = (oid: string, obj: string) =>
-    invoke<FieldMeta[]>("get_fields", { org_id: oid, object_name: obj });
+    invoke<FieldMeta[]>("get_fields", { orgId: oid, objectName: obj });
 
   const provider = monaco.languages.registerCompletionItemProvider("soql", {
     triggerCharacters: [" ", ".", ",", "("],
     async provideCompletionItems(model: monaco.editor.ITextModel, position: monaco.Position) {
-      const textBefore = model.getValueInRange({
-        startLineNumber: 1,
-        startColumn: 1,
-        endLineNumber: position.lineNumber,
-        endColumn: position.column,
-      });
-      const word = model.getWordUntilPosition(position);
-      const range: monaco.IRange = {
-        startLineNumber: position.lineNumber,
-        endLineNumber: position.lineNumber,
-        startColumn: word.startColumn,
-        endColumn: position.column,
-      };
-
-      const ctx = parseCompletionContext(textBefore);
-
-      if (ctx.clause === "FROM" && ctx.triggerKind === "OBJECT") {
-        const objects = await invoke<ObjectMeta[]>("get_objects", { org_id: orgId });
-        return {
-          suggestions: objects.map((obj) => ({
-            label: obj.api_name,
-            kind: CompletionItemKind.Class,
-            detail: `${obj.label} | ${obj.is_custom ? "自定义对象" : "标准对象"}`,
-            insertText: obj.api_name,
-            range,
-            sortText: obj.is_custom ? `1_${obj.api_name}` : `0_${obj.api_name}`,
-          })),
-        };
-      }
-
-      if (ctx.clause === "SUBQUERY_FROM" || ctx.clause === "SUBQUERY_SELECT") {
-        const sub = await handleSubqueryCompletion(ctx, orgId, range);
-        return { suggestions: sub };
-      }
-
-      if (!ctx.primaryObject) return { suggestions: [] };
-
-      if (ctx.triggerKind === "RELATIONSHIP_FIELD" && ctx.relationshipPath.length > 0) {
-        const resolved = await parseRelationshipPath(orgId, ctx.primaryObject, ctx.relationshipPath, getFieldsFn);
-        if (!resolved.isValid) return { suggestions: [] };
-        const fields = await invoke<FieldMeta[]>("get_fields", {
-          org_id: orgId,
-          object_name: resolved.terminalObject,
+      try {
+        const textBefore = model.getValueInRange({
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
         });
-        const relPrefixes =
-          ctx.relationshipPath.length < 5
-            ? fields
-                .filter((f) => f.field_type === "REFERENCE" && f.relationship_name)
-                .map((f) => relationshipPrefixCompletion(f, range))
-                .filter(Boolean) as monaco.languages.CompletionItem[]
-            : [];
-        return {
-          suggestions: [...fields.map((f) => fieldToCompletion(f, range)), ...relPrefixes],
+        const word = model.getWordUntilPosition(position);
+        const range: monaco.IRange = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: position.column,
         };
-      }
 
-      if (ctx.clause === "WHERE" && ctx.triggerKind === "OPERATOR" && ctx.whereField) {
-        return { suggestions: await handleOperatorCompletion(ctx, orgId, range) };
-      }
+        const ctx = parseCompletionContext(textBefore);
+        onLog?.(
+          `补全触发: clause=${ctx.clause}, trigger=${ctx.triggerKind}, primary=${ctx.primaryObject ?? "-"}`,
+          "info",
+        );
 
-      if (ctx.clause === "WHERE" && ctx.triggerKind === "VALUE") {
-        return { suggestions: await handleValueCompletion(ctx, orgId, range) };
-      }
+        if (ctx.clause === "FROM" && ctx.triggerKind === "OBJECT") {
+          const objects = await invoke<ObjectMeta[]>("get_objects", { orgId });
+          return {
+            suggestions: objects.map((obj) => ({
+              label: obj.api_name,
+              kind: CompletionItemKind.Class,
+              detail: `${obj.label} | ${obj.is_custom ? "自定义对象" : "标准对象"}`,
+              insertText: obj.api_name,
+              range,
+              sortText: obj.is_custom ? `1_${obj.api_name}` : `0_${obj.api_name}`,
+            })),
+          };
+        }
 
-      const fields = await invoke<FieldMeta[]>("get_fields", {
-        org_id: orgId,
-        object_name: ctx.primaryObject,
-      });
-      const fieldItems = fields.map((f) => fieldToCompletion(f, range));
-      const extras: monaco.languages.CompletionItem[] = [];
+        if (ctx.clause === "SUBQUERY_FROM" || ctx.clause === "SUBQUERY_SELECT") {
+          const sub = await handleSubqueryCompletion(ctx, orgId, range);
+          return { suggestions: sub };
+        }
 
-      if (ctx.clause === "SELECT") {
-        fields
-          .filter((f) => f.field_type === "REFERENCE" && f.relationship_name)
-          .forEach((f) => {
-            const item = relationshipPrefixCompletion(f, range);
-            if (item) extras.push(item);
+        if (!ctx.primaryObject) return { suggestions: [] };
+
+        if (ctx.triggerKind === "RELATIONSHIP_FIELD" && ctx.relationshipPath.length > 0) {
+          const resolved = await parseRelationshipPath(orgId, ctx.primaryObject, ctx.relationshipPath, getFieldsFn);
+          if (!resolved.isValid) return { suggestions: [] };
+          const fields = await invoke<FieldMeta[]>("get_fields", {
+            orgId,
+            objectName: resolved.terminalObject,
           });
-        extras.push(...AGGREGATE_FUNCTIONS.map((fn) => ({ ...fn, range })));
-        extras.push(...SPECIAL_FUNCTIONS.map((fn) => ({ ...fn, range })));
+          const relPrefixes =
+            ctx.relationshipPath.length < 5
+              ? fields
+                  .filter((f) => f.field_type === "REFERENCE" && f.relationship_name)
+                  .map((f) => relationshipPrefixCompletion(f, range))
+                  .filter(Boolean) as monaco.languages.CompletionItem[]
+              : [];
+          return {
+            suggestions: [...fields.map((f) => fieldToCompletion(f, range)), ...relPrefixes],
+          };
+        }
+
+        if (ctx.clause === "WHERE" && ctx.triggerKind === "OPERATOR" && ctx.whereField) {
+          return { suggestions: await handleOperatorCompletion(ctx, orgId, range) };
+        }
+
+        if (ctx.clause === "WHERE" && ctx.triggerKind === "VALUE") {
+          return { suggestions: await handleValueCompletion(ctx, orgId, range) };
+        }
+
+        const fields = await invoke<FieldMeta[]>("get_fields", {
+          orgId,
+          objectName: ctx.primaryObject,
+        });
+        const fieldItems = fields.map((f) => fieldToCompletion(f, range));
+        const extras: monaco.languages.CompletionItem[] = [];
+
+        if (ctx.clause === "SELECT") {
+          fields
+            .filter((f) => f.field_type === "REFERENCE" && f.relationship_name)
+            .forEach((f) => {
+              const item = relationshipPrefixCompletion(f, range);
+              if (item) extras.push(item);
+            });
+          extras.push(...AGGREGATE_FUNCTIONS.map((fn) => ({ ...fn, range })));
+          extras.push(...SPECIAL_FUNCTIONS.map((fn) => ({ ...fn, range })));
+        }
+
+        const filteredFields =
+          ctx.clause === "GROUP_BY"
+            ? fieldItems.filter((item) => {
+                const f = fields.find((ff) => ff.api_name === item.label);
+                return f && !NON_GROUPABLE_TYPES.has(f.field_type);
+              })
+            : fieldItems;
+
+        return { suggestions: [...filteredFields, ...extras] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        onLog?.(`补全失败: ${message}`, "error");
+        return { suggestions: [] };
       }
-
-      const filteredFields =
-        ctx.clause === "GROUP_BY"
-          ? fieldItems.filter((item) => {
-              const f = fields.find((ff) => ff.api_name === item.label);
-              return f && !NON_GROUPABLE_TYPES.has(f.field_type);
-            })
-          : fieldItems;
-
-      return { suggestions: [...filteredFields, ...extras] };
     },
   });
 

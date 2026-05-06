@@ -3,7 +3,7 @@ import { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import { useEffect, useMemo, useRef } from "react";
 import { useOrgStore } from "../../store/org";
-import { registerSoqlCompletion } from "./soqlCompletion";
+import { registerSoqlCompletion, type CompletionLogFn } from "./soqlCompletion";
 import { registerSoqlLanguage, registerSoqlTokenizer } from "./tokenizer";
 
 loader.config({ monaco });
@@ -11,9 +11,10 @@ loader.config({ monaco });
 interface SoqlMonacoEditorProps {
   value: string;
   onChange: (v: string) => void;
+  onLog?: CompletionLogFn;
 }
 
-export function SoqlMonacoEditor({ value, onChange }: SoqlMonacoEditorProps) {
+export function SoqlMonacoEditor({ value, onChange, onLog }: SoqlMonacoEditorProps) {
   const { currentOrg } = useOrgStore();
   const orgRef = useRef(currentOrg);
   orgRef.current = currentOrg;
@@ -36,11 +37,11 @@ export function SoqlMonacoEditor({ value, onChange }: SoqlMonacoEditorProps) {
   }, []);
 
   useEffect(() => {
-    const disposables = registerSoqlCompletion(orgRef.current);
+    const disposables = registerSoqlCompletion(orgRef.current, onLog);
     return () => {
       disposables.forEach((d) => d.dispose());
     };
-  }, [currentOrg]);
+  }, [currentOrg, onLog]);
 
   return (
     <Editor

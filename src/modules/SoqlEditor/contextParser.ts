@@ -151,22 +151,32 @@ function parseSubqueryContext(soql: string): CompletionContext | null {
   return null;
 }
 
+function getLastMatchIndex(input: string, regex: RegExp): number {
+  let index = -1;
+  let m: RegExpExecArray | null;
+  regex.lastIndex = 0;
+  while ((m = regex.exec(input)) !== null) {
+    index = m.index;
+  }
+  return index;
+}
+
 export function detectClause(soql: string): ClauseType {
-  const padded = ` ${soql.toUpperCase()} `;
-  const entries: Array<{ key: string; type: ClauseType }> = [
-    { key: " OFFSET ", type: "OFFSET" },
-    { key: " LIMIT ", type: "LIMIT" },
-    { key: " HAVING ", type: "HAVING" },
-    { key: " ORDER BY ", type: "ORDER_BY" },
-    { key: " GROUP BY ", type: "GROUP_BY" },
-    { key: " WHERE ", type: "WHERE" },
-    { key: " FROM ", type: "FROM" },
-    { key: " SELECT ", type: "SELECT" },
+  const u = soql.toUpperCase();
+  const entries: Array<{ regex: RegExp; type: ClauseType }> = [
+    { regex: /\bOFFSET\b/g, type: "OFFSET" },
+    { regex: /\bLIMIT\b/g, type: "LIMIT" },
+    { regex: /\bHAVING\b/g, type: "HAVING" },
+    { regex: /\bORDER\s+BY\b/g, type: "ORDER_BY" },
+    { regex: /\bGROUP\s+BY\b/g, type: "GROUP_BY" },
+    { regex: /\bWHERE\b/g, type: "WHERE" },
+    { regex: /\bFROM\b/g, type: "FROM" },
+    { regex: /\bSELECT\b/g, type: "SELECT" },
   ];
   let best = -1;
   let bestType: ClauseType = "UNKNOWN";
-  for (const { key, type } of entries) {
-    const idx = padded.lastIndexOf(key);
+  for (const { regex, type } of entries) {
+    const idx = getLastMatchIndex(u, regex);
     if (idx > best) {
       best = idx;
       bestType = type;
@@ -176,14 +186,17 @@ export function detectClause(soql: string): ClauseType {
 }
 
 export function extractWhereContext(soql: string): { whereField: string | null; whereOperator: string | null } {
-  const u = soql.toUpperCase();
-  const kw = " WHERE ";
-  const wi = u.lastIndexOf(kw);
-  if (wi === -1) return { whereField: null, whereOperator: null };
+  const whereMatch = /\bWHERE\b/gi;
+  let m: RegExpExecArray | null;
+  let whereIdx = -1;
+  while ((m = whereMatch.exec(soql)) !== null) {
+    whereIdx = m.index;
+  }
+  if (whereIdx === -1) return { whereField: null, whereOperator: null };
 
-  let after = soql.slice(wi + kw.length);
+  const after = soql.slice(whereIdx + "WHERE".length);
   const parts = after.split(/\b(?:AND|OR)\b/i);
-  const last = parts[parts.length - 1] ?? "";
+  const last = (parts[parts.length - 1] ?? "").trimStart();
 
   const withOp = last.trimEnd().match(
     /^([A-Za-z0-9_.]+)\s*(=|!=|<>|>=|<=|>|<|LIKE|NOT\s+LIKE|IN|NOT\s+IN|INCLUDES|EXCLUDES)\s*(.*)$/i,

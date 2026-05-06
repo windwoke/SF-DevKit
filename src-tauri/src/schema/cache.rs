@@ -253,6 +253,7 @@ pub async fn get_child_relationships(
 }
 
 pub async fn run_soql_query(org_id: &str, query: &str) -> anyhow::Result<Value> {
+    eprintln!("[soql] run query org={} sql={}", org_id, query.replace('\n', " "));
     let output = run_command(
         &[
             "data",
@@ -265,5 +266,11 @@ pub async fn run_soql_query(org_id: &str, query: &str) -> anyhow::Result<Value> 
         true,
     )
     .await?;
-    serde_json::from_str(&output.stdout).map_err(|e| anyhow::anyhow!(e))
+    if !output.stderr.trim().is_empty() {
+        eprintln!("[soql] stderr: {}", output.stderr.trim());
+    }
+    let parsed: Value = serde_json::from_str(&output.stdout).map_err(|e| anyhow::anyhow!(e))?;
+    let total = parsed["result"]["totalSize"].as_i64().unwrap_or_default();
+    eprintln!("[soql] success totalSize={}", total);
+    Ok(parsed)
 }

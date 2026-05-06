@@ -6,24 +6,52 @@ import { SoqlMonacoEditor } from "./SoqlMonacoEditor";
 
 const DEFAULT_SOQL = "SELECT Id, Name\nFROM Account\nLIMIT 20";
 
+interface SoqlLogEntry {
+  id: number;
+  level: "info" | "error";
+  time: string;
+  message: string;
+}
+
 export function SoqlEditor() {
   const { currentOrg } = useOrgStore();
   const [soql, setSoql] = useState(DEFAULT_SOQL);
   const [resultJson, setResultJson] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<SoqlLogEntry[]>([]);
+  const [logCounter, setLogCounter] = useState(0);
+
+  const pushLog = (level: SoqlLogEntry["level"], message: string) => {
+    setLogCounter((prev) => {
+      const id = prev + 1;
+      const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      setLogs((old) => [...old, { id, level, time, message }]);
+      return id;
+    });
+  };
 
   const runMutation = useMutation({
     mutationFn: async () => {
       if (!currentOrg) throw new Error("请先选择或登录 Org");
-      return invoke<unknown>("run_soql_query", { org_id: currentOrg, query: soql });
+      pushLog("info", `开始执行 SOQL，Org=${currentOrg}`);
+      pushLog("info", `Query: ${soql.replace(/\s+/g, " ").slice(0, 240)}`);
+      return invoke<unknown>("run_soql_query", { orgId: currentOrg, query: soql });
     },
     onSuccess: (data) => {
       setError(null);
-      setResultJson(JSON.stringify(data, null, 2));
+      const pretty = JSON.stringify(data, null, 2);
+      setResultJson(pretty);
+      const rows =
+        (data as { result?: { records?: unknown[]; totalSize?: number } })?.result?.records?.length ??
+        (data as { result?: { totalSize?: number } })?.result?.totalSize ??
+        0;
+      pushLog("info", `执行成功，返回记录数=${rows}`);
     },
     onError: (e) => {
       setResultJson(null);
-      setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
+      pushLog("error", `执行失败: ${message}`);
     },
   });
 
@@ -48,7 +76,11 @@ export function SoqlEditor() {
       </div>
       <div className="soql-layout">
         <div className="soql-editor-wrap">
-          <SoqlMonacoEditor value={soql} onChange={setSoql} />
+          <SoqlMonacoEditor
+            value={soql}
+            onChange={setSoql}
+            onLog={(message, level = "info") => pushLog(level, message)}
+          />
           <div className="soql-toolbar">
             <button type="button" onClick={() => runMutation.mutate()} disabled={runMutation.isPending || !currentOrg}>
               {runMutation.isPending ? "执行中…" : "执行 SOQL"}
@@ -84,6 +116,25 @@ export function SoqlEditor() {
           ) : !error ? (
             <div className="empty-state">执行查询后在此显示结果。</div>
           ) : null}
+        </div>
+        <div className="soql-log-panel">
+          <div className="soql-log-header">
+            <h3 className="soql-results-title">执行日志</h3>
+            <button type="button" onClick={() => setLogs([])} disabled={logs.length === 0}>
+              清空日志
+            </button>
+          </div>
+          {logs.length === 0 ? (
+            <div className="empty-state">暂无日志，执行一次 SOQL 后会显示详细过程。</div>
+          ) : (
+            <div className="soql-log-list">
+              {logs.map((log) => (
+                <div key={log.id} className={log.level === "error" ? "soql-log-item error" : "soql-log-item"}>
+                  <span className="soql-log-time">[{log.time}]</span> {log.message}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>
