@@ -27,6 +27,37 @@ ${xmlParts.join("\n")}
 </Package>`;
 }
 
+export function parsePackageXml(xml: string): PackageSelection[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, "application/xml");
+  const parserError = doc.querySelector("parsererror");
+  if (parserError) {
+    throw new Error("XML 语法错误，请检查标签是否闭合。");
+  }
+
+  const packageNode = doc.querySelector("Package");
+  if (!packageNode) {
+    throw new Error("缺少 <Package> 根节点。");
+  }
+
+  const types = Array.from(doc.getElementsByTagName("types"));
+  const grouped = new Map<string, Set<string>>();
+  for (const typeNode of types) {
+    const name = typeNode.getElementsByTagName("name")[0]?.textContent?.trim() ?? "";
+    if (!name) continue;
+    const members = Array.from(typeNode.getElementsByTagName("members"))
+      .map((node) => node.textContent?.trim() ?? "")
+      .filter(Boolean);
+    if (!grouped.has(name)) grouped.set(name, new Set<string>());
+    const set = grouped.get(name)!;
+    for (const member of members) set.add(member);
+  }
+
+  return Array.from(grouped.entries())
+    .map(([metadata_type, members]) => ({ metadata_type, members: Array.from(members).sort() }))
+    .sort((a, b) => a.metadata_type.localeCompare(b.metadata_type));
+}
+
 function escapeXml(input: string): string {
   return input
     .replace(/&/g, "&amp;")

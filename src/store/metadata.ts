@@ -19,6 +19,7 @@ interface MetadataState {
   toggleComponent: (metadataType: string, fullName: string) => void;
   toggleType: (metadataType: string, members: string[]) => void;
   clearSelection: () => void;
+  replaceSelectionFromList: (items: Array<{ metadata_type: string; members: string[] }>) => void;
   selectedCount: () => number;
   getTypeSelectionState: (metadataType: string, allMembers: string[]) => TypeSelectionState;
   toSelectionList: () => Array<{ metadata_type: string; members: string[] }>;
@@ -62,6 +63,19 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
       return { selection: next };
     }),
   clearSelection: () => set({ selection: {} }),
+  replaceSelectionFromList: (items) =>
+    set(() => {
+      const selection: SelectionMap = {};
+      for (const item of items) {
+        const metadataType = item.metadata_type.trim();
+        if (!metadataType) continue;
+        const members = Array.from(new Set(item.members.map((m) => m.trim()).filter(Boolean))).sort();
+        if (members.length > 0) {
+          selection[metadataType] = members;
+        }
+      }
+      return { selection };
+    }),
   selectedCount: () => Object.values(get().selection).reduce((sum, members) => sum + members.length, 0),
   getTypeSelectionState: (metadataType, allMembers) => {
     const selected = new Set(get().selection[metadataType] ?? []);
