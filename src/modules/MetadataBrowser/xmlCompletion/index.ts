@@ -5,10 +5,27 @@ import { parseXmlCompletionContext } from "./contextParser";
 
 const API_VERSIONS = ["62.0", "61.0", "60.0", "59.0", "58.0", "57.0"];
 const PACKAGE_XMLNS = "http://soap.sforce.com/2006/04/metadata";
+const FALLBACK_TYPES = [
+  "ApexClass",
+  "ApexTrigger",
+  "CustomObject",
+  "CustomField",
+  "Flow",
+  "Layout",
+  "PermissionSet",
+  "Profile",
+];
 
 export function registerPackageXmlCompletion(monaco: typeof MonacoType, orgId: string): MonacoType.IDisposable {
   return monaco.languages.registerCompletionItemProvider("xml", {
-    triggerCharacters: ["<", "/", ">", " ", "\n"],
+    triggerCharacters: [
+      "<",
+      "/",
+      ">",
+      " ",
+      "\n",
+      ...("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.*".split("")),
+    ],
     provideCompletionItems: async (model, position) => {
       const text = model.getValue();
       const offset = model.getOffsetAt(position);
@@ -22,6 +39,8 @@ export function registerPackageXmlCompletion(monaco: typeof MonacoType, orgId: s
           return { suggestions: buildCloseTag(monaco, context.unclosedTag, range) };
         case "TAG_OPEN":
           return { suggestions: buildOpenTags(monaco, context.parentTag, range) };
+        case "BLANK_CONTENT":
+          return { suggestions: buildBlankSnippets(monaco, context.parentTag, range) };
         case "ATTRIBUTE":
           if (context.tagName === "Package") {
             return {
@@ -49,7 +68,7 @@ export function registerPackageXmlCompletion(monaco: typeof MonacoType, orgId: s
             })),
           };
         case "NAME_CONTENT": {
-          const types = await tauriApi.listMetadataTypes({ orgId, forceRefresh: false });
+          const types = await safeListMetadataTypes(orgId);
           const used = new Set(context.usedTypes);
           return { suggestions: buildNameItems(monaco, types, used, range) };
         }
@@ -125,6 +144,60 @@ function buildOpenTags(
   return [];
 }
 
+function buildBlankSnippets(
+  monaco: typeof MonacoType,
+  parent: "Package" | "types" | "unknown",
+  range: MonacoType.IRange,
+): MonacoType.languages.CompletionItem[] {
+  if (parent === "Package") {
+    return [
+      {
+        label: "types 代码片段",
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        detail: "插入完整 <types> 块",
+        insertText: "<types>\n    <members>${1:*}</members>\n    <name>${2:ApexClass}</name>\n</types>",
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        range,
+        sortText: "0_types_snippet",
+      },
+      {
+        label: "version 代码片段",
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        detail: "插入 <version> 标签",
+        insertText: "<version>${1:60.0}</version>",
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        range,
+        sortText: "1_version_snippet",
+      },
+    ];
+  }
+
+  if (parent === "types") {
+    return [
+      {
+        label: "members 代码片段",
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        detail: "插入 <members> 标签",
+        insertText: "<members>${1:*}</members>",
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        range,
+        sortText: "0_members_snippet",
+      },
+      {
+        label: "name 代码片段",
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        detail: "插入 <name> 标签",
+        insertText: "<name>${1:ApexClass}</name>",
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        range,
+        sortText: "1_name_snippet",
+      },
+    ];
+  }
+
+  return [];
+}
+
 function buildCloseTag(
   monaco: typeof MonacoType,
   unclosedTag: string | null,
@@ -156,6 +229,20 @@ function buildNameItems(
     sortText: used.has(t.xml_name) ? `z_${t.xml_name}` : `a_${t.group_name}_${t.xml_name}`,
     tags: used.has(t.xml_name) ? [monaco.languages.CompletionItemTag.Deprecated] : [],
   }));
+}
+
+async function safeListMetadataTypes(orgId: string): Promise<MetadataTypeMeta[]> {
+  try {
+    return await tauriApi.listMetadataTypes({ orgId, forceRefresh: false });
+  } catch {
+    return FALLBACK_TYPES.map((xml_name) => ({
+      xml_name,
+      directory_name: null,
+      suffix: null,
+      in_folder: false,
+      group_name: "Fallback",
+    }));
+  }
 }
 
 async function buildMembersItems(

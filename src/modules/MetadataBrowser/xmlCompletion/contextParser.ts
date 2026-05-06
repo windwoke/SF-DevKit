@@ -3,6 +3,7 @@ export type XmlCompletionContext =
   | { kind: "MEMBERS_CONTENT"; resolvedType: string | null; existingMembers: string[] }
   | { kind: "NAME_CONTENT"; usedTypes: string[] }
   | { kind: "VERSION_CONTENT" }
+  | { kind: "BLANK_CONTENT"; parentTag: "Package" | "types" | "unknown" }
   | { kind: "ATTRIBUTE"; tagName: string }
   | { kind: "TAG_OPEN"; parentTag: "Package" | "types" | "unknown" }
   | { kind: "TAG_CLOSE"; unclosedTag: string | null }
@@ -43,31 +44,40 @@ export function parseXmlCompletionContext(fullText: string, offset: number): Xml
     return { kind: "VERSION_CONTENT" };
   }
 
+  const parentTag = findImmediateParentTag(textBefore);
+  if ((parentTag === "Package" || parentTag === "types") && isWhitespaceAroundCursor(fullText, offset)) {
+    return { kind: "BLANK_CONTENT", parentTag };
+  }
+
   return { kind: "UNKNOWN" };
 }
 
 function isInTagContent(fullText: string, offset: number, tag: string): boolean {
-  const open = `<${tag}>`;
-  const close = `</${tag}>`;
-  const lastOpen = fullText.lastIndexOf(open, offset);
-  const lastCloseBefore = fullText.lastIndexOf(close, offset);
+  const openRe = new RegExp(`<${tag}\\b[^>]*>`, "gi");
+  const closeRe = new RegExp(`</${tag}>`, "gi");
+  const before = fullText.slice(0, offset);
+  const lastOpen = findLastMatchIndex(before, openRe);
+  const lastCloseBefore = findLastMatchIndex(before, closeRe);
   if (lastOpen === -1 || lastOpen < lastCloseBefore) return false;
-  const closeAfter = fullText.indexOf(close, lastOpen);
+  const after = fullText.slice(lastOpen);
+  const closeAfterRel = after.search(closeRe);
+  const closeAfter = closeAfterRel === -1 ? -1 : lastOpen + closeAfterRel;
   return closeAfter !== -1 && offset <= closeAfter;
 }
 
 function extractCurrentTypesBlock(fullText: string, offset: number): string {
-  const tokenRe = /<\/?types>/g;
+  const tokenRe = /<\/?types\b[^>]*>/gi;
   const stack: number[] = [];
   let m: RegExpExecArray | null;
   while ((m = tokenRe.exec(fullText)) !== null) {
     if (m.index >= offset) break;
-    if (m[0] === "<types>") stack.push(m.index);
+    if (/^<types\b/i.test(m[0]) && !/^<\/types/i.test(m[0])) stack.push(m.index);
     else if (stack.length > 0) stack.pop();
   }
   const start = stack.length > 0 ? stack[stack.length - 1] : -1;
   if (start === -1) return "";
-  const end = fullText.indexOf("</types>", offset);
+  const endMatch = fullText.slice(offset).match(/<\/types>/i);
+  const end = endMatch?.index == null ? -1 : offset + endMatch.index;
   return fullText.slice(start, end === -1 ? fullText.length : end + "</types>".length);
 }
 
@@ -77,7 +87,7 @@ function extractNameFromBlock(blockText: string): string | null {
 }
 
 function extractMembersFromBlock(blockText: string): string[] {
-  const re = /<members>\s*([^<]*?)\s*<\/members>/g;
+  const re = /<members>\s*([^<]*?)\s*<\/members>/gi;
   const out: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(blockText)) !== null) {
@@ -88,7 +98,7 @@ function extractMembersFromBlock(blockText: string): string[] {
 }
 
 function extractAllDeclaredTypes(fullText: string): string[] {
-  const re = /<name>\s*([^<]+?)\s*<\/name>/g;
+  const re = /<name>\s*([^<]+?)\s*<\/name>/gi;
   const out = new Set<string>();
   let m: RegExpExecArray | null;
   while ((m = re.exec(fullText)) !== null) {
@@ -96,6 +106,24 @@ function extractAllDeclaredTypes(fullText: string): string[] {
     if (v) out.add(v);
   }
   return Array.from(out);
+}
+
+function findLastMatchIndex(text: string, re: RegExp): number {
+  let idx = -1;
+  re.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    idx = m.index;
+  }
+  return idx;
+}
+
+function isWhitespaceAroundCursor(text: string, offset: number): boolean {
+  const before = text.slice(0, offset);
+  const after = text.slice(offset);
+  const left = before.match(/[^\s]$/)?.[0] ?? "";
+  const right = after.match(/^[^\s]/)?.[0] ?? "";
+  return (!left || left === ">") && (!right || right === "<");
 }
 
 function findImmediateParentTag(textBefore: string): "Package" | "types" | "unknown" {

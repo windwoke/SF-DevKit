@@ -1,10 +1,11 @@
 import Editor from "@monaco-editor/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMonaco } from "@monaco-editor/react";
 import { useMetadataStore } from "../../store/metadata";
 import { generatePackageXml, parsePackageXml } from "./packageXml";
 import { registerPackageXmlCompletion } from "./xmlCompletion";
 import { useOrgStore } from "../../store/org";
+import { computePackageXmlDiagnostics } from "./xmlCompletion/diagnostics";
 
 export function PackageXmlPanel() {
   const monaco = useMonaco();
@@ -15,6 +16,7 @@ export function PackageXmlPanel() {
   const [draftXml, setDraftXml] = useState(previewXml);
   const [lastSyncedXml, setLastSyncedXml] = useState(previewXml);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const modelRef = useRef<import("monaco-editor").editor.ITextModel | null>(null);
 
   useEffect(() => {
     if (!isEditMode) {
@@ -67,6 +69,18 @@ export function PackageXmlPanel() {
     return () => disposable.dispose();
   }, [monaco, currentOrg, isEditMode]);
 
+  useEffect(() => {
+    if (!monaco) return;
+    const model = modelRef.current;
+    if (!model) return;
+    if (!isEditMode) {
+      monaco.editor.setModelMarkers(model, "package-xml-diagnostics", []);
+      return;
+    }
+    const markers = computePackageXmlDiagnostics(monaco, draftXml);
+    monaco.editor.setModelMarkers(model, "package-xml-diagnostics", markers);
+  }, [monaco, isEditMode, draftXml, selection]);
+
   return (
     <section className="metadata-pane">
       <header className="metadata-pane-header">
@@ -107,8 +121,18 @@ export function PackageXmlPanel() {
             automaticLayout: true,
             scrollBeyondLastLine: false,
             fontSize: 12,
+            autoClosingBrackets: "never",
+            autoClosingQuotes: "never",
+            autoClosingDelete: "never",
+            autoClosingOvertype: "never",
             quickSuggestions: { other: true, comments: false, strings: true },
             suggest: { showWords: false, preview: true },
+          }}
+          onMount={(editor) => {
+            const model = editor.getModel();
+            if (model) {
+              modelRef.current = model;
+            }
           }}
         />
       </div>
