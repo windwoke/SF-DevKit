@@ -39,6 +39,12 @@ body,
   gap: 10px;
 }
 
+.topbar-org-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .topbar-open-btn {
   padding: 4px 10px;
 }
@@ -98,13 +104,28 @@ body,
   gap: 10px;
 }
 
-.success-banner {
-  border: 1px solid #2d6f55;
+.notice-banner {
   border-radius: 10px;
   padding: 10px 12px;
+  font-size: 13px;
+}
+
+.notice-banner-success {
+  border: 1px solid #2d6f55;
   background: #163a2e;
   color: #a7e9cb;
-  font-size: 13px;
+}
+
+.notice-banner-error {
+  border: 1px solid #7a3030;
+  background: #3a1a1a;
+  color: #ffb2b2;
+}
+
+.org-login-error {
+  color: #ffb2b2;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .org-actions {
@@ -126,14 +147,36 @@ body,
   color: #7f8ca8;
 }
 
-.org-login-form {
+.org-login-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 13, 0.7);
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  z-index: 40;
+}
+
+.org-login-modal {
+  width: min(520px, calc(100vw - 32px));
   border: 1px solid #2f3443;
-  border-radius: 10px;
+  border-radius: 12px;
   background: #171c28;
-  padding: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.org-login-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.org-login-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .org-form-input,
@@ -161,9 +204,7 @@ body,
 
 .org-card-top {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
 }
 
 .org-name-block {
@@ -195,10 +236,11 @@ body,
 .org-type {
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 4px 8px;
+  padding: 2px 8px;
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
+  line-height: 1.4;
 }
 
 .org-type-scratch {

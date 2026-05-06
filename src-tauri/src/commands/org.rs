@@ -32,17 +32,13 @@ pub async fn logout_org(state: State<'_, DbState>, username: String) -> Result<(
         .map_err(|e| e.to_string())
 }
 
+/// Browser OAuth only; returns immediately after CLI finishes. Call `sync_orgs` next to refresh DB.
 #[tauri::command]
 pub async fn login_org(
-    state: State<'_, DbState>,
     alias: Option<String>,
     login_domain: Option<String>,
-) -> Result<Vec<OrgAuth>, String> {
-    manager::login_org(
-        &state.0,
-        alias,
-        login_domain.as_deref().unwrap_or("production"),
-    )
+) -> Result<(), String> {
+    manager::login_org_web(alias, login_domain.as_deref().unwrap_or("production"))
         .await
         .map_err(|e| e.to_string())
 }

@@ -13,7 +13,16 @@ export function TopBar() {
     <header className="topbar">
       <div>当前模块：开发工具台</div>
       <div className="topbar-right">
-        <div>{org ? `当前 Org: ${org.alias ?? org.id}` : "当前 Org: 未选择"}</div>
+        <div className="topbar-org-info">
+          {org ? (
+            <>
+              <span>{`当前 Org: ${org.alias ?? org.id}`}</span>
+              <span className={`org-type org-type-${org.org_type}`}>{org.org_type}</span>
+            </>
+          ) : (
+            "当前 Org: 未选择"
+          )}
+        </div>
         <button
           className="topbar-open-btn"
           onClick={() => org && openMutation.mutate(org.id)}

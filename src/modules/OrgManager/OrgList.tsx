@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tauriApi, type LoginDomain } from "../../lib/tauri";
 import { useOrgStore } from "../../store/org";
@@ -7,10 +7,22 @@ export function OrgList() {
   const queryClient = useQueryClient();
   const { setCurrentOrg, setOrgs } = useOrgStore();
   const [keyword, setKeyword] = useState("");
-  const [showLoginForm, setShowLoginForm] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginAlias, setLoginAlias] = useState("");
   const [loginDomain, setLoginDomain] = useState<LoginDomain>("production");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{
+    text: string;
+    autoHide: boolean;
+    variant?: "success" | "error";
+  } | null>(null);
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!notice?.autoHide) return;
+    const id = window.setTimeout(() => setNotice(null), 3000);
+    return () => window.clearTimeout(id);
+  }, [notice]);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["orgs"],
@@ -39,19 +51,6 @@ export function OrgList() {
     },
   });
 
-  const loginMutation = useMutation({
-    mutationFn: (payload: { alias?: string; loginDomain: LoginDomain }) => tauriApi.loginOrg(payload),
-    onSuccess: (orgs) => {
-      setOrgs(orgs);
-      queryClient.setQueryData(["orgs"], orgs);
-      setCurrentOrg(orgs.find((org) => org.is_default)?.id ?? orgs[0]?.id ?? null);
-      setShowLoginForm(false);
-      setLoginAlias("");
-      setLoginDomain("production");
-      setNotice("Org 登录成功，已自动设置为默认。");
-    },
-  });
-
   const openMutation = useMutation({
     mutationFn: (username: string) => tauriApi.openOrg(username),
   });
@@ -61,9 +60,46 @@ export function OrgList() {
     onSuccess: (orgs) => {
       setOrgs(orgs);
       queryClient.setQueryData(["orgs"], orgs);
-      setNotice("Org 列表已刷新。");
+      setNotice({ text: "Org 列表已刷新。", autoHide: true, variant: "success" });
     },
   });
+
+  const handleLoginConfirm = async () => {
+    setLoginError(null);
+    setLoginBusy(true);
+    let browserAuthDone = false;
+    try {
+      await tauriApi.loginOrg({ alias: loginAlias, loginDomain });
+      setShowLoginModal(false);
+      setLoginAlias("");
+      setLoginDomain("production");
+      browserAuthDone = true;
+      setNotice({ text: "浏览器授权成功，正在同步 Org 列表…", autoHide: false, variant: "success" });
+      const orgs = await tauriApi.syncOrgs();
+      setOrgs(orgs);
+      queryClient.setQueryData(["orgs"], orgs);
+      const defaultOrg = orgs.find((org) => !!org.is_default) ?? null;
+      setCurrentOrg(defaultOrg?.id ?? orgs[0]?.id ?? null);
+      setNotice(
+        defaultOrg
+          ? {
+              text: `同步完成，默认 Org：${defaultOrg.alias ?? defaultOrg.id}。`,
+              autoHide: true,
+              variant: "success",
+            }
+          : { text: "同步完成，未检测到默认 Org，请手动设置。", autoHide: true, variant: "success" },
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (browserAuthDone) {
+        setNotice({ text: `同步失败：${message}`, autoHide: true, variant: "error" });
+      } else {
+        setLoginError(message);
+      }
+    } finally {
+      setLoginBusy(false);
+    }
+  };
 
   const filteredOrgs = useMemo(() => {
     if (!data) return [];
@@ -81,7 +117,11 @@ export function OrgList() {
 
   return (
     <div className="org-list">
-      {notice ? <div className="success-banner">{notice}</div> : null}
+      {notice ? (
+        <div className={notice.variant === "error" ? "notice-banner notice-banner-error" : "notice-banner notice-banner-success"}>
+          {notice.text}
+        </div>
+      ) : null}
       <div className="org-actions">
         <input
           className="org-search"
@@ -93,37 +133,40 @@ export function OrgList() {
         <button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending}>
           {refreshMutation.isPending ? "刷新中..." : "刷新"}
         </button>
-        <button onClick={() => setShowLoginForm((prev) => !prev)} disabled={loginMutation.isPending}>
-          {showLoginForm ? "取消添加" : "添加 Org"}
+        <button onClick={() => setShowLoginModal(true)} disabled={loginBusy}>
+          添加 Org
         </button>
       </div>
-      {showLoginForm ? (
-        <div className="org-login-form">
-          <input
-            type="text"
-            className="org-form-input"
-            value={loginAlias}
-            onChange={(e) => setLoginAlias(e.target.value)}
-            placeholder="Org 别名（可选）"
-          />
-          <select
-            className="org-form-select"
-            value={loginDomain}
-            onChange={(e) => setLoginDomain(e.target.value as LoginDomain)}
-          >
-            <option value="production">正式环境（login.salesforce.com）</option>
-            <option value="sandbox">测试环境（test.salesforce.com）</option>
-          </select>
-          <button
-            onClick={() => loginMutation.mutate({ alias: loginAlias, loginDomain })}
-            disabled={loginMutation.isPending}
-          >
-            {loginMutation.isPending ? "登录中..." : "登录并设为默认"}
-          </button>
+      {showLoginModal ? (
+        <div className="org-login-modal-backdrop" onClick={() => !loginBusy && setShowLoginModal(false)}>
+          <div className="org-login-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="org-login-title">添加 Org</h3>
+            <input
+              type="text"
+              className="org-form-input"
+              value={loginAlias}
+              onChange={(e) => setLoginAlias(e.target.value)}
+              placeholder="Org 别名（可选）"
+            />
+            <select
+              className="org-form-select"
+              value={loginDomain}
+              onChange={(e) => setLoginDomain(e.target.value as LoginDomain)}
+            >
+              <option value="production">正式环境（login.salesforce.com）</option>
+              <option value="sandbox">测试环境（test.salesforce.com）</option>
+            </select>
+            {loginError ? <div className="org-login-error">{loginError}</div> : null}
+            <div className="org-login-modal-actions">
+              <button onClick={() => setShowLoginModal(false)} disabled={loginBusy}>
+                取消
+              </button>
+              <button onClick={() => void handleLoginConfirm()} disabled={loginBusy}>
+                {loginBusy ? "等待浏览器授权…" : "登录并设为默认"}
+              </button>
+            </div>
+          </div>
         </div>
-      ) : null}
-      {loginMutation.isError ? (
-        <div className="empty-state error">登录失败：{(loginMutation.error as Error).message}</div>
       ) : null}
       {filteredOrgs.length > 0 ? (
         filteredOrgs.map((org) => (
@@ -133,10 +176,10 @@ export function OrgList() {
                 <div className="org-name">
                   {org.alias ?? org.id}
                   {org.is_default ? <span className="org-default-tag">默认</span> : null}
+                  <span className={`org-type org-type-${org.org_type}`}>{org.org_type}</span>
                 </div>
                 <div className="org-sub">{org.instance_url}</div>
               </div>
-              <div className={`org-type org-type-${org.org_type}`}>{org.org_type}</div>
             </div>
             <div className="org-buttons org-card-bottom">
               <button onClick={() => openMutation.mutate(org.id)} disabled={openMutation.isPending}>
