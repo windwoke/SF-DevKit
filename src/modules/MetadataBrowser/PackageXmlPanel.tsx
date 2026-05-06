@@ -1,9 +1,14 @@
 import Editor from "@monaco-editor/react";
 import { useEffect, useMemo, useState } from "react";
+import { useMonaco } from "@monaco-editor/react";
 import { useMetadataStore } from "../../store/metadata";
 import { generatePackageXml, parsePackageXml } from "./packageXml";
+import { registerPackageXmlCompletion } from "./xmlCompletion";
+import { useOrgStore } from "../../store/org";
 
 export function PackageXmlPanel() {
+  const monaco = useMonaco();
+  const { currentOrg } = useOrgStore();
   const { apiVersion, selection, toSelectionList, replaceSelectionFromList } = useMetadataStore();
   const previewXml = useMemo(() => generatePackageXml(toSelectionList(), apiVersion), [selection, apiVersion, toSelectionList]);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -56,6 +61,12 @@ export function PackageXmlPanel() {
     }
   };
 
+  useEffect(() => {
+    if (!monaco || !currentOrg || !isEditMode) return;
+    const disposable = registerPackageXmlCompletion(monaco, currentOrg);
+    return () => disposable.dispose();
+  }, [monaco, currentOrg, isEditMode]);
+
   return (
     <section className="metadata-pane">
       <header className="metadata-pane-header">
@@ -96,6 +107,8 @@ export function PackageXmlPanel() {
             automaticLayout: true,
             scrollBeyondLastLine: false,
             fontSize: 12,
+            quickSuggestions: { other: true, comments: false, strings: true },
+            suggest: { showWords: false, preview: true },
           }}
         />
       </div>
