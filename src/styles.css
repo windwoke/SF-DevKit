@@ -145,7 +145,7 @@ body,
 
 .org-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   align-items: start;
 }
@@ -382,6 +382,36 @@ body,
   font-size: 12px;
 }
 
+.org-manage-actions {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed #2a3140;
+}
+
+.org-manage-actions button {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.org-icon-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.org-icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
 button.org-link-clear {
   background: transparent;
   border-color: #3d4a63;
@@ -391,6 +421,12 @@ button.org-link-clear {
 button.org-link-clear:hover:not(:disabled) {
   border-color: #5a6a8a;
   color: #d0d6e8;
+}
+
+@media (max-width: 1180px) {
+  .org-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 button {

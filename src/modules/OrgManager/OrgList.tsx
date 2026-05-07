@@ -3,6 +3,48 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tauriApi, type LoginDomain } from "../../lib/tauri";
 import { useOrgStore } from "../../store/org";
 
+function IconFolder() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-10Z" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+function IconLaunch() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M9 6H6.5A2.5 2.5 0 0 0 4 8.5v9A2.5 2.5 0 0 0 6.5 20h9a2.5 2.5 0 0 0 2.5-2.5V15" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M13 5h6v6M19 5l-8.5 8.5" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 7h14M10 11v6M14 11v6M8 7l1-2h6l1 2M7 7v11a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V7" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+function IconCompass() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.7" />
+      <path d="m15.8 8.2-2.3 6.1-6.1 2.3 2.3-6.1 6.1-2.3Z" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+function IconSwitch() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 8h11m0 0-2.6-2.6M16 8l-2.6 2.6M19 16H8m0 0 2.6-2.6M8 16l2.6 2.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function OrgList() {
   const queryClient = useQueryClient();
   const { setCurrentOrg, setOrgs } = useOrgStore();
@@ -227,36 +269,41 @@ export function OrgList() {
                 </span>
               </div>
               <div className="org-linked-actions">
-                <button type="button" onClick={() => void linkLocalProject(org.id)}>
-                  选择文件夹…
+                <button type="button" className="org-icon-btn" title="选择本地项目文件夹" aria-label="选择本地项目文件夹" onClick={() => void linkLocalProject(org.id)}>
+                  <IconFolder />
                 </button>
                 <button
                   type="button"
+                  className="org-icon-btn"
+                  title="在本地 IDE 中打开项目"
+                  aria-label="在本地 IDE 中打开项目"
                   disabled={!org.linked_project_path?.trim() || openIdeMutation.isPending}
                   onClick={() => openIdeMutation.mutate(org.id)}
                 >
-                  {openIdeMutation.isPending ? "打开中…" : "在 IDE 中打开"}
+                  <IconLaunch />
                 </button>
                 <button
                   type="button"
-                  className="org-link-clear"
+                  className="org-icon-btn org-link-clear"
+                  title="清除关联路径"
+                  aria-label="清除关联路径"
                   disabled={!org.linked_project_path?.trim()}
                   onClick={() => void clearLinkedProject(org.id)}
                 >
-                  清除
+                  <IconTrash />
                 </button>
               </div>
-            </div>
-            <div className="org-buttons org-card-bottom">
-              <button onClick={() => openMutation.mutate(org.id)} disabled={openMutation.isPending}>
-                Open
-              </button>
-              <button onClick={() => switchMutation.mutate(org.id)} disabled={switchMutation.isPending}>
-                设为默认
-              </button>
-              <button className="danger" onClick={() => logoutMutation.mutate(org.id)} disabled={logoutMutation.isPending}>
-                登出
-              </button>
+              <div className="org-manage-actions">
+                <button className="org-icon-btn" title="在 Salesforce 打开 Org" aria-label="在 Salesforce 打开 Org" onClick={() => openMutation.mutate(org.id)} disabled={openMutation.isPending}>
+                  <IconCompass />
+                </button>
+                <button className="org-icon-btn" title="切换为默认 Org" aria-label="切换为默认 Org" onClick={() => switchMutation.mutate(org.id)} disabled={switchMutation.isPending}>
+                  <IconSwitch />
+                </button>
+                <button className="org-icon-btn danger" title="登出当前 Org" aria-label="登出当前 Org" onClick={() => logoutMutation.mutate(org.id)} disabled={logoutMutation.isPending}>
+                  <IconTrash />
+                </button>
+              </div>
             </div>
           </article>
         ))

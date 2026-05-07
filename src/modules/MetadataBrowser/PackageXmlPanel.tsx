@@ -6,6 +6,7 @@ import { generatePackageXml, parsePackageXml } from "./packageXml";
 import { registerPackageXmlCompletion } from "./xmlCompletion";
 import { useOrgStore } from "../../store/org";
 import { computePackageXmlDiagnostics } from "./xmlCompletion/diagnostics";
+import { parseXmlCompletionContext } from "./xmlCompletion/contextParser";
 
 export function PackageXmlPanel() {
   const monaco = useMonaco();
@@ -17,6 +18,11 @@ export function PackageXmlPanel() {
   const [lastSyncedXml, setLastSyncedXml] = useState(previewXml);
   const [draftError, setDraftError] = useState<string | null>(null);
   const modelRef = useRef<import("monaco-editor").editor.ITextModel | null>(null);
+  const isEditModeRef = useRef(false);
+
+  useEffect(() => {
+    isEditModeRef.current = isEditMode;
+  }, [isEditMode]);
 
   useEffect(() => {
     if (!isEditMode) {
@@ -132,6 +138,19 @@ export function PackageXmlPanel() {
             const model = editor.getModel();
             if (model) {
               modelRef.current = model;
+              model.onDidChangeContent((event) => {
+                if (!isEditModeRef.current) return;
+                const isDelete = event.changes.some((change) => change.text.length === 0 && change.rangeLength > 0);
+                if (!isDelete) return;
+                const position = editor.getPosition();
+                if (!position) return;
+                const offset = model.getOffsetAt(position);
+                const ctx = parseXmlCompletionContext(model.getValue(), offset);
+                if (ctx.kind !== "NAME_CONTENT" && ctx.kind !== "MEMBERS_CONTENT") return;
+                queueMicrotask(() => {
+                  editor.trigger("package-xml-delete", "editor.action.triggerSuggest", {});
+                });
+              });
             }
           }}
         />
