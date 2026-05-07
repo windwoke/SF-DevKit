@@ -1,11 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { tauriApi } from "../../lib/tauri";
 import { useOrgStore } from "../../store/org";
 import { useSoqlStore } from "../../store/soql";
 import { SoqlMonacoEditor } from "./SoqlMonacoEditor";
 import { extractFromObject } from "./contextParser";
+import { extractSubqueryRows, getByPath, parseSoqlLayout, type MainColumn } from "./resultLayout";
 import { clearSoqlCompletionCache } from "./soqlCompletion";
 import { formatSoql } from "./soqlFormat";
 import { IconCopy, IconExport, IconFormat, IconRefresh, IconRun } from "./SoqlToolbarIcons";
@@ -35,19 +36,24 @@ interface ClassifiedError {
 type SortDirection = "asc" | "desc";
 type SortState = { column: string | null; direction: SortDirection };
 
-type RecordsTable = { cols: string[]; rows: Record<string, unknown>[] };
+type ParsedRecords = { fallbackCols: string[]; rows: Record<string, unknown>[] };
+type RecordsTable = { cols: MainColumn[]; rows: Record<string, unknown>[] };
 
 /** 解析 result.records（含空数组）；解析失败返回 null */
-function parseRecordsTableFromResultJson(resultJson: string): RecordsTable | null {
+function parseRecordsTableFromResultJson(resultJson: string): ParsedRecords | null {
   try {
     const data = JSON.parse(resultJson) as { result?: { records?: Record<string, unknown>[] } };
     const records = data.result?.records;
     if (!Array.isArray(records)) return null;
     const colSet = new Set<string>();
     for (const row of records) {
-      if (row && typeof row === "object") Object.keys(row as object).forEach((c) => colSet.add(c));
+      if (row && typeof row === "object") {
+        Object.keys(row as object)
+          .filter((c) => c !== "attributes")
+          .forEach((c) => colSet.add(c));
+      }
     }
-    return { cols: [...colSet], rows: [...records] };
+    return { fallbackCols: [...colSet], rows: [...records] };
   } catch {
     return null;
   }
@@ -60,6 +66,7 @@ export function SoqlEditor() {
   const [error, setError] = useState<ClassifiedError | null>(null);
   const [summary, setSummary] = useState<QuerySummary | null>(null);
   const [sortState, setSortState] = useState<SortState>({ column: null, direction: "asc" });
+  const [expandedSubqueries, setExpandedSubqueries] = useState<Record<string, boolean>>({});
   const [completionLoading, setCompletionLoading] = useState<string | null>(null);
   const [logs, setLogs] = useState<SoqlLogEntry[]>([]);
   const [logCounter, setLogCounter] = useState(0);
@@ -83,6 +90,7 @@ export function SoqlEditor() {
     exportUiTimerRef.current = null;
     setResultCopyUi("idle");
     setExportUi("idle");
+    setExpandedSubqueries({});
   }, [resultJson]);
 
   const pushLog = useCallback((level: SoqlLogEntry["level"], message: string) => {
@@ -161,24 +169,46 @@ export function SoqlEditor() {
   });
 
   const parsedTable = useMemo(() => (resultJson ? parseRecordsTableFromResultJson(resultJson) : null), [resultJson]);
+  const resultLayout = useMemo(() => parseSoqlLayout(soql), [soql]);
 
   const table = useMemo(() => {
     if (!parsedTable || parsedTable.rows.length === 0) return null;
     const rows = [...parsedTable.rows];
+    const fallbackColumns: MainColumn[] = parsedTable.fallbackCols.map((label, idx) => ({
+      id: `fallback:${label}:${idx}`,
+      label,
+      kind: "field" as const,
+      path: label.split(".").filter(Boolean),
+    }));
+    const cols = resultLayout?.mainColumns.length ? resultLayout.mainColumns : fallbackColumns;
     if (sortState.column) {
-      const col = sortState.column;
+      const sortableCol = cols.find(
+        (col): col is Extract<MainColumn, { kind: "field" }> => col.id === sortState.column && col.kind === "field",
+      );
+      if (!sortableCol) {
+        return { cols, rows };
+      }
       const dir = sortState.direction === "asc" ? 1 : -1;
-      rows.sort((a, b) => compareCell(a[col], b[col]) * dir);
+      rows.sort((a, b) => compareCell(getByPath(a, sortableCol.path), getByPath(b, sortableCol.path)) * dir);
     }
-    return { cols: parsedTable.cols, rows };
-  }, [parsedTable, sortState]);
+    return { cols, rows };
+  }, [parsedTable, resultLayout, sortState]);
 
-  const toggleSort = (column: string) => {
+  const toggleSort = (column: MainColumn) => {
+    if (column.kind !== "field") return;
     setSortState((prev) => {
-      if (prev.column !== column) return { column, direction: "asc" };
-      return { column, direction: prev.direction === "asc" ? "desc" : "asc" };
+      if (prev.column !== column.id) return { column: column.id, direction: "asc" };
+      return { column: column.id, direction: prev.direction === "asc" ? "desc" : "asc" };
     });
   };
+
+  const toggleSubqueryExpand = useCallback((rowKey: string, subqueryName: string) => {
+    const stateKey = `${rowKey}::${subqueryName}`;
+    setExpandedSubqueries((prev) => ({
+      ...prev,
+      [stateKey]: !prev[stateKey],
+    }));
+  }, []);
 
   const handleFormatSoql = useCallback(() => {
     setSoql(formatSoql(soql));
@@ -403,31 +433,121 @@ export function SoqlEditor() {
                 <thead>
                   <tr>
                     <th className="soql-th-rownum">#</th>
-                    {table.cols.map((c) => (
-                      <th key={c} className="soql-sortable-th" onClick={() => toggleSort(c)}>
-                        <span>{c}</span>
-                        {sortState.column === c ? <span>{sortState.direction === "asc" ? "▲" : "▼"}</span> : null}
+                    {table.cols.map((col) => (
+                      <th
+                        key={col.id}
+                        className={col.kind === "field" ? "soql-sortable-th" : undefined}
+                        onClick={() => toggleSort(col)}
+                      >
+                        <span>{col.label}</span>
+                        {sortState.column === col.id ? <span>{sortState.direction === "asc" ? "▲" : "▼"}</span> : null}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {table.rows.map((row, i) => (
-                    <tr key={i}>
-                      <td className="soql-td-rownum">{i + 1}</td>
-                      {table.cols.map((c) => (
-                        <td key={c} title={formatCell(row[c])}>
-                          <span className="soql-cell-text">{formatCell(row[c])}</span>
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                  {table.rows.map((row, i) => {
+                    const rowKey = getRowIdentity(row, i);
+                    const expandedItems = table.cols
+                      .filter((col): col is Extract<MainColumn, { kind: "subquery" }> => col.kind === "subquery")
+                      .map((col) => {
+                        const sqRows = extractSubqueryRows(row, col.subqueryName);
+                        const sqLayout = resultLayout?.subqueries[col.subqueryName];
+                        const stateKey = `${rowKey}::${col.subqueryName}`;
+                        return { col, sqRows, sqLayout, expanded: Boolean(expandedSubqueries[stateKey]) };
+                      })
+                      .filter((item) => item.expanded && item.sqLayout);
+
+                    return (
+                      <Fragment key={`${rowKey}-fragment`}>
+                        <tr key={`${rowKey}-main`}>
+                          <td className="soql-td-rownum">{i + 1}</td>
+                          {table.cols.map((col) => {
+                            if (col.kind === "field") {
+                              const value = getByPath(row, col.path);
+                              return (
+                                <td key={col.id} title={formatCell(value)}>
+                                  <span className="soql-cell-text">{formatCell(value)}</span>
+                                </td>
+                              );
+                            }
+                            const sqRows = extractSubqueryRows(row, col.subqueryName);
+                            const sqLayout = resultLayout?.subqueries[col.subqueryName];
+                            const countText = `${sqRows.length} 条`;
+                            const stateKey = `${rowKey}::${col.subqueryName}`;
+                            const isExpanded = Boolean(expandedSubqueries[stateKey]);
+                            return (
+                              <td key={col.id} title={countText}>
+                                <button
+                                  type="button"
+                                  className="soql-subquery-btn"
+                                  disabled={sqRows.length === 0 || !sqLayout}
+                                  onClick={() => toggleSubqueryExpand(rowKey, col.subqueryName)}
+                                >
+                                  {isExpanded ? "收起" : "展开"} {countText}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        {expandedItems.length > 0 ? (
+                          <tr key={`${rowKey}-sub`} className="soql-subquery-inline-row">
+                            <td colSpan={table.cols.length + 1}>
+                              {expandedItems.map((item) => (
+                                <div className="soql-subquery-panel" key={`${rowKey}-${item.col.subqueryName}`}>
+                                  <div className="soql-subquery-header">
+                                    <strong>{`${item.col.label}（第 ${i + 1} 行）`}</strong>
+                                  </div>
+                                  {item.sqRows.length === 0 ? (
+                                    <div className="empty-state">该行无子查询记录。</div>
+                                  ) : (
+                                    <div className="soql-table-scroll soql-subquery-table-scroll">
+                                      <table className="soql-table">
+                                        <thead>
+                                          <tr>
+                                            <th className="soql-th-rownum">#</th>
+                                            {item.sqLayout?.columns.map((col) => (
+                                              <th key={`${rowKey}-${item.col.subqueryName}-${col.label}`}>{col.label}</th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {item.sqRows.map((sqRow, sqIndex) => (
+                                            <tr key={`${rowKey}-${item.col.subqueryName}-${sqIndex}`}>
+                                              <td className="soql-td-rownum">{sqIndex + 1}</td>
+                                              {item.sqLayout?.columns.map((col) => {
+                                                const value = getByPath(sqRow, col.path);
+                                                return (
+                                                  <td
+                                                    key={`${rowKey}-${item.col.subqueryName}-${sqIndex}-${col.label}`}
+                                                    title={formatCell(value)}
+                                                  >
+                                                    <span className="soql-cell-text">{formatCell(value)}</span>
+                                                  </td>
+                                                );
+                                              })}
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          ) : resultJson && !error ? (
+          ) : null}
+          {!table && resultJson && !error ? (
             <pre className="soql-json">{resultJson}</pre>
-          ) : !error ? (
+          ) : null}
+          {!table && !resultJson && !error ? (
             <div className="empty-state">执行查询后在此显示结果。</div>
           ) : null}
         </div>
@@ -526,24 +646,43 @@ function formatCellForExcel(v: unknown): string {
   return formatCell(v).replace(/\r\n|\n|\r/g, " ").replace(/\t/g, " ");
 }
 
-function recordsToTsv(cols: string[], rows: Record<string, unknown>[]): string {
+function recordsToTsv(cols: MainColumn[], rows: Record<string, unknown>[]): string {
   if (cols.length === 0) return "";
-  const header = cols.map(formatCellForExcel).join("\t");
+  const header = cols.map((col) => formatCellForExcel(col.label)).join("\t");
   if (rows.length === 0) return header;
-  return [header, ...rows.map((row) => cols.map((c) => formatCellForExcel(row[c])).join("\t"))].join("\n");
+  return [
+    header,
+    ...rows.map((row) => cols.map((col) => formatCellForExcel(getMainColumnCellValue(row, col))).join("\t")),
+  ].join("\n");
 }
 
 function collapseLinesForSingleCell(s: string): string {
   return s.replace(/\r\n|\n|\r/g, " ").slice(0, 32760);
 }
 
-function buildExcelClipboardText(resultJson: string, table: RecordsTable | null, parsed: RecordsTable | null): string {
+function buildExcelClipboardText(resultJson: string, table: RecordsTable | null, parsed: ParsedRecords | null): string {
   if (table) return recordsToTsv(table.cols, table.rows);
   if (parsed?.rows.length === 0) {
-    if (parsed.cols.length > 0) return recordsToTsv(parsed.cols, []);
+    if (parsed.fallbackCols.length > 0) {
+      const cols: MainColumn[] = parsed.fallbackCols.map((label, idx) => ({
+        id: `fallback:${label}:${idx}`,
+        label,
+        kind: "field",
+        path: label.split(".").filter(Boolean),
+      }));
+      return recordsToTsv(cols, []);
+    }
     return "提示\t无数据行（可在 JSON 中查看 totalSize）";
   }
-  if (parsed && parsed.rows.length > 0) return recordsToTsv(parsed.cols, parsed.rows);
+  if (parsed && parsed.rows.length > 0) {
+    const cols: MainColumn[] = parsed.fallbackCols.map((label, idx) => ({
+      id: `fallback:${label}:${idx}`,
+      label,
+      kind: "field",
+      path: label.split(".").filter(Boolean),
+    }));
+    return recordsToTsv(cols, parsed.rows);
+  }
   return collapseLinesForSingleCell(resultJson);
 }
 
@@ -552,10 +691,17 @@ function escapeCsvField(s: string): string {
   return s;
 }
 
-function recordsToCsv(cols: string[], rows: Record<string, unknown>[]): string {
-  const header = cols.map((c) => escapeCsvField(c)).join(",");
-  const lines = rows.map((row) => cols.map((c) => escapeCsvField(formatCell(row[c]))).join(","));
+function recordsToCsv(cols: MainColumn[], rows: Record<string, unknown>[]): string {
+  const header = cols.map((col) => escapeCsvField(col.label)).join(",");
+  const lines = rows.map((row) => cols.map((col) => escapeCsvField(formatCell(getMainColumnCellValue(row, col)))).join(","));
   return `\uFEFF${header}\n${lines.join("\n")}`;
+}
+
+function getMainColumnCellValue(row: Record<string, unknown>, col: MainColumn): unknown {
+  if (col.kind === "field") {
+    return getByPath(row, col.path);
+  }
+  return `${extractSubqueryRows(row, col.subqueryName).length} 条`;
 }
 
 function downloadTextFile(filename: string, content: string, mime: string): void {
@@ -572,4 +718,12 @@ function downloadTextFile(filename: string, content: string, mime: string): void
     a.remove();
     URL.revokeObjectURL(url);
   }, 1500);
+}
+
+function getRowIdentity(row: Record<string, unknown>, idx: number): string {
+  const id = getByPath(row, ["Id"]);
+  if (typeof id === "string" && id.trim()) return id;
+  const contactId = getByPath(row, ["ID"]);
+  if (typeof contactId === "string" && contactId.trim()) return contactId;
+  return `row-${idx}`;
 }

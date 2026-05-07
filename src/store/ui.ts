@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type ModuleId = "orgs" | "soql" | "metadata";
+export type ModuleId = "orgs" | "soql" | "metadata" | "apex" | "deployer" | "logs";
 
 interface UiState {
   activeModule: ModuleId;

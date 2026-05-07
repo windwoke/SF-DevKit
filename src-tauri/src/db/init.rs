@@ -1,8 +1,9 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::Context;
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager};
 
@@ -14,14 +15,16 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
     std::fs::create_dir_all(&app_dir).context("failed to create app data dir")?;
 
     let db_path = app_dir.join("sfdevkit.db");
-    let db_url = format!("sqlite://{}", db_path.to_string_lossy());
-
     let rt = tokio::runtime::Runtime::new().context("failed to create runtime for DB init")?;
     let pool = rt.block_on(async move {
+        let connect_options = SqliteConnectOptions::from_str(&format!("sqlite://{}", db_path.to_string_lossy()))
+            .context("failed to build sqlite connect options")?
+            .create_if_missing(true);
+
         let pool = SqlitePoolOptions::new()
             .max_connections(20)
             .acquire_timeout(Duration::from_secs(30))
-            .connect(&db_url)
+            .connect_with(connect_options)
             .await
             .context("failed to connect sqlite")?;
 
@@ -123,6 +126,7 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
               directory_name TEXT,
               suffix TEXT,
               in_folder INTEGER DEFAULT 0,
+              group_name TEXT NOT NULL DEFAULT '',
               meta_file INTEGER DEFAULT 1,
               last_synced TEXT NOT NULL,
               UNIQUE(org_id, xml_name)
@@ -184,6 +188,7 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
             "ALTER TABLE metadata_types ADD COLUMN directory_name TEXT",
             "ALTER TABLE metadata_types ADD COLUMN suffix TEXT",
             "ALTER TABLE metadata_types ADD COLUMN in_folder INTEGER DEFAULT 0",
+            "ALTER TABLE metadata_types ADD COLUMN group_name TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE metadata_types ADD COLUMN meta_file INTEGER DEFAULT 1",
             "ALTER TABLE metadata_types ADD COLUMN last_synced TEXT",
             "ALTER TABLE metadata_components ADD COLUMN file_name TEXT",
@@ -200,6 +205,11 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
                 }
             }
         }
+
+        // Backfill legacy rows where group_name may be NULL.
+        let _ = sqlx::query("UPDATE metadata_types SET group_name = '' WHERE group_name IS NULL")
+            .execute(&pool)
+            .await;
 
         if let Err(e) = sqlx::query("ALTER TABLE org_auth ADD COLUMN linked_project_path TEXT")
             .execute(&pool)

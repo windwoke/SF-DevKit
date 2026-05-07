@@ -42,8 +42,38 @@ export function IconMetadataNav() {
   );
 }
 
+export function IconApexNav() {
+  return (
+    <svg {...stroke} aria-hidden>
+      <path d="M11 3L4 14h6l-1 7 8-12h-6l1-6z" />
+    </svg>
+  );
+}
+
+export function IconDeployNav() {
+  return (
+    <svg {...stroke} aria-hidden>
+      <path d="M12 4v9" />
+      <path d="M8.5 9.5L12 13l3.5-3.5" />
+      <rect x="4" y="16" width="16" height="4" rx="1.5" />
+    </svg>
+  );
+}
+
+export function IconLogNav() {
+  return (
+    <svg {...stroke} aria-hidden>
+      <path d="M5 5h14v14H5z" />
+      <path d="M8 9h8M8 13h8M8 17h5" />
+    </svg>
+  );
+}
+
 export function SidebarModuleIcon({ id }: { id: ModuleId }) {
   if (id === "orgs") return <IconOrgNav />;
   if (id === "soql") return <IconSoqlNav />;
-  return <IconMetadataNav />;
+  if (id === "metadata") return <IconMetadataNav />;
+  if (id === "apex") return <IconApexNav />;
+  if (id === "deployer") return <IconDeployNav />;
+  return <IconLogNav />;
 }

@@ -134,6 +134,44 @@ body,
   margin: 0 0 14px;
 }
 
+.module-placeholder {
+  max-width: 900px;
+}
+
+.module-placeholder-card {
+  border: 1px solid #2e3544;
+  border-radius: 12px;
+  background: #141b28;
+  padding: 16px 18px;
+}
+
+.module-placeholder-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid #3e5e92;
+  background: #1b2d4a;
+  color: #9ec5ff;
+  font-size: 12px;
+}
+
+.module-placeholder-summary {
+  margin: 10px 0 8px;
+  color: #d7e2f8;
+}
+
+.module-placeholder-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #93a4c3;
+}
+
+.module-placeholder-list li + li {
+  margin-top: 5px;
+}
+
 .module-header--compact h2 {
   margin-bottom: 8px;
   font-size: 17px;
@@ -1058,14 +1096,19 @@ button.danger {
 
 .soql-table-scroll {
   max-height: 320px;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
   border: 1px solid #2f3443;
   border-radius: 8px;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
 }
 
 .soql-table {
-  width: 100%;
-  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 12px;
 }
 
@@ -1095,23 +1138,42 @@ button.danger {
   font-size: 10px;
 }
 
-.soql-th-rownum,
-.soql-td-rownum {
-  position: sticky;
+.soql-table thead .soql-th-rownum {
+  position: sticky !important;
+  top: 0;
   left: 0;
-  z-index: 2;
+  z-index: 30 !important;
   width: 48px;
   min-width: 48px;
   text-align: right;
-}
-
-.soql-th-rownum {
   background: #1a2130;
 }
 
-.soql-td-rownum {
+.soql-table tbody .soql-td-rownum {
+  position: sticky !important;
+  left: 0;
+  z-index: 20 !important;
+  width: 48px;
+  min-width: 48px;
+  text-align: right;
   background: #111620;
   color: #9cb2d4;
+}
+
+.soql-table tbody tr:nth-child(odd) td {
+  background: #172234;
+}
+
+.soql-table tbody tr:nth-child(even) td {
+  background: #0d1522;
+}
+
+.soql-table tbody tr:hover td {
+  background: #253754;
+}
+
+.soql-table tbody tr:hover .soql-td-rownum {
+  background: #2b4161;
 }
 
 .soql-cell-text {
@@ -1120,6 +1182,45 @@ button.danger {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.soql-subquery-btn {
+  border: 1px solid #375486;
+  background: #162744;
+  color: #a9cbff;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.soql-subquery-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.soql-subquery-panel {
+  margin-top: 10px;
+  border: 1px solid #2f3443;
+  border-radius: 8px;
+  background: #111620;
+  padding: 8px;
+}
+
+.soql-subquery-inline-row > td {
+  background: #0f1624;
+  padding: 8px;
+}
+
+.soql-subquery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.soql-subquery-table-scroll {
+  max-height: 220px;
 }
 
 .soql-json {

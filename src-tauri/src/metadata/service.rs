@@ -27,7 +27,7 @@ impl MetadataService {
                     directory_name,
                     suffix,
                     CAST(in_folder AS INTEGER) AS in_folder,
-                    '' AS group_name
+                    COALESCE(group_name, '') AS group_name
                 FROM metadata_types
                 WHERE org_id = ?1
                   AND datetime(last_synced, '+24 hours') > datetime('now')
@@ -65,16 +65,18 @@ impl MetadataService {
             let suffix = item["suffix"].as_str().map(str::to_string);
             let in_folder = item["inFolder"].as_bool().unwrap_or(false);
             let meta_file = item["metaFile"].as_bool().unwrap_or(true);
+            let group_name = get_type_group(&xml_name).to_string();
 
             sqlx::query(
                 r#"
                 INSERT INTO metadata_types
-                    (org_id, xml_name, directory_name, suffix, in_folder, meta_file, last_synced)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
+                    (org_id, xml_name, directory_name, suffix, in_folder, group_name, meta_file, last_synced)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
                 ON CONFLICT(org_id, xml_name) DO UPDATE SET
                     directory_name = excluded.directory_name,
                     suffix = excluded.suffix,
                     in_folder = excluded.in_folder,
+                    group_name = excluded.group_name,
                     meta_file = excluded.meta_file,
                     last_synced = datetime('now')
                 "#,
@@ -84,6 +86,7 @@ impl MetadataService {
             .bind(&directory_name)
             .bind(&suffix)
             .bind(if in_folder { 1_i64 } else { 0_i64 })
+            .bind(&group_name)
             .bind(if meta_file { 1_i64 } else { 0_i64 })
             .execute(&self.pool)
             .await?;
@@ -93,7 +96,7 @@ impl MetadataService {
                 directory_name,
                 suffix,
                 in_folder,
-                group_name: String::new(),
+                group_name,
             });
         }
 

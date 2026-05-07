@@ -6,6 +6,31 @@ import { useMetadataStore } from "../../store/metadata";
 import { useOrgStore } from "../../store/org";
 import { GROUP_ORDER } from "./constants";
 
+async function loadMetadataTypesWithFallback(orgId: string) {
+  try {
+    return await tauriApi.listMetadataTypes({ orgId, forceRefresh: false });
+  } catch (firstError) {
+    console.warn("[MetadataTree] listMetadataTypes cache read failed, retrying force refresh", {
+      orgId,
+      firstError,
+    });
+    return tauriApi.listMetadataTypes({ orgId, forceRefresh: true });
+  }
+}
+
+async function loadMetadataComponentsWithFallback(orgId: string, metadataType: string) {
+  try {
+    return await tauriApi.listMetadataComponents({ orgId, metadataType, forceRefresh: false });
+  } catch (firstError) {
+    console.warn("[MetadataTree] listMetadataComponents cache read failed, retrying force refresh", {
+      orgId,
+      metadataType,
+      firstError,
+    });
+    return tauriApi.listMetadataComponents({ orgId, metadataType, forceRefresh: true });
+  }
+}
+
 export function MetadataTree() {
   const queryClient = useQueryClient();
   const { currentOrg } = useOrgStore();
@@ -19,7 +44,7 @@ export function MetadataTree() {
     queryKey: ["metadata-types", currentOrg],
     queryFn: async () => {
       console.log("[MetadataTree] listMetadataTypes:start", { orgId: currentOrg });
-      const data = await tauriApi.listMetadataTypes({ orgId: currentOrg!, forceRefresh: false });
+      const data = await loadMetadataTypesWithFallback(currentOrg!);
       console.log("[MetadataTree] listMetadataTypes:success", { count: data.length, orgId: currentOrg });
       return data;
     },
@@ -49,7 +74,7 @@ export function MetadataTree() {
       message: msg,
       fullError: typesQuery.error,
     });
-    return <div className="empty-state error">加载失败：{msg}</div>;
+    return <div className="empty-state error">加载失败：{msg}。可先切换到 Org 管理确认当前 Org 可用后再点刷新。</div>;
   }
 
   return (
@@ -99,11 +124,7 @@ function TypeRow({ item }: { item: MetadataTypeMeta }) {
         orgId: currentOrg,
         metadataType: item.xml_name,
       });
-      const data = await tauriApi.listMetadataComponents({
-        orgId: currentOrg!,
-        metadataType: item.xml_name,
-        forceRefresh: false,
-      });
+      const data = await loadMetadataComponentsWithFallback(currentOrg!, item.xml_name);
       console.log("[MetadataTree] listMetadataComponents:success", {
         orgId: currentOrg,
         metadataType: item.xml_name,
