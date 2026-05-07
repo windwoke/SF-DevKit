@@ -565,7 +565,12 @@ async function resolveWhereFieldMeta(
   }
 
   const fields = await getFieldsCached(orgId, objectName, onLoading);
-  const field = fields.find((f) => f.api_name.toLowerCase() === fieldName.toLowerCase());
+  const lowerField = fieldName.toLowerCase();
+  const field = fields.find((f) => {
+    const api = f.api_name.toLowerCase();
+    const rel = (f.relationship_name ?? "").toLowerCase();
+    return api === lowerField || rel === lowerField || api === `${lowerField}id`;
+  });
   if (!field) return null;
   return { objectName, fieldName, field };
 }
@@ -814,6 +819,15 @@ export function registerSoqlCompletion(
         }
 
         if (ctx.clause === "GROUP_BY") {
+          fields
+            .filter((f) => f.field_type === "REFERENCE" && f.relationship_name)
+            .forEach((f) => {
+              const item = relationshipPrefixCompletion(f, range);
+              if (item) extras.push(item);
+            });
+        }
+
+        if (ctx.clause === "WHERE") {
           fields
             .filter((f) => f.field_type === "REFERENCE" && f.relationship_name)
             .forEach((f) => {

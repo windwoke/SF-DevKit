@@ -63,6 +63,13 @@ describe("parseCompletionContext", () => {
     expect(ctx.whereOperator).toBe("=");
   });
 
+  test("WHERE 关系前缀后 → RELATIONSHIP_FIELD", () => {
+    const ctx = parseCompletionContext("SELECT Id FROM Account WHERE RecordType.");
+    expect(ctx.clause).toBe("WHERE");
+    expect(ctx.triggerKind).toBe("RELATIONSHIP_FIELD");
+    expect(ctx.relationshipPath).toEqual(["RecordType"]);
+  });
+
   test("子查询 FROM 补全", () => {
     const ctx = parseCompletionContext("SELECT Id, (SELECT Id FROM ");
     expect(ctx.clause).toBe("SUBQUERY_FROM");

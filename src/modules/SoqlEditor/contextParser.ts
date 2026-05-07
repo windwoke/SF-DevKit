@@ -313,6 +313,23 @@ export function extractWhereContext(soql: string): { whereField: string | null; 
   return { whereField: null, whereOperator: null };
 }
 
+function extractWhereRelationshipPath(soql: string): string[] {
+  const whereMatch = /\bWHERE\b/gi;
+  let m: RegExpExecArray | null;
+  let whereIdx = -1;
+  while ((m = whereMatch.exec(soql)) !== null) {
+    whereIdx = m.index;
+  }
+  if (whereIdx === -1) return [];
+
+  const after = soql.slice(whereIdx + "WHERE".length);
+  const parts = after.split(/\b(?:AND|OR)\b/i);
+  const last = (parts[parts.length - 1] ?? "").trimStart();
+  const relationshipTail = last.match(/^([A-Za-z][A-Za-z0-9_.]*)\.\s*$/);
+  if (!relationshipTail?.[1]) return [];
+  return relationshipTail[1].split(".").filter(Boolean);
+}
+
 function getLastToken(soql: string): string | null {
   const trimmed = soql.trimEnd();
   const m = trimmed.match(/([A-Za-z0-9_.]+)\s*$/);
@@ -347,9 +364,11 @@ export function parseCompletionContext(soqlBefore: string): CompletionContext {
   const sub = parseSubqueryContext(soqlBefore);
   if (sub) return sub;
 
-  const primaryObject = extractFromObject(soqlBefore);
-  const relationshipPath = extractRelationshipPath(soqlBefore);
   const clause = detectClause(soqlBefore);
+  const primaryObject = extractFromObject(soqlBefore);
+  const selectRelationshipPath = extractRelationshipPath(soqlBefore);
+  const whereRelationshipPath = clause === "WHERE" ? extractWhereRelationshipPath(soqlBefore) : [];
+  const relationshipPath = whereRelationshipPath.length > 0 ? whereRelationshipPath : selectRelationshipPath;
   const { whereField, whereOperator } = extractWhereContext(soqlBefore);
   const triggerKind = detectTriggerKind(soqlBefore, clause, relationshipPath);
 
