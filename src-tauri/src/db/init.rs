@@ -174,6 +174,55 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
         .await?;
 
         sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS trace_targets (
+              id TEXT PRIMARY KEY,
+              org_id TEXT NOT NULL,
+              kind TEXT NOT NULL,
+              label TEXT NOT NULL,
+              entity_id TEXT NOT NULL,
+              trace_flag_id TEXT,
+              debug_level_id TEXT,
+              expires_at TEXT,
+              is_active INTEGER DEFAULT 0,
+              created_at TEXT DEFAULT (datetime('now'))
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS sf_users_cache (
+              id TEXT NOT NULL,
+              org_id TEXT NOT NULL,
+              name TEXT NOT NULL,
+              username TEXT NOT NULL,
+              cached_at TEXT DEFAULT (datetime('now')),
+              PRIMARY KEY (id, org_id)
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS log_downloads (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              org_id TEXT NOT NULL,
+              log_id TEXT NOT NULL,
+              file_path TEXT NOT NULL,
+              file_size INTEGER,
+              downloaded_at TEXT DEFAULT (datetime('now'))
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
             "CREATE INDEX IF NOT EXISTS idx_components_type ON metadata_components(org_id, metadata_type);",
         )
         .execute(&pool)

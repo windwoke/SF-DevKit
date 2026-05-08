@@ -1,0 +1,555 @@
+use std::path::Path;
+
+use anyhow::Context;
+use chrono::{Duration, Utc};
+use reqwest::Client;
+use serde::Deserialize;
+use serde_json::Value;
+use sqlx::SqlitePool;
+use tokio::process::Command;
+
+use crate::cli::runner::run_command;
+
+use super::models::{ActiveTrace, ApexLog, SfUser};
+
+pub async fn list_apex_logs(
+    org_id: &str,
+    limit: u32,
+    user_filter: Option<&str>,
+) -> anyhow::Result<Vec<ApexLog>> {
+    let output = run_command(
+        &[
+            "apex",
+            "log",
+            "list",
+            "--target-org",
+            org_id,
+            "--number",
+            &limit.to_string(),
+        ],
+        true,
+    )
+    .await?;
+    if !output.success {
+        anyhow::bail!("{}", cli_error_message(&output.stderr, &output.stdout));
+    }
+
+    let json: Value = serde_json::from_str(&output.stdout).context("解析日志列表 JSON 失败")?;
+    let arr = json
+        .get("result")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut logs: Vec<ApexLog> = arr.iter().map(parse_apex_log).collect();
+    if let Some(filter) = user_filter.filter(|s| !s.trim().is_empty()) {
+        let needle = filter.trim().to_lowercase();
+        logs.retain(|l| {
+            l.log_user_name.to_lowercase().contains(&needle) || l.operation.to_lowercase().contains(&needle)
+        });
+    }
+    logs.sort_by(|a, b| b.start_time.cmp(&a.start_time));
+    Ok(logs)
+}
+
+pub async fn download_apex_log(
+    pool: &SqlitePool,
+    org_id: &str,
+    log_id: &str,
+    output_dir: &str,
+    file_name: &str,
+) -> anyhow::Result<String> {
+    tokio::fs::create_dir_all(output_dir)
+        .await
+        .with_context(|| format!("创建目录失败：{}", output_dir))?;
+
+    let output = run_command(
+        &["apex", "log", "get", "--target-org", org_id, "--log-id", log_id],
+        false,
+    )
+    .await?;
+    if !output.success {
+        anyhow::bail!("{}", cli_error_message(&output.stderr, &output.stdout));
+    }
+
+    let file_path = Path::new(output_dir).join(file_name);
+    tokio::fs::write(&file_path, output.stdout.as_bytes())
+        .await
+        .with_context(|| format!("写入日志文件失败：{}", file_path.display()))?;
+
+    let meta_size = tokio::fs::metadata(&file_path).await.ok().map(|m| m.len() as i64);
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO log_downloads (org_id, log_id, file_path, file_size)
+        VALUES (?1, ?2, ?3, ?4)
+        "#,
+    )
+    .bind(org_id)
+    .bind(log_id)
+    .bind(file_path.to_string_lossy().to_string())
+    .bind(meta_size)
+    .execute(pool)
+    .await;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+pub async fn download_latest_self_log(
+    pool: &SqlitePool,
+    org_id: &str,
+    current_user_name: &str,
+    output_dir: &str,
+) -> anyhow::Result<Option<String>> {
+    let user_key = current_user_name.trim();
+    let logs = list_apex_logs(org_id, 20, Some(user_key)).await?;
+    let Some(latest) = logs.first() else {
+        return Ok(None);
+    };
+    let file_name = build_file_name(latest);
+    let path = download_apex_log(pool, org_id, &latest.id, output_dir, &file_name).await?;
+    Ok(Some(path))
+}
+
+pub async fn open_in_vscode(file_path: &str) -> anyhow::Result<()> {
+    let code_cmd = which::which("code").context(
+        "未找到 VSCode CLI（code 命令）。请在 VSCode 中执行：Shell Command: Install 'code' command in PATH",
+    )?;
+
+    let status = Command::new(code_cmd).arg(file_path).status().await?;
+    if !status.success() {
+        anyhow::bail!("VSCode 启动失败");
+    }
+    Ok(())
+}
+
+pub async fn reveal_log_file(file_path: &str) -> anyhow::Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("open").args(["-R", file_path]).status().await?;
+        if !status.success() {
+            anyhow::bail!("无法在 Finder 中显示文件");
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let status = Command::new("explorer")
+            .args(["/select,", file_path])
+            .status()
+            .await?;
+        if !status.success() {
+            anyhow::bail!("无法在资源管理器中显示文件");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let parent = Path::new(file_path).parent().unwrap_or_else(|| Path::new("/"));
+        let status = Command::new("xdg-open").arg(parent).status().await?;
+        if !status.success() {
+            anyhow::bail!("无法打开文件目录");
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn get_current_user(org_id: &str) -> anyhow::Result<SfUser> {
+    let query = format!(
+        "SELECT Id, Name, Username FROM User WHERE Username = '{}' LIMIT 1",
+        escape_soql(org_id)
+    );
+    let resp = query_data(org_id, &query, false).await?;
+    parse_first_user(&resp).ok_or_else(|| anyhow::anyhow!("未找到当前用户信息"))
+}
+
+pub async fn search_users(pool: &SqlitePool, org_id: &str, keyword: &str) -> anyhow::Result<Vec<SfUser>> {
+    let k = keyword.trim();
+    if k.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let query = format!(
+        "SELECT Id, Name, Username FROM User WHERE (Username LIKE '%{kw}%' OR Name LIKE '%{kw}%') AND IsActive = true ORDER BY LastModifiedDate DESC LIMIT 10",
+        kw = escape_soql(k)
+    );
+    let resp = query_data(org_id, &query, false).await?;
+    let users = parse_users(&resp);
+
+    let mut tx = pool.begin().await?;
+    for user in &users {
+        sqlx::query(
+            r#"
+            INSERT INTO sf_users_cache (id, org_id, name, username, cached_at)
+            VALUES (?1, ?2, ?3, ?4, datetime('now'))
+            ON CONFLICT(id, org_id) DO UPDATE SET
+              name = excluded.name,
+              username = excluded.username,
+              cached_at = datetime('now')
+            "#,
+        )
+        .bind(&user.id)
+        .bind(org_id)
+        .bind(&user.name)
+        .bind(&user.username)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+
+    Ok(users)
+}
+
+pub async fn find_apex_class_id(org_id: &str, class_name: &str) -> anyhow::Result<Option<String>> {
+    let query = format!(
+        "SELECT Id, Name FROM ApexClass WHERE Name = '{}' LIMIT 1",
+        escape_soql(class_name.trim())
+    );
+    let resp = query_data(org_id, &query, true).await?;
+    Ok(resp
+        .get("records")
+        .and_then(|v| v.as_array())
+        .and_then(|rows| rows.first())
+        .and_then(|row| get_string(row, &["Id", "id"])))
+}
+
+pub async fn ensure_debug_level(org_id: &str, preset: &str) -> anyhow::Result<String> {
+    let dev_name = format!("SFDevKit_{}", preset);
+    let query = format!(
+        "SELECT Id FROM DebugLevel WHERE DeveloperName = '{}' LIMIT 1",
+        escape_soql(&dev_name)
+    );
+    let query_resp = query_data(org_id, &query, true).await?;
+    if let Some(id) = query_resp
+        .get("records")
+        .and_then(|v| v.as_array())
+        .and_then(|rows| rows.first())
+        .and_then(|row| get_string(row, &["Id", "id"]))
+    {
+        return Ok(id);
+    }
+
+    let body = if preset == "verbose" {
+        serde_json::json!({
+            "DeveloperName": dev_name,
+            "MasterLabel": "SF DevKit verbose",
+            "ApexCode": "FINEST",
+            "ApexProfiling": "NONE",
+            "Callout": "INFO",
+            "Database": "FINE",
+            "System": "FINE",
+            "Validation": "INFO",
+            "Visualforce": "NONE",
+            "Workflow": "INFO"
+        })
+    } else {
+        serde_json::json!({
+            "DeveloperName": dev_name,
+            "MasterLabel": "SF DevKit standard",
+            "ApexCode": "DEBUG",
+            "ApexProfiling": "NONE",
+            "Callout": "INFO",
+            "Database": "INFO",
+            "System": "DEBUG",
+            "Validation": "INFO",
+            "Visualforce": "NONE",
+            "Workflow": "INFO"
+        })
+    };
+    let created = post_tooling_sobject(org_id, "DebugLevel", &body).await?;
+    created
+        .get("id")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| anyhow::anyhow!("创建 DebugLevel 失败"))
+}
+
+pub async fn enable_trace(
+    pool: &SqlitePool,
+    org_id: &str,
+    entity_id: &str,
+    log_type: &str,
+    debug_level_id: &str,
+    duration_minutes: u32,
+) -> anyhow::Result<ActiveTrace> {
+    delete_entity_trace_flags(org_id, entity_id).await?;
+
+    let expires = (Utc::now() + Duration::minutes(duration_minutes as i64)).to_rfc3339();
+    let body = serde_json::json!({
+        "TracedEntityId": entity_id,
+        "DebugLevelId": debug_level_id,
+        "LogType": log_type,
+        "ExpirationDate": expires,
+    });
+    let resp = post_tooling_sobject(org_id, "TraceFlag", &body).await?;
+    let trace_flag_id = resp
+        .get("id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("创建 TraceFlag 失败"))?
+        .to_string();
+
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO trace_targets (id, org_id, kind, label, entity_id, trace_flag_id, debug_level_id, expires_at, is_active)
+        VALUES (?1, ?2, 'UNKNOWN', ?3, ?4, ?5, ?6, ?7, 1)
+        ON CONFLICT(id) DO UPDATE SET
+          trace_flag_id = excluded.trace_flag_id,
+          debug_level_id = excluded.debug_level_id,
+          expires_at = excluded.expires_at,
+          is_active = 1
+        "#,
+    )
+    .bind(entity_id)
+    .bind(org_id)
+    .bind(entity_id)
+    .bind(entity_id)
+    .bind(&trace_flag_id)
+    .bind(debug_level_id)
+    .bind(&expires)
+    .execute(pool)
+    .await;
+
+    Ok(ActiveTrace {
+        trace_flag_id,
+        entity_id: entity_id.to_string(),
+        log_type: log_type.to_string(),
+        expires_at: expires,
+    })
+}
+
+pub async fn renew_trace(
+    pool: &SqlitePool,
+    org_id: &str,
+    trace_flag_id: &str,
+    duration_minutes: u32,
+) -> anyhow::Result<String> {
+    let session = get_org_session(org_id).await?;
+    let client = Client::new();
+    let new_expires = (Utc::now() + Duration::minutes(duration_minutes as i64)).to_rfc3339();
+    let url = format!(
+        "{}/services/data/v60.0/tooling/sobjects/TraceFlag/{}",
+        session.instance_url, trace_flag_id
+    );
+    let resp = client
+        .patch(url)
+        .bearer_auth(&session.access_token)
+        .json(&serde_json::json!({ "ExpirationDate": new_expires }))
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        anyhow::bail!("续期 TraceFlag 失败");
+    }
+
+    let _ = sqlx::query("UPDATE trace_targets SET expires_at = ?1, is_active = 1 WHERE trace_flag_id = ?2")
+        .bind(&new_expires)
+        .bind(trace_flag_id)
+        .execute(pool)
+        .await;
+
+    Ok(new_expires)
+}
+
+pub async fn disable_trace(pool: &SqlitePool, org_id: &str, trace_flag_id: &str) -> anyhow::Result<()> {
+    let session = get_org_session(org_id).await?;
+    let client = Client::new();
+    let url = format!(
+        "{}/services/data/v60.0/tooling/sobjects/TraceFlag/{}",
+        session.instance_url, trace_flag_id
+    );
+    let resp = client.delete(url).bearer_auth(&session.access_token).send().await?;
+    if !resp.status().is_success() {
+        anyhow::bail!("关闭 TraceFlag 失败");
+    }
+
+    let _ = sqlx::query(
+        "UPDATE trace_targets SET is_active = 0, trace_flag_id = NULL, expires_at = NULL WHERE trace_flag_id = ?1",
+    )
+    .bind(trace_flag_id)
+    .execute(pool)
+    .await;
+    Ok(())
+}
+
+pub fn build_file_name(log: &ApexLog) -> String {
+    let date = log
+        .start_time
+        .replace([':', '.'], "-")
+        .chars()
+        .take(19)
+        .collect::<String>();
+    let user = log.log_user_name.split('@').next().unwrap_or("unknown");
+    let short_id = log.id.chars().take(8).collect::<String>();
+    format!("{}_{}_{}.log", user, short_id, date)
+}
+
+fn parse_apex_log(value: &Value) -> ApexLog {
+    ApexLog {
+        id: get_string(value, &["Id", "id"]).unwrap_or_default(),
+        application: get_string(value, &["Application", "application"]).unwrap_or_default(),
+        duration_millis: get_i64(value, &["DurationMilliseconds", "durationMilliseconds"]).unwrap_or(0),
+        location: get_string(value, &["Location", "location"]).unwrap_or_default(),
+        log_user_name: get_string(value, &["LogUser.Name", "LogUserName", "logUserName"])
+            .unwrap_or_else(|| "unknown".to_string()),
+        operation: get_string(value, &["Operation", "operation"]).unwrap_or_default(),
+        request: get_string(value, &["Request", "request"]).unwrap_or_default(),
+        size: get_i64(value, &["LogLength", "Size", "size"]).unwrap_or(0),
+        start_time: get_string(value, &["StartTime", "startTime"]).unwrap_or_default(),
+        status: get_string(value, &["Status", "status"]).unwrap_or_default(),
+    }
+}
+
+fn get_string(value: &Value, keys: &[&str]) -> Option<String> {
+    keys.iter().find_map(|k| {
+        if k.contains('.') {
+            let mut cur = value;
+            for seg in k.split('.') {
+                cur = cur.get(seg)?;
+            }
+            cur.as_str().map(str::to_string)
+        } else {
+            value.get(k).and_then(|v| v.as_str().map(str::to_string))
+        }
+    })
+}
+
+fn get_i64(value: &Value, keys: &[&str]) -> Option<i64> {
+    keys.iter().find_map(|k| value.get(k).and_then(|v| v.as_i64()))
+}
+
+fn cli_error_message(stderr: &str, stdout: &str) -> String {
+    let msg = if !stderr.trim().is_empty() {
+        stderr.trim()
+    } else {
+        stdout.trim()
+    };
+    if msg.is_empty() {
+        "命令执行失败".to_string()
+    } else {
+        msg.to_string()
+    }
+}
+
+fn escape_soql(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
+fn parse_users(resp: &Value) -> Vec<SfUser> {
+    resp.get("records")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(parse_user_row)
+        .collect()
+}
+
+fn parse_first_user(resp: &Value) -> Option<SfUser> {
+    resp.get("records")
+        .and_then(|v| v.as_array())
+        .and_then(|rows| rows.first())
+        .and_then(parse_user_row)
+}
+
+fn parse_user_row(v: &Value) -> Option<SfUser> {
+    Some(SfUser {
+        id: get_string(v, &["Id", "id"])?,
+        name: get_string(v, &["Name", "name"])?,
+        username: get_string(v, &["Username", "username"])?,
+    })
+}
+
+async fn delete_entity_trace_flags(org_id: &str, entity_id: &str) -> anyhow::Result<()> {
+    let query = format!(
+        "SELECT Id FROM TraceFlag WHERE TracedEntityId = '{}' LIMIT 200",
+        escape_soql(entity_id)
+    );
+    let existing = query_data(org_id, &query, true).await?;
+    let ids = existing
+        .get("records")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    for row in ids {
+        if let Some(id) = get_string(&row, &["Id", "id"]) {
+            delete_tooling_sobject(org_id, "TraceFlag", &id).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn post_tooling_sobject(org_id: &str, sobject: &str, body: &Value) -> anyhow::Result<Value> {
+    let session = get_org_session(org_id).await?;
+    let client = Client::new();
+    let url = format!(
+        "{}/services/data/v60.0/tooling/sobjects/{}/",
+        session.instance_url, sobject
+    );
+    let resp = client
+        .post(url)
+        .bearer_auth(&session.access_token)
+        .json(body)
+        .send()
+        .await?;
+    let status = resp.status();
+    let json: Value = resp.json().await.unwrap_or(Value::Null);
+    if !status.is_success() {
+        anyhow::bail!("创建 {} 失败: {}", sobject, json);
+    }
+    Ok(json)
+}
+
+async fn delete_tooling_sobject(org_id: &str, sobject: &str, id: &str) -> anyhow::Result<()> {
+    let session = get_org_session(org_id).await?;
+    let client = Client::new();
+    let url = format!(
+        "{}/services/data/v60.0/tooling/sobjects/{}/{}",
+        session.instance_url, sobject, id
+    );
+    let resp = client.delete(url).bearer_auth(&session.access_token).send().await?;
+    if !resp.status().is_success() {
+        anyhow::bail!("删除 {} 失败", sobject);
+    }
+    Ok(())
+}
+
+async fn query_data(org_id: &str, soql: &str, tooling: bool) -> anyhow::Result<Value> {
+    let session = get_org_session(org_id).await?;
+    let client = Client::new();
+    let endpoint = if tooling { "tooling/query" } else { "query" };
+    let url = format!(
+        "{}/services/data/v60.0/{}?q={}",
+        session.instance_url,
+        endpoint,
+        urlencoding::encode(soql)
+    );
+    let resp = client.get(url).bearer_auth(&session.access_token).send().await?;
+    let status = resp.status();
+    let json: Value = resp.json().await.unwrap_or(Value::Null);
+    if !status.is_success() {
+        anyhow::bail!("SOQL 请求失败: {}", json);
+    }
+    Ok(json)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OrgDisplayEnvelope {
+    result: OrgDisplayResult,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OrgDisplayResult {
+    access_token: String,
+    instance_url: String,
+}
+
+async fn get_org_session(org_id: &str) -> anyhow::Result<OrgDisplayResult> {
+    let output = run_command(&["org", "display", "--target-org", org_id, "--verbose"], true).await?;
+    if !output.success {
+        anyhow::bail!("{}", cli_error_message(&output.stderr, &output.stdout));
+    }
+    let parsed: OrgDisplayEnvelope =
+        serde_json::from_str(&output.stdout).context("解析 Org 会话信息失败")?;
+    Ok(parsed.result)
+}

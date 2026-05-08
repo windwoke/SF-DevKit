@@ -1,6 +1,7 @@
 import { Sidebar } from "./components/Layout/Sidebar";
 import { TopBar } from "./components/Layout/TopBar";
 import { ComingSoon } from "./modules/ComingSoon";
+import { LogViewer } from "./modules/LogViewer";
 import { MetadataBrowser } from "./modules/MetadataBrowser";
 import { OrgManager } from "./modules/OrgManager";
 import { SoqlEditor } from "./modules/SoqlEditor";
@@ -35,13 +36,7 @@ const MODULE_REGISTRY: Array<{ id: ModuleId; label: string; render: () => JSX.El
   {
     id: "logs",
     label: "Log Viewer",
-    render: () => (
-      <ComingSoon
-        title="Log Viewer"
-        summary="用于 Debug Log 的快速追踪、过滤与上下文定位。"
-        bullets={["日志列表与实时刷新", "按类别/关键字快速过滤", "异常与性能热点高亮"]}
-      />
-    ),
+    render: LogViewer,
   },
 ];
 

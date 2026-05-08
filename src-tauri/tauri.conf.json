@@ -10,6 +10,10 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "security": {
+      "csp": null,
+      "capabilities": ["default"]
+    },
     "windows": [
       {
         "title": "SF DevKit",
@@ -18,10 +22,7 @@
         "minWidth": 900,
         "minHeight": 600
       }
-    ],
-    "security": {
-      "csp": null
-    }
+    ]
   },
   "bundle": {
     "active": false,

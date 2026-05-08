@@ -2,6 +2,7 @@ mod auth;
 mod cli;
 mod commands;
 mod db;
+mod log_viewer;
 mod metadata;
 mod schema;
 
@@ -38,6 +39,19 @@ pub fn run() {
             commands::metadata::retrieve_metadata,
             commands::metadata::cancel_retrieve,
             commands::metadata::reveal_in_finder,
+            commands::log_viewer::list_apex_logs,
+            commands::log_viewer::download_apex_log,
+            commands::log_viewer::download_latest_self_log,
+            commands::log_viewer::open_in_vscode,
+            commands::log_viewer::reveal_log_file,
+            commands::log_viewer::get_current_user,
+            commands::log_viewer::search_users,
+            commands::log_viewer::find_apex_class_id,
+            commands::log_viewer::ensure_debug_level,
+            commands::log_viewer::enable_trace,
+            commands::log_viewer::renew_trace,
+            commands::log_viewer::disable_trace,
+            commands::log_viewer::pick_log_output_directory,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start SF DevKit");

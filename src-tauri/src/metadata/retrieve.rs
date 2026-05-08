@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
+use chrono::Local;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -42,11 +44,18 @@ impl RetrieveRunner {
         let tmp_dir = std::env::temp_dir();
         let pkg_path = tmp_dir.join(format!("sfdevkit-{}-package.xml", event_id));
         let package_xml = generate_package_xml(&selections, api_version);
-        tokio::fs::write(&pkg_path, package_xml).await?;
+        tokio::fs::write(&pkg_path, package_xml.as_bytes()).await?;
 
         let sf_path = which::which("sf")
             .or_else(|_| which::which("sfdx"))
             .map_err(|_| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
+        let workspace = prepare_temp_sfdx_workspace(event_id).await?;
+        let internal_output_dir = workspace.join(".sfdevkit-output");
+        let internal_output_arg = ".sfdevkit-output";
+        tokio::fs::create_dir_all(&internal_output_dir).await?;
+        let output_token = build_output_token();
+        let target_extract_dir = PathBuf::from(output_dir).join(format!("retrieve-{}", output_token));
+        let target_zip_file = PathBuf::from(output_dir).join(format!("retrieve-{}.zip", output_token));
 
         let mut cmd = Command::new(&sf_path);
         cmd.args([
@@ -58,13 +67,14 @@ impl RetrieveRunner {
             "--manifest",
             &pkg_path.to_string_lossy(),
             "--output-dir",
-            output_dir,
+            internal_output_arg,
             "--api-version",
             api_version,
         ]);
         if output_mode == "zip" {
             cmd.arg("--zip-file-name").arg("retrieve.zip");
         }
+        cmd.current_dir(&workspace);
         cmd.stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
@@ -81,7 +91,12 @@ impl RetrieveRunner {
             event_id,
             RetrieveEvent {
                 event_type: "start".to_string(),
-                data: format!("开始 retrieve，共 {} 个组件", component_count),
+                data: format!(
+                    "开始 retrieve，共 {} 个组件；工作目录: {}；目标输出: {}",
+                    component_count,
+                    workspace.to_string_lossy(),
+                    output_dir
+                ),
             },
         );
 
@@ -165,11 +180,45 @@ impl RetrieveRunner {
         .execute(&self.pool)
         .await?;
 
-        let output_path = if output_mode == "zip" {
-            format!("{}/retrieve.zip", output_dir.trim_end_matches('/'))
+        let output_path = if success {
+            if output_mode == "zip" {
+                let internal_zip_primary = internal_output_dir.join("retrieve.zip");
+                let internal_zip_fallback = workspace.join("retrieve.zip");
+                let internal_zip = if internal_zip_primary.exists() {
+                    internal_zip_primary
+                } else {
+                    internal_zip_fallback
+                };
+                tokio::fs::create_dir_all(output_dir).await?;
+                tokio::fs::copy(&internal_zip, &target_zip_file).await?;
+                target_zip_file.to_string_lossy().into_owned()
+            } else {
+                tokio::fs::create_dir_all(&target_extract_dir).await?;
+                let internal_force_app_dir = internal_output_dir.join("force-app");
+                let workspace_force_app_dir = workspace.join("force-app");
+                let source_force_app_dir = if dir_has_entries(&internal_force_app_dir).await? {
+                    internal_force_app_dir
+                } else if dir_has_entries(&workspace_force_app_dir).await? {
+                    workspace_force_app_dir
+                } else if dir_has_entries(&internal_output_dir).await? {
+                    internal_output_dir.clone()
+                } else {
+                    workspace_force_app_dir
+                };
+                let target_force_app_dir = target_extract_dir.join("force-app");
+                tokio::fs::create_dir_all(&target_force_app_dir).await?;
+                copy_dir_recursive(&source_force_app_dir, &target_force_app_dir).await?;
+                tokio::fs::write(target_extract_dir.join("package.xml"), package_xml.as_bytes()).await?;
+                target_extract_dir.to_string_lossy().into_owned()
+            }
         } else {
-            output_dir.to_string()
+            if output_mode == "zip" {
+                target_zip_file.to_string_lossy().into_owned()
+            } else {
+                target_extract_dir.to_string_lossy().into_owned()
+            }
         };
+        let _ = tokio::fs::remove_dir_all(&workspace).await;
 
         Ok(RetrieveResult {
             success,
@@ -191,6 +240,59 @@ impl RetrieveRunner {
         }
         Ok(())
     }
+}
+
+async fn prepare_temp_sfdx_workspace(event_id: &str) -> anyhow::Result<PathBuf> {
+    let workspace = std::env::temp_dir().join(format!("sfdevkit-retrieve-workspace-{}", event_id));
+    tokio::fs::create_dir_all(&workspace).await?;
+    tokio::fs::create_dir_all(workspace.join("force-app")).await?;
+    let project_json = r#"{
+  "packageDirectories": [
+    {
+      "path": "force-app",
+      "default": true
+    }
+  ],
+  "namespace": "",
+  "sourceApiVersion": "62.0"
+}"#;
+    tokio::fs::write(workspace.join("sfdx-project.json"), project_json).await?;
+    Ok(workspace)
+}
+
+fn build_output_token() -> String {
+    Local::now().format("%Y%m%d-%H%M%S-%3f").to_string()
+}
+
+async fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> anyhow::Result<()> {
+    let mut stack: Vec<(PathBuf, PathBuf)> = vec![(src.clone(), dst.clone())];
+
+    while let Some((from_dir, to_dir)) = stack.pop() {
+        tokio::fs::create_dir_all(&to_dir).await?;
+        let mut entries = tokio::fs::read_dir(&from_dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let src_path = entry.path();
+            let dst_path = to_dir.join(entry.file_name());
+            let file_type = entry.file_type().await?;
+            if file_type.is_dir() {
+                stack.push((src_path, dst_path));
+            } else if file_type.is_file() {
+                tokio::fs::copy(src_path, dst_path).await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn dir_has_entries(path: &PathBuf) -> anyhow::Result<bool> {
+    let Ok(meta) = tokio::fs::metadata(path).await else {
+        return Ok(false);
+    };
+    if !meta.is_dir() {
+        return Ok(false);
+    }
+    let mut entries = tokio::fs::read_dir(path).await?;
+    Ok(entries.next_entry().await?.is_some())
 }
 
 async fn kill_process(pid: u32) -> anyhow::Result<()> {
