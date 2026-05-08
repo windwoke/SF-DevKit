@@ -17,9 +17,11 @@ interface SoqlMonacoEditorProps {
   /** Cmd+Enter / Ctrl+Enter 执行查询 */
   onRun?: () => void;
   runDisabled?: boolean;
+  /** Command palette / keyboard action label (i18n) */
+  runActionLabel: string;
 }
 
-export function SoqlMonacoEditor({ value, onChange, onLog, onLoading, onRun, runDisabled }: SoqlMonacoEditorProps) {
+export function SoqlMonacoEditor({ value, onChange, onLog, onLoading, onRun, runDisabled, runActionLabel }: SoqlMonacoEditorProps) {
   const { currentOrg } = useOrgStore();
   const orgRef = useRef(currentOrg);
   const onLogRef = useRef(onLog);
@@ -67,7 +69,7 @@ export function SoqlMonacoEditor({ value, onChange, onLog, onLoading, onRun, run
     if (!mountedEditor) return;
     const disposable = mountedEditor.addAction({
       id: "sfdevkit.soql.run",
-      label: "执行 SOQL",
+      label: runActionLabel,
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
       run: () => {
         if (runDisabledRef.current) return;
@@ -75,7 +77,7 @@ export function SoqlMonacoEditor({ value, onChange, onLog, onLoading, onRun, run
       },
     });
     return () => disposable.dispose();
-  }, [mountedEditor]);
+  }, [mountedEditor, runActionLabel]);
 
   return (
     <Editor

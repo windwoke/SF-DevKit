@@ -129,6 +129,156 @@
       "clearFailed": "Clear failed: {{message}}"
     }
   },
+  "soqlEditor": {
+    "title": "SOQL Editor",
+    "historyLabel": "History",
+    "historyOptionEmpty": "No history yet",
+    "historyOptionPick": "Pick a saved SOQL…",
+    "clearHistory": "Clear history",
+    "toolbarFormatTitle": "Format SOQL",
+    "toolbarFormatAria": "Format SOQL",
+    "toolbarCopyTitle": "Copy SOQL",
+    "toolbarCopyAria": "Copy SOQL",
+    "toolbarRefreshTitle": "Refresh schema cache (FROM object or full list)",
+    "toolbarRefreshAria": "Refresh cache",
+    "toolbarRunTitle": "Run SOQL (⌘↩ or Ctrl+Enter)",
+    "toolbarRunAria": "Run SOQL",
+    "resultsTitle": "Results",
+    "copyResultsTitle": "Copy as tab-separated (paste into Excel)",
+    "copyLabelIdle": "Copy",
+    "copyLabelOk": "Copied",
+    "copyLabelErr": "Failed",
+    "exportCsvTitle": "Export table as CSV",
+    "exportJsonTitle": "Export JSON",
+    "exportLabelIdle": "Export",
+    "exportLabelLoading": "Saving…",
+    "exportLabelOk": "Saved",
+    "exportLabelErr": "Failed",
+    "summaryTotal": "Total records: {{n}}",
+    "summaryDisplayed": "Displayed: {{n}}",
+    "summaryDuration": "Duration: {{n}} ms",
+    "summaryOrg": "Org: {{id}}",
+    "summaryExecutedAt": "Executed at: {{time}}",
+    "errorDetailsSummary": "Error details",
+    "subqueryExpand": "Expand",
+    "subqueryCollapse": "Collapse",
+    "subqueryRows": "{{count}} rows",
+    "subqueryPanelTitle": "{{label}} (row {{row}})",
+    "subqueryEmptyRow": "No subquery rows for this line.",
+    "resultPlaceholder": "Run a query to see results here.",
+    "execLogTitle": "Execution log",
+    "clearLog": "Clear log",
+    "logPanelEmpty": "No log yet. Run a SOQL query to see details.",
+    "errors": {
+      "needOrg": "Select or sign in to an org first"
+    },
+    "log": {
+      "runStart": "Running SOQL, org={{org}}",
+      "runQuery": "Query: {{snippet}}",
+      "runSuccess": "Success: totalSize={{total}}, duration={{ms}} ms",
+      "runFail": "Failed: {{message}}",
+      "cacheManualObj": "Refreshing cache: {{name}}",
+      "cacheManualAll": "Refreshing cache: full object list",
+      "cacheDoneObj": "Cache refreshed: {{name}}",
+      "cacheDoneAll": "Cache refreshed: full object list",
+      "cacheFail": "Cache refresh failed: {{message}}",
+      "formatted": "SOQL formatted",
+      "soqlCopied": "SOQL copied to clipboard",
+      "copyFailApp": "Copy failed (check app clipboard permission)",
+      "tsvCopied": "Copied as TSV (paste into Excel)",
+      "copyFailClipboard": "Copy failed (check clipboard permission)",
+      "savedCsv": "Saved CSV ({{rows}} rows)",
+      "savedJson": "Saved JSON file",
+      "exportCancelled": "Save cancelled",
+      "exportBrowserDownload": "Saved via browser download (check Downloads if no dialog)",
+      "exportFail": "Export failed: {{message}}"
+    },
+    "errorClass": {
+      "syntax": {
+        "category": "SOQL syntax",
+        "title": "Invalid query syntax",
+        "suggestion": "Check keyword order, parentheses, commas, and field spelling."
+      },
+      "access": {
+        "category": "Permissions / field visibility",
+        "title": "Field or object not accessible",
+        "suggestion": "Verify org permissions and try visible fields (e.g. SELECT FIELDS(STANDARD))."
+      },
+      "session": {
+        "category": "Session",
+        "title": "Org session may be invalid",
+        "suggestion": "Refresh login in Org Manager and try again."
+      },
+      "cli": {
+        "category": "CLI / network",
+        "title": "Execution environment error",
+        "suggestion": "Check Salesforce CLI and network, then retry."
+      },
+      "unknown": {
+        "category": "Unknown error",
+        "title": "Query failed",
+        "suggestion": "See error details below and retry."
+      }
+    },
+    "excelNoDataHint": "Hint\tNo data rows (see totalSize in JSON)",
+    "monacoRunAction": "Run SOQL",
+    "completion": {
+      "loadingDefault": "Loading completion metadata…",
+      "loadingObjects": "Loading object list…",
+      "loadingFields": "Loading fields: {{name}}…",
+      "loadingChildRel": "Loading child relationships: {{name}}…",
+      "loadingPicklist": "Loading picklist: {{name}}…",
+      "op": {
+        "exact": "Exact match",
+        "notEq": "Not equal",
+        "like": "LIKE pattern",
+        "in": "IN list",
+        "null": "IS NULL",
+        "lastNDays": "Last N days",
+        "refExact": "ID exact match",
+        "refIn": "Multiple IDs",
+        "subquery": "Subquery",
+        "includes": "Includes",
+        "excludes": "Excludes"
+      },
+      "agg": {
+        "count": "Aggregate: record count",
+        "countDistinct": "Aggregate: distinct count",
+        "sum": "Aggregate: sum",
+        "avg": "Aggregate: average",
+        "min": "Aggregate: minimum",
+        "max": "Aggregate: maximum"
+      },
+      "special": {
+        "toLabel": "Picklist label",
+        "format": "Format number/date",
+        "fieldsAll": "All fields (LIMIT required)"
+      },
+      "order": {
+        "asc": "Ascending (default)",
+        "desc": "Descending",
+        "nullsFirst": "NULLS FIRST",
+        "nullsLast": "NULLS LAST"
+      },
+      "limit": {
+        "maxRows": "Max rows returned",
+        "commonCap": "Common SOQL cap",
+        "offset": "Result offset"
+      },
+      "parentRel": "Parent → {{to}}",
+      "childRel": "Child → {{child}}",
+      "dateLiteral": "Date literal",
+      "pickValue": "Picklist: {{value}}",
+      "pickValueInactive": "Picklist: {{value}} (inactive)",
+      "typeofWhen": "TYPEOF object",
+      "numeric": "Number",
+      "standardObject": "Standard object",
+      "customObject": "Custom object",
+      "logTriggered": "Completion: clause={{clause}}, trigger={{trigger}}, primary={{primary}}",
+      "logEmptyObjects": "Completion: object list empty or invalid response",
+      "logFailed": "Completion failed: {{message}}"
+    }
+  },
   "comingSoon": {
     "apex": {
       "summary": "Run Anonymous Apex quickly with structured execution output.",

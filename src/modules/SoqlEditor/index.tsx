@@ -1,6 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../../i18n";
+import { dateLocaleFromI18n } from "../../lib/locale";
 import { tauriApi } from "../../lib/tauri";
 import { useOrgStore } from "../../store/org";
 import { useSoqlStore } from "../../store/soql";
@@ -60,6 +63,7 @@ function parseRecordsTableFromResultJson(resultJson: string): ParsedRecords | nu
 }
 
 export function SoqlEditor() {
+  const { t, i18n: i18nInstance } = useTranslation();
   const { currentOrg } = useOrgStore();
   const { draft: soql, setDraft: setSoql, history, pushHistory, clearHistory } = useSoqlStore();
   const [resultJson, setResultJson] = useState<string | null>(null);
@@ -96,7 +100,8 @@ export function SoqlEditor() {
   const pushLog = useCallback((level: SoqlLogEntry["level"], message: string) => {
     setLogCounter((prev) => {
       const id = prev + 1;
-      const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      const locale = dateLocaleFromI18n(i18nInstance.language);
+      const time = new Date().toLocaleTimeString(locale, { hour12: false });
       setLogs((old) => {
         const last = old[old.length - 1];
         if (last && last.level === level && last.message === message) {
@@ -107,7 +112,7 @@ export function SoqlEditor() {
       });
       return id;
     });
-  }, []);
+  }, [i18nInstance.language]);
 
   const handleCompletionLog = useCallback(
     (message: string, level: "info" | "error" = "info") => {
@@ -118,11 +123,11 @@ export function SoqlEditor() {
 
   const runMutation = useMutation({
     mutationFn: async () => {
-      if (!currentOrg) throw new Error("请先选择或登录 Org");
+      if (!currentOrg) throw new Error(i18n.t("soqlEditor.errors.needOrg"));
       startedAtRef.current = performance.now();
       pushHistory(soql);
-      pushLog("info", `开始执行 SOQL，Org=${currentOrg}`);
-      pushLog("info", `Query: ${soql.replace(/\s+/g, " ").slice(0, 240)}`);
+      pushLog("info", i18n.t("soqlEditor.log.runStart", { org: currentOrg }));
+      pushLog("info", i18n.t("soqlEditor.log.runQuery", { snippet: soql.replace(/\s+/g, " ").slice(0, 240) }));
       return invoke<unknown>("run_soql_query", { orgId: currentOrg, query: soql });
     },
     onSuccess: (data) => {
@@ -132,39 +137,46 @@ export function SoqlEditor() {
       const records = (data as { result?: { records?: unknown[] } })?.result?.records ?? [];
       const totalSize = (data as { result?: { totalSize?: number } })?.result?.totalSize ?? records.length ?? 0;
       const durationMs = Math.max(0, Math.round(performance.now() - startedAtRef.current));
+      const locale = dateLocaleFromI18n(i18n.language);
       setSummary({
         orgId: currentOrg ?? "-",
         totalSize,
         displayedRows: records.length,
         durationMs,
-        executedAt: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
+        executedAt: new Date().toLocaleTimeString(locale, { hour12: false }),
       });
-      pushLog("info", `执行成功，返回记录数=${totalSize}，耗时=${durationMs}ms`);
+      pushLog("info", i18n.t("soqlEditor.log.runSuccess", { total: totalSize, ms: durationMs }));
     },
     onError: (e) => {
       setResultJson(null);
       const message = e instanceof Error ? e.message : String(e);
       setSummary(null);
       setError(classifySoqlError(message));
-      pushLog("error", `执行失败: ${message}`);
+      pushLog("error", i18n.t("soqlEditor.log.runFail", { message }));
     },
   });
 
   const refreshCacheMutation = useMutation({
     mutationFn: async () => {
-      if (!currentOrg) throw new Error("请先选择或登录 Org");
+      if (!currentOrg) throw new Error(i18n.t("soqlEditor.errors.needOrg"));
       const objectName = extractFromObject(soql);
-      pushLog("info", objectName ? `手动刷新缓存: ${objectName}` : "手动刷新缓存: 全量对象列表");
+      pushLog(
+        "info",
+        objectName ? i18n.t("soqlEditor.log.cacheManualObj", { name: objectName }) : i18n.t("soqlEditor.log.cacheManualAll"),
+      );
       await tauriApi.refreshSchemaCache({ orgId: currentOrg, objectName });
       clearSoqlCompletionCache({ orgId: currentOrg, objectName: objectName ?? undefined });
       return { objectName };
     },
     onSuccess: ({ objectName }) => {
-      pushLog("info", objectName ? `缓存已刷新: ${objectName}` : "缓存已刷新: 全量对象列表");
+      pushLog(
+        "info",
+        objectName ? i18n.t("soqlEditor.log.cacheDoneObj", { name: objectName }) : i18n.t("soqlEditor.log.cacheDoneAll"),
+      );
     },
     onError: (e) => {
       const message = e instanceof Error ? e.message : String(e);
-      pushLog("error", `刷新缓存失败: ${message}`);
+      pushLog("error", i18n.t("soqlEditor.log.cacheFail", { message }));
     },
   });
 
@@ -189,10 +201,13 @@ export function SoqlEditor() {
         return { cols, rows };
       }
       const dir = sortState.direction === "asc" ? 1 : -1;
-      rows.sort((a, b) => compareCell(getByPath(a, sortableCol.path), getByPath(b, sortableCol.path)) * dir);
+      const locale = dateLocaleFromI18n(i18nInstance.language);
+      rows.sort(
+        (a, b) => compareCell(getByPath(a, sortableCol.path), getByPath(b, sortableCol.path), locale) * dir,
+      );
     }
     return { cols, rows };
-  }, [parsedTable, resultLayout, sortState]);
+  }, [parsedTable, resultLayout, sortState, i18nInstance.language]);
 
   const toggleSort = (column: MainColumn) => {
     if (column.kind !== "field") return;
@@ -212,7 +227,7 @@ export function SoqlEditor() {
 
   const handleFormatSoql = useCallback(() => {
     setSoql(formatSoql(soql));
-    pushLog("info", "已格式化 SOQL");
+    pushLog("info", i18n.t("soqlEditor.log.formatted"));
   }, [soql, setSoql, pushLog]);
 
   const handleCopySoql = useCallback(async () => {
@@ -220,9 +235,9 @@ export function SoqlEditor() {
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
-      pushLog("info", "SOQL 已复制到剪贴板");
+      pushLog("info", i18n.t("soqlEditor.log.soqlCopied"));
     } catch {
-      pushLog("error", "复制失败（请检查应用剪贴板权限）");
+      pushLog("error", i18n.t("soqlEditor.log.copyFailApp"));
     }
   }, [soql, pushLog]);
 
@@ -249,11 +264,11 @@ export function SoqlEditor() {
       await navigator.clipboard.writeText(text);
       setResultCopyUi("ok");
       scheduleCopyUiReset();
-      pushLog("info", "已复制为表格格式（可直接粘贴到 Excel）");
+      pushLog("info", i18n.t("soqlEditor.log.tsvCopied"));
     } catch {
       setResultCopyUi("err");
       scheduleCopyUiReset();
-      pushLog("error", "复制失败（请检查剪贴板权限）");
+      pushLog("error", i18n.t("soqlEditor.log.copyFailClipboard"));
     }
   }, [resultJson, table, parsedTable, pushLog, scheduleCopyUiReset]);
 
@@ -270,23 +285,23 @@ export function SoqlEditor() {
       await invoke("save_export_file", { defaultName, content });
       setExportUi("ok");
       scheduleExportUiReset();
-      pushLog("info", hasRows ? `已保存 CSV（${table!.rows.length} 行）` : "已保存 JSON 文件");
+      pushLog("info", hasRows ? i18n.t("soqlEditor.log.savedCsv", { rows: table!.rows.length }) : i18n.t("soqlEditor.log.savedJson"));
     } catch (e) {
       if (isExportCancelled(e)) {
         setExportUi("idle");
-        pushLog("info", "已取消保存");
+        pushLog("info", i18n.t("soqlEditor.log.exportCancelled"));
         return;
       }
       try {
         downloadTextFile(defaultName, content, mime);
         setExportUi("ok");
         scheduleExportUiReset();
-        pushLog("info", "已通过浏览器下载保存（若未弹出另存为，请查看下载目录）");
+        pushLog("info", i18n.t("soqlEditor.log.exportBrowserDownload"));
       } catch (e2) {
         setExportUi("err");
         scheduleExportUiReset();
         const msg = e2 instanceof Error ? e2.message : String(e2);
-        pushLog("error", `导出失败: ${msg}`);
+        pushLog("error", i18n.t("soqlEditor.log.exportFail", { message: msg }));
       }
     }
   }, [resultJson, table, pushLog, scheduleExportUiReset]);
@@ -296,13 +311,13 @@ export function SoqlEditor() {
   return (
     <section className="module soql-module">
       <div className="module-header">
-        <h2>SOQL 编辑器</h2>
-        {!currentOrg ? <span className="soql-hint">未选择 Org，请先在 Org 管理中设置默认。</span> : null}
+        <h2>{t("soqlEditor.title")}</h2>
+        {!currentOrg ? <span className="soql-hint">{t("logViewer.noOrgHint")}</span> : null}
       </div>
       <div className="soql-layout">
         <div className="soql-editor-wrap">
           <div className="soql-history-row">
-            <span className="soql-history-label">历史输入</span>
+            <span className="soql-history-label">{t("soqlEditor.historyLabel")}</span>
             <select
               className="soql-history-select"
               value=""
@@ -313,7 +328,9 @@ export function SoqlEditor() {
               }}
               disabled={history.length === 0}
             >
-              <option value="">{history.length === 0 ? "暂无历史" : "选择历史 SOQL…"}</option>
+              <option value="">
+                {history.length === 0 ? t("soqlEditor.historyOptionEmpty") : t("soqlEditor.historyOptionPick")}
+              </option>
               {history.map((item, idx) => (
                 <option key={`${idx}-${item.slice(0, 20)}`} value={item}>
                   {item.replace(/\s+/g, " ").slice(0, 120)}
@@ -321,7 +338,7 @@ export function SoqlEditor() {
               ))}
             </select>
             <button type="button" onClick={() => clearHistory()} disabled={history.length === 0}>
-              清空历史
+              {t("soqlEditor.clearHistory")}
             </button>
           </div>
           <SoqlMonacoEditor
@@ -331,6 +348,7 @@ export function SoqlEditor() {
             onLoading={setCompletionLoading}
             onRun={() => runMutation.mutate()}
             runDisabled={runMutation.isPending || !currentOrg}
+            runActionLabel={t("soqlEditor.monacoRunAction")}
           />
           <div className="soql-toolbar">
             {completionLoading ? <span className="soql-completion-loading">{completionLoading}</span> : null}
@@ -338,8 +356,8 @@ export function SoqlEditor() {
               <button
                 type="button"
                 className="soql-icon-btn"
-                title="格式化 SOQL"
-                aria-label="格式化 SOQL"
+                title={t("soqlEditor.toolbarFormatTitle")}
+                aria-label={t("soqlEditor.toolbarFormatAria")}
                 onClick={handleFormatSoql}
                 disabled={!soql.trim()}
               >
@@ -348,8 +366,8 @@ export function SoqlEditor() {
               <button
                 type="button"
                 className="soql-icon-btn"
-                title="复制 SOQL"
-                aria-label="复制 SOQL"
+                title={t("soqlEditor.toolbarCopyTitle")}
+                aria-label={t("soqlEditor.toolbarCopyAria")}
                 onClick={() => void handleCopySoql()}
                 disabled={!soql.trim()}
               >
@@ -358,8 +376,8 @@ export function SoqlEditor() {
               <button
                 type="button"
                 className={`soql-icon-btn${refreshCacheMutation.isPending ? " soql-icon-btn--busy" : ""}`}
-                title="刷新模式缓存（当前 FROM 对象或全量列表）"
-                aria-label="刷新缓存"
+                title={t("soqlEditor.toolbarRefreshTitle")}
+                aria-label={t("soqlEditor.toolbarRefreshAria")}
                 onClick={() => refreshCacheMutation.mutate()}
                 disabled={!currentOrg || refreshCacheMutation.isPending}
               >
@@ -368,8 +386,8 @@ export function SoqlEditor() {
               <button
                 type="button"
                 className={`soql-icon-btn soql-icon-btn--primary${runMutation.isPending ? " soql-icon-btn--pulse" : ""}`}
-                title="执行 SOQL（⌘↩ 或 Ctrl+Enter）"
-                aria-label="执行 SOQL"
+                title={t("soqlEditor.toolbarRunTitle")}
+                aria-label={t("soqlEditor.toolbarRunAria")}
                 onClick={() => runMutation.mutate()}
                 disabled={runMutation.isPending || !currentOrg}
               >
@@ -380,28 +398,40 @@ export function SoqlEditor() {
         </div>
         <div className="soql-results">
           <div className="soql-results-header">
-            <h3 className="soql-results-title">结果</h3>
+            <h3 className="soql-results-title">{t("soqlEditor.resultsTitle")}</h3>
             {hasExportableResult ? (
               <div className="soql-results-actions">
                 <button
                   type="button"
                   className={`soql-results-btn${resultCopyUi === "ok" ? " soql-results-btn--ok" : ""}${resultCopyUi === "err" ? " soql-results-btn--err" : ""}`}
-                  title="复制为制表符分隔（粘贴到 Excel）"
+                  title={t("soqlEditor.copyResultsTitle")}
                   onClick={() => void handleCopyResults()}
                 >
                   <IconCopy />
-                  <span>{resultCopyUi === "ok" ? "已复制" : resultCopyUi === "err" ? "失败" : "复制"}</span>
+                  <span>
+                    {resultCopyUi === "ok"
+                      ? t("soqlEditor.copyLabelOk")
+                      : resultCopyUi === "err"
+                        ? t("soqlEditor.copyLabelErr")
+                        : t("soqlEditor.copyLabelIdle")}
+                  </span>
                 </button>
                 <button
                   type="button"
                   className={`soql-results-btn${exportUi === "ok" ? " soql-results-btn--ok" : ""}${exportUi === "err" ? " soql-results-btn--err" : ""}`}
-                  title={table ? "导出当前表格为 CSV" : "导出 JSON"}
+                  title={table ? t("soqlEditor.exportCsvTitle") : t("soqlEditor.exportJsonTitle")}
                   disabled={exportUi === "loading"}
                   onClick={() => void handleExportResults()}
                 >
                   <IconExport />
                   <span>
-                    {exportUi === "loading" ? "保存中…" : exportUi === "ok" ? "已保存" : exportUi === "err" ? "失败" : "导出"}
+                    {exportUi === "loading"
+                      ? t("soqlEditor.exportLabelLoading")
+                      : exportUi === "ok"
+                        ? t("soqlEditor.exportLabelOk")
+                        : exportUi === "err"
+                          ? t("soqlEditor.exportLabelErr")
+                          : t("soqlEditor.exportLabelIdle")}
                   </span>
                 </button>
               </div>
@@ -409,11 +439,11 @@ export function SoqlEditor() {
           </div>
           {summary ? (
             <div className="soql-summary">
-              <span>总记录数: {summary.totalSize}</span>
-              <span>当前展示: {summary.displayedRows}</span>
-              <span>耗时: {summary.durationMs}ms</span>
-              <span>Org: {summary.orgId}</span>
-              <span>执行时间: {summary.executedAt}</span>
+              <span>{t("soqlEditor.summaryTotal", { n: summary.totalSize })}</span>
+              <span>{t("soqlEditor.summaryDisplayed", { n: summary.displayedRows })}</span>
+              <span>{t("soqlEditor.summaryDuration", { n: summary.durationMs })}</span>
+              <span>{t("soqlEditor.summaryOrg", { id: summary.orgId })}</span>
+              <span>{t("soqlEditor.summaryExecutedAt", { time: summary.executedAt })}</span>
             </div>
           ) : null}
           {error ? (
@@ -422,7 +452,7 @@ export function SoqlEditor() {
               <div className="soql-error-subtitle">{error.category}</div>
               <div className="soql-error-suggestion">{error.suggestion}</div>
               <details>
-                <summary>错误详情</summary>
+                <summary>{t("soqlEditor.errorDetailsSummary")}</summary>
                 <pre className="soql-error-raw">{error.raw}</pre>
               </details>
             </div>
@@ -473,7 +503,7 @@ export function SoqlEditor() {
                             }
                             const sqRows = extractSubqueryRows(row, col.subqueryName);
                             const sqLayout = resultLayout?.subqueries[col.subqueryName];
-                            const countText = `${sqRows.length} 条`;
+                            const countText = t("soqlEditor.subqueryRows", { count: sqRows.length });
                             const stateKey = `${rowKey}::${col.subqueryName}`;
                             const isExpanded = Boolean(expandedSubqueries[stateKey]);
                             return (
@@ -484,7 +514,7 @@ export function SoqlEditor() {
                                   disabled={sqRows.length === 0 || !sqLayout}
                                   onClick={() => toggleSubqueryExpand(rowKey, col.subqueryName)}
                                 >
-                                  {isExpanded ? "收起" : "展开"} {countText}
+                                  {isExpanded ? t("soqlEditor.subqueryCollapse") : t("soqlEditor.subqueryExpand")} {countText}
                                 </button>
                               </td>
                             );
@@ -496,10 +526,10 @@ export function SoqlEditor() {
                               {expandedItems.map((item) => (
                                 <div className="soql-subquery-panel" key={`${rowKey}-${item.col.subqueryName}`}>
                                   <div className="soql-subquery-header">
-                                    <strong>{`${item.col.label}（第 ${i + 1} 行）`}</strong>
+                                    <strong>{t("soqlEditor.subqueryPanelTitle", { label: item.col.label, row: i + 1 })}</strong>
                                   </div>
                                   {item.sqRows.length === 0 ? (
-                                    <div className="empty-state">该行无子查询记录。</div>
+                                    <div className="empty-state">{t("soqlEditor.subqueryEmptyRow")}</div>
                                   ) : (
                                     <div className="soql-table-scroll soql-subquery-table-scroll">
                                       <table className="soql-table">
@@ -548,18 +578,18 @@ export function SoqlEditor() {
             <pre className="soql-json">{resultJson}</pre>
           ) : null}
           {!table && !resultJson && !error ? (
-            <div className="empty-state">执行查询后在此显示结果。</div>
+            <div className="empty-state">{t("soqlEditor.resultPlaceholder")}</div>
           ) : null}
         </div>
         <div className="soql-log-panel">
           <div className="soql-log-header">
-            <h3 className="soql-results-title">执行日志</h3>
+            <h3 className="soql-results-title">{t("soqlEditor.execLogTitle")}</h3>
             <button type="button" onClick={() => setLogs([])} disabled={logs.length === 0}>
-              清空日志
+              {t("soqlEditor.clearLog")}
             </button>
           </div>
           {logs.length === 0 ? (
-            <div className="empty-state">暂无日志，执行一次 SOQL 后会显示详细过程。</div>
+            <div className="empty-state">{t("soqlEditor.logPanelEmpty")}</div>
           ) : (
             <div className="soql-log-list">
               {logs.map((log) => (
@@ -575,54 +605,54 @@ export function SoqlEditor() {
   );
 }
 
-function compareCell(a: unknown, b: unknown): number {
+function compareCell(a: unknown, b: unknown, locale: string): number {
   if (a == null && b == null) return 0;
   if (a == null) return -1;
   if (b == null) return 1;
   const na = typeof a === "number" ? a : Number(a);
   const nb = typeof b === "number" ? b : Number(b);
   if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
-  return String(a).localeCompare(String(b), "zh-CN", { sensitivity: "base" });
+  return String(a).localeCompare(String(b), locale, { sensitivity: "base" });
 }
 
 function classifySoqlError(raw: string): ClassifiedError {
   const lower = raw.toLowerCase();
   if (lower.includes("malformed_query") || lower.includes("unexpected token") || lower.includes("syntax")) {
     return {
-      category: "SOQL 语法错误",
-      title: "查询语法有问题",
-      suggestion: "检查关键字顺序、括号闭合、逗号以及字段拼写。",
+      category: i18n.t("soqlEditor.errorClass.syntax.category"),
+      title: i18n.t("soqlEditor.errorClass.syntax.title"),
+      suggestion: i18n.t("soqlEditor.errorClass.syntax.suggestion"),
       raw,
     };
   }
   if (lower.includes("insufficient_access") || lower.includes("insufficient permissions") || lower.includes("no such column")) {
     return {
-      category: "权限或字段可见性问题",
-      title: "字段或对象不可访问",
-      suggestion: "确认当前 Org 权限，并尝试改用可见字段（可先用 SELECT FIELDS(STANDARD)）。",
+      category: i18n.t("soqlEditor.errorClass.access.category"),
+      title: i18n.t("soqlEditor.errorClass.access.title"),
+      suggestion: i18n.t("soqlEditor.errorClass.access.suggestion"),
       raw,
     };
   }
   if (lower.includes("session") || lower.includes("not authorized") || lower.includes("expired")) {
     return {
-      category: "登录会话问题",
-      title: "Org 会话可能失效",
-      suggestion: "请回到 Org 管理刷新登录状态后重试。",
+      category: i18n.t("soqlEditor.errorClass.session.category"),
+      title: i18n.t("soqlEditor.errorClass.session.title"),
+      suggestion: i18n.t("soqlEditor.errorClass.session.suggestion"),
       raw,
     };
   }
   if (lower.includes("sf") || lower.includes("command failed") || lower.includes("network")) {
     return {
-      category: "CLI/网络问题",
-      title: "执行环境异常",
-      suggestion: "检查 Salesforce CLI 可用性与网络连接，必要时重试。",
+      category: i18n.t("soqlEditor.errorClass.cli.category"),
+      title: i18n.t("soqlEditor.errorClass.cli.title"),
+      suggestion: i18n.t("soqlEditor.errorClass.cli.suggestion"),
       raw,
     };
   }
   return {
-    category: "未知错误",
-    title: "执行失败",
-    suggestion: "请查看错误详情并重试。",
+    category: i18n.t("soqlEditor.errorClass.unknown.category"),
+    title: i18n.t("soqlEditor.errorClass.unknown.title"),
+    suggestion: i18n.t("soqlEditor.errorClass.unknown.suggestion"),
     raw,
   };
 }
@@ -672,7 +702,7 @@ function buildExcelClipboardText(resultJson: string, table: RecordsTable | null,
       }));
       return recordsToTsv(cols, []);
     }
-    return "提示\t无数据行（可在 JSON 中查看 totalSize）";
+    return i18n.t("soqlEditor.excelNoDataHint");
   }
   if (parsed && parsed.rows.length > 0) {
     const cols: MainColumn[] = parsed.fallbackCols.map((label, idx) => ({
@@ -701,7 +731,7 @@ function getMainColumnCellValue(row: Record<string, unknown>, col: MainColumn): 
   if (col.kind === "field") {
     return getByPath(row, col.path);
   }
-  return `${extractSubqueryRows(row, col.subqueryName).length} 条`;
+  return i18n.t("soqlEditor.subqueryRows", { count: extractSubqueryRows(row, col.subqueryName).length });
 }
 
 function downloadTextFile(filename: string, content: string, mime: string): void {

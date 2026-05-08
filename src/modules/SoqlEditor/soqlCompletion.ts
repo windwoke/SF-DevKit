@@ -1,5 +1,10 @@
 import * as monaco from "monaco-editor";
 import { invoke } from "@tauri-apps/api/core";
+import i18n from "../../i18n";
+
+function $t(key: string, options?: Record<string, unknown>): string {
+  return String(i18n.t(key, options as never));
+}
 import { extractFromObject, getSubqueryFromObjectBeforeCursor, parseCompletionContext } from "./contextParser";
 import { parseRelationshipPath, type FieldMeta } from "./relationshipParser";
 
@@ -94,7 +99,7 @@ async function withLoadingIndicator<T>(
   message?: string,
 ): Promise<T> {
   if (!onLoading) return promise;
-  onLoading(message ?? "正在加载补全元数据…");
+  onLoading(message ?? $t("soqlEditor.completion.loadingDefault"));
   try {
     return await promise;
   } finally {
@@ -118,7 +123,7 @@ async function getObjectsCached(orgId: string, onLoading?: CompletionLoadingFn):
       objectInflight.delete(orgId);
     });
   objectInflight.set(orgId, request);
-  return withLoadingIndicator(request, onLoading, "正在加载对象列表…");
+  return withLoadingIndicator(request, onLoading, $t("soqlEditor.completion.loadingObjects"));
 }
 
 async function getFieldsCached(orgId: string, objectName: string, onLoading?: CompletionLoadingFn): Promise<FieldMeta[]> {
@@ -138,7 +143,7 @@ async function getFieldsCached(orgId: string, objectName: string, onLoading?: Co
       fieldInflight.delete(key);
     });
   fieldInflight.set(key, request);
-  return withLoadingIndicator(request, onLoading, `正在加载字段: ${objectName}…`);
+  return withLoadingIndicator(request, onLoading, $t("soqlEditor.completion.loadingFields", { name: objectName }));
 }
 
 async function getChildRelationshipsCached(
@@ -162,7 +167,7 @@ async function getChildRelationshipsCached(
       childRelInflight.delete(key);
     });
   childRelInflight.set(key, request);
-  return withLoadingIndicator(request, onLoading, `正在加载子关系: ${objectName}…`);
+  return withLoadingIndicator(request, onLoading, $t("soqlEditor.completion.loadingChildRel", { name: objectName }));
 }
 
 async function getPicklistValuesCached(
@@ -192,7 +197,7 @@ async function getPicklistValuesCached(
       picklistInflight.delete(key);
     });
   picklistInflight.set(key, request);
-  return withLoadingIndicator(request, onLoading, `正在加载选项值: ${fieldName}…`);
+  return withLoadingIndicator(request, onLoading, $t("soqlEditor.completion.loadingPicklist", { name: fieldName }));
 }
 
 async function objectExists(orgId: string, objectName: string, onLoading?: CompletionLoadingFn): Promise<boolean> {
@@ -226,148 +231,160 @@ const DATE_LITERALS = [
 
 type OperatorDef = { label: string; insertText: string; detail?: string; sortText?: string };
 
-const OPERATORS_BY_TYPE: Record<string, OperatorDef[]> = {
-  STRING: [
-    { label: "=", insertText: "= ''", detail: "精确匹配" },
-    { label: "!=", insertText: "!= ''", detail: "不等于" },
-    { label: "LIKE", insertText: "LIKE '%'", detail: "模糊匹配" },
-    { label: "NOT LIKE", insertText: "NOT LIKE '%'" },
-    { label: "IN", insertText: "IN ()", detail: "多值匹配" },
-    { label: "NOT IN", insertText: "NOT IN ()" },
-    { label: "= null", insertText: "= null", detail: "为空", sortText: "z_null" },
-  ],
-  BOOLEAN: [
-    { label: "= true", insertText: "= true" },
-    { label: "= false", insertText: "= false" },
-  ],
-  INTEGER: [
-    { label: "=", insertText: "= " },
-    { label: "!=", insertText: "!= " },
-    { label: ">", insertText: "> " },
-    { label: ">=", insertText: ">= " },
-    { label: "<", insertText: "< " },
-    { label: "<=", insertText: "<= " },
-    { label: "IN", insertText: "IN ()" },
-  ],
-  DOUBLE: [
-    { label: "=", insertText: "= " },
-    { label: "!=", insertText: "!= " },
-    { label: ">", insertText: "> " },
-    { label: "<", insertText: "< " },
-  ],
-  DATE: [
-    { label: "=", insertText: "= " },
-    { label: ">", insertText: "> " },
-    { label: "<", insertText: "< " },
-    { label: "TODAY", insertText: "= TODAY" },
-    { label: "YESTERDAY", insertText: "= YESTERDAY" },
-    { label: "LAST_N_DAYS", insertText: "= LAST_N_DAYS:30", detail: "最近 N 天" },
-    { label: "NEXT_N_DAYS", insertText: "= NEXT_N_DAYS:7" },
-    { label: "THIS_MONTH", insertText: "= THIS_MONTH" },
-  ],
-  DATETIME: [
-    { label: "=", insertText: "= " },
-    { label: ">", insertText: "> " },
-    { label: "<", insertText: "< " },
-    { label: "TODAY", insertText: "= TODAY" },
-  ],
-  REFERENCE: [
-    { label: "=", insertText: "= ''", detail: "ID 精确匹配" },
-    { label: "IN", insertText: "IN ()", detail: "多 ID 匹配" },
-    { label: "= null", insertText: "= null", detail: "为空" },
-    { label: "!= null", insertText: "!= null" },
-    { label: "IN (SELECT ...)", insertText: "IN (SELECT Id FROM )", detail: "子查询" },
-  ],
-  PICKLIST: [
-    { label: "=", insertText: "= ''" },
-    { label: "IN", insertText: "IN ()" },
-  ],
-  MULTIPICKLIST: [
-    { label: "INCLUDES", insertText: "INCLUDES ('')", detail: "包含" },
-    { label: "EXCLUDES", insertText: "EXCLUDES ('')", detail: "不包含" },
-  ],
-};
+function getOperatorsByType(): Record<string, OperatorDef[]> {
+  const o = (k: string) => $t(`soqlEditor.completion.op.${k}`);
+  return {
+    STRING: [
+      { label: "=", insertText: "= ''", detail: o("exact") },
+      { label: "!=", insertText: "!= ''", detail: o("notEq") },
+      { label: "LIKE", insertText: "LIKE '%'", detail: o("like") },
+      { label: "NOT LIKE", insertText: "NOT LIKE '%'" },
+      { label: "IN", insertText: "IN ()", detail: o("in") },
+      { label: "NOT IN", insertText: "NOT IN ()" },
+      { label: "= null", insertText: "= null", detail: o("null"), sortText: "z_null" },
+    ],
+    BOOLEAN: [
+      { label: "= true", insertText: "= true" },
+      { label: "= false", insertText: "= false" },
+    ],
+    INTEGER: [
+      { label: "=", insertText: "= " },
+      { label: "!=", insertText: "!= " },
+      { label: ">", insertText: "> " },
+      { label: ">=", insertText: ">= " },
+      { label: "<", insertText: "< " },
+      { label: "<=", insertText: "<= " },
+      { label: "IN", insertText: "IN ()" },
+    ],
+    DOUBLE: [
+      { label: "=", insertText: "= " },
+      { label: "!=", insertText: "!= " },
+      { label: ">", insertText: "> " },
+      { label: "<", insertText: "< " },
+    ],
+    DATE: [
+      { label: "=", insertText: "= " },
+      { label: ">", insertText: "> " },
+      { label: "<", insertText: "< " },
+      { label: "TODAY", insertText: "= TODAY" },
+      { label: "YESTERDAY", insertText: "= YESTERDAY" },
+      { label: "LAST_N_DAYS", insertText: "= LAST_N_DAYS:30", detail: o("lastNDays") },
+      { label: "NEXT_N_DAYS", insertText: "= NEXT_N_DAYS:7" },
+      { label: "THIS_MONTH", insertText: "= THIS_MONTH" },
+    ],
+    DATETIME: [
+      { label: "=", insertText: "= " },
+      { label: ">", insertText: "> " },
+      { label: "<", insertText: "< " },
+      { label: "TODAY", insertText: "= TODAY" },
+    ],
+    REFERENCE: [
+      { label: "=", insertText: "= ''", detail: o("refExact") },
+      { label: "IN", insertText: "IN ()", detail: o("refIn") },
+      { label: "= null", insertText: "= null", detail: o("null") },
+      { label: "!= null", insertText: "!= null" },
+      { label: "IN (SELECT ...)", insertText: "IN (SELECT Id FROM )", detail: o("subquery") },
+    ],
+    PICKLIST: [
+      { label: "=", insertText: "= ''" },
+      { label: "IN", insertText: "IN ()" },
+    ],
+    MULTIPICKLIST: [
+      { label: "INCLUDES", insertText: "INCLUDES ('')", detail: o("includes") },
+      { label: "EXCLUDES", insertText: "EXCLUDES ('')", detail: o("excludes") },
+    ],
+  };
+}
 
-const AGGREGATE_FUNCTIONS: Omit<monaco.languages.CompletionItem, "range">[] = [
-  { label: "COUNT(Id)", kind: CompletionItemKind.Function, detail: "聚合: 记录总数", insertText: "COUNT(Id)", sortText: "z1_COUNT" },
-  {
-    label: "COUNT_DISTINCT()",
-    kind: CompletionItemKind.Function,
-    detail: "聚合: 唯一值数量",
-    insertText: "COUNT_DISTINCT($1)",
-    insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
-    sortText: "z2_COUNT_DISTINCT",
-  },
-  {
-    label: "SUM()",
-    kind: CompletionItemKind.Function,
-    detail: "聚合: 求和",
-    insertText: "SUM($1)",
-    insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
-    sortText: "z3_SUM",
-  },
-  {
-    label: "AVG()",
-    kind: CompletionItemKind.Function,
-    detail: "聚合: 平均值",
-    insertText: "AVG($1)",
-    insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
-    sortText: "z4_AVG",
-  },
-  {
-    label: "MIN()",
-    kind: CompletionItemKind.Function,
-    detail: "聚合: 最小值",
-    insertText: "MIN($1)",
-    insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
-    sortText: "z5_MIN",
-  },
-  {
-    label: "MAX()",
-    kind: CompletionItemKind.Function,
-    detail: "聚合: 最大值",
-    insertText: "MAX($1)",
-    insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
-    sortText: "z6_MAX",
-  },
-];
+function getAggregateFunctions(): Omit<monaco.languages.CompletionItem, "range">[] {
+  const a = (k: string) => $t(`soqlEditor.completion.agg.${k}`);
+  return [
+    { label: "COUNT(Id)", kind: CompletionItemKind.Function, detail: a("count"), insertText: "COUNT(Id)", sortText: "z1_COUNT" },
+    {
+      label: "COUNT_DISTINCT()",
+      kind: CompletionItemKind.Function,
+      detail: a("countDistinct"),
+      insertText: "COUNT_DISTINCT($1)",
+      insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+      sortText: "z2_COUNT_DISTINCT",
+    },
+    {
+      label: "SUM()",
+      kind: CompletionItemKind.Function,
+      detail: a("sum"),
+      insertText: "SUM($1)",
+      insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+      sortText: "z3_SUM",
+    },
+    {
+      label: "AVG()",
+      kind: CompletionItemKind.Function,
+      detail: a("avg"),
+      insertText: "AVG($1)",
+      insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+      sortText: "z4_AVG",
+    },
+    {
+      label: "MIN()",
+      kind: CompletionItemKind.Function,
+      detail: a("min"),
+      insertText: "MIN($1)",
+      insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+      sortText: "z5_MIN",
+    },
+    {
+      label: "MAX()",
+      kind: CompletionItemKind.Function,
+      detail: a("max"),
+      insertText: "MAX($1)",
+      insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+      sortText: "z6_MAX",
+    },
+  ];
+}
 
-const SPECIAL_FUNCTIONS: Omit<monaco.languages.CompletionItem, "range">[] = [
-  {
-    label: "toLabel()",
-    kind: CompletionItemKind.Function,
-    detail: "Picklist 标签",
-    insertText: "toLabel($1)",
-    insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
-    sortText: "z7_toLabel",
-  },
-  {
-    label: "FORMAT()",
-    kind: CompletionItemKind.Function,
-    detail: "格式化数字/日期",
-    insertText: "FORMAT($1)",
-    insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
-    sortText: "z8_FORMAT",
-  },
-  {
-    label: "FIELDS(ALL)",
-    kind: CompletionItemKind.Function,
-    detail: "所有字段（需 LIMIT）",
-    insertText: "FIELDS(ALL)",
-    sortText: "z9_FIELDS_ALL",
-  },
-];
+function getSpecialFunctions(): Omit<monaco.languages.CompletionItem, "range">[] {
+  const s = (k: string) => $t(`soqlEditor.completion.special.${k}`);
+  return [
+    {
+      label: "toLabel()",
+      kind: CompletionItemKind.Function,
+      detail: s("toLabel"),
+      insertText: "toLabel($1)",
+      insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+      sortText: "z7_toLabel",
+    },
+    {
+      label: "FORMAT()",
+      kind: CompletionItemKind.Function,
+      detail: s("format"),
+      insertText: "FORMAT($1)",
+      insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+      sortText: "z8_FORMAT",
+    },
+    {
+      label: "FIELDS(ALL)",
+      kind: CompletionItemKind.Function,
+      detail: s("fieldsAll"),
+      insertText: "FIELDS(ALL)",
+      sortText: "z9_FIELDS_ALL",
+    },
+  ];
+}
 
-const ORDER_DIRECTION_ITEMS: Omit<monaco.languages.CompletionItem, "range">[] = [
-  { label: "ASC", kind: CompletionItemKind.Keyword, detail: "升序（默认）", insertText: "ASC" },
-  { label: "DESC", kind: CompletionItemKind.Keyword, detail: "降序", insertText: "DESC" },
-  { label: "NULLS FIRST", kind: CompletionItemKind.Keyword, detail: "null 值排在最前", insertText: "NULLS FIRST" },
-  { label: "NULLS LAST", kind: CompletionItemKind.Keyword, detail: "null 值排在最后", insertText: "NULLS LAST" },
-  { label: "ASC NULLS FIRST", kind: CompletionItemKind.Keyword, insertText: "ASC NULLS FIRST" },
-  { label: "ASC NULLS LAST", kind: CompletionItemKind.Keyword, insertText: "ASC NULLS LAST" },
-  { label: "DESC NULLS FIRST", kind: CompletionItemKind.Keyword, insertText: "DESC NULLS FIRST" },
-  { label: "DESC NULLS LAST", kind: CompletionItemKind.Keyword, insertText: "DESC NULLS LAST" },
-];
+function getOrderDirectionItems(): Omit<monaco.languages.CompletionItem, "range">[] {
+  const ord = (k: string) => $t(`soqlEditor.completion.order.${k}`);
+  return [
+    { label: "ASC", kind: CompletionItemKind.Keyword, detail: ord("asc"), insertText: "ASC" },
+    { label: "DESC", kind: CompletionItemKind.Keyword, detail: ord("desc"), insertText: "DESC" },
+    { label: "NULLS FIRST", kind: CompletionItemKind.Keyword, detail: ord("nullsFirst"), insertText: "NULLS FIRST" },
+    { label: "NULLS LAST", kind: CompletionItemKind.Keyword, detail: ord("nullsLast"), insertText: "NULLS LAST" },
+    { label: "ASC NULLS FIRST", kind: CompletionItemKind.Keyword, insertText: "ASC NULLS FIRST" },
+    { label: "ASC NULLS LAST", kind: CompletionItemKind.Keyword, insertText: "ASC NULLS LAST" },
+    { label: "DESC NULLS FIRST", kind: CompletionItemKind.Keyword, insertText: "DESC NULLS FIRST" },
+    { label: "DESC NULLS LAST", kind: CompletionItemKind.Keyword, insertText: "DESC NULLS LAST" },
+  ];
+}
 
 const HAVING_OPERATORS: Omit<monaco.languages.CompletionItem, "range">[] = [
   { label: ">", kind: CompletionItemKind.Operator, insertText: "> " },
@@ -398,7 +415,7 @@ function relationshipPrefixCompletion(
   return {
     label: `${field.relationship_name}.`,
     kind: CompletionItemKind.Module,
-    detail: `父关系 → ${field.reference_to ?? ""}`,
+    detail: $t("soqlEditor.completion.parentRel", { to: field.reference_to ?? "" }),
     insertText: `${field.relationship_name}.`,
     range,
     sortText: `3_${field.relationship_name}`,
@@ -420,7 +437,7 @@ async function handleSubqueryCompletion(
     return childRels.map((rel) => ({
       label: rel.relationship_name,
       kind: CompletionItemKind.Class,
-      detail: `子关系 → ${rel.child_object}`,
+      detail: $t("soqlEditor.completion.childRel", { child: rel.child_object }),
       insertText: rel.relationship_name,
       range,
     }));
@@ -442,21 +459,21 @@ async function resolveSubqueryObjectName(
   fromToken: string,
   onLoading?: CompletionLoadingFn,
 ): Promise<string | null> {
-  const t = fromToken.trim();
-  if (!t) return null;
+  const token = fromToken.trim();
+  if (!token) return null;
 
   const childRels = await getChildRelationshipsCached(orgId, parentObject, onLoading);
-  const matchByRelName = childRels.find((r) => r.relationship_name.toLowerCase() === t.toLowerCase());
+  const matchByRelName = childRels.find((r) => r.relationship_name.toLowerCase() === token.toLowerCase());
   if (matchByRelName) return matchByRelName.child_object;
 
-  const matchByObject = childRels.find((r) => r.child_object.toLowerCase() === t.toLowerCase());
+  const matchByObject = childRels.find((r) => r.child_object.toLowerCase() === token.toLowerCase());
   if (matchByObject) return matchByObject.child_object;
 
   // 避免输入过程中对短 token 反复 describe；__c 自定义对象可短一些
-  if (t.length < 4 && !t.endsWith("__c")) return null;
+  if (token.length < 4 && !token.endsWith("__c")) return null;
 
-  const directFields = await getFieldsCached(orgId, t, onLoading).catch(() => []);
-  if (directFields.length > 0) return t;
+  const directFields = await getFieldsCached(orgId, token, onLoading).catch(() => []);
+  if (directFields.length > 0) return token;
 
   return null;
 }
@@ -497,7 +514,8 @@ async function handleOperatorCompletion(
   const resolved = await resolveWhereFieldMeta(ctx, orgId, onLoading);
   const field = resolved?.field;
   if (!field) return [];
-  const ops = OPERATORS_BY_TYPE[field.field_type] ?? OPERATORS_BY_TYPE.STRING;
+  const byType = getOperatorsByType();
+  const ops = byType[field.field_type] ?? byType.STRING;
   return ops.map((op) => ({
     label: op.label,
     kind: CompletionItemKind.Operator,
@@ -525,7 +543,7 @@ async function handleValueCompletion(
     return DATE_LITERALS.map((lit) => ({
       label: lit,
       kind: CompletionItemKind.Constant,
-      detail: "日期字面量",
+      detail: $t("soqlEditor.completion.dateLiteral"),
       insertText: lit.includes("_N_") ? `${lit}:30` : lit,
       range,
     }));
@@ -536,7 +554,9 @@ async function handleValueCompletion(
     return picklistValues.map((v) => ({
       label: v.label && v.label !== v.value ? `${v.label}(${v.value})` : v.value,
       kind: CompletionItemKind.EnumMember,
-      detail: v.active ? `Picklist 值: ${v.value}` : `Picklist 值: ${v.value}（已停用）`,
+      detail: v.active
+        ? $t("soqlEditor.completion.pickValue", { value: v.value })
+        : $t("soqlEditor.completion.pickValueInactive", { value: v.value }),
       insertText: `'${v.value}'`,
       range,
     }));
@@ -604,7 +624,7 @@ function buildLimitOffsetSnippets(range: monaco.IRange, clause: "LIMIT" | "OFFSE
         kind: CompletionItemKind.Snippet,
         insertText: "LIMIT ${1:200}",
         insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
-        detail: "最大返回行数",
+        detail: $t("soqlEditor.completion.limit.maxRows"),
         range,
       },
       {
@@ -612,7 +632,7 @@ function buildLimitOffsetSnippets(range: monaco.IRange, clause: "LIMIT" | "OFFSE
         kind: CompletionItemKind.Snippet,
         insertText: "LIMIT ${1:2000}",
         insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
-        detail: "SOQL 常见上限",
+        detail: $t("soqlEditor.completion.limit.commonCap"),
         range,
       },
     ];
@@ -623,7 +643,7 @@ function buildLimitOffsetSnippets(range: monaco.IRange, clause: "LIMIT" | "OFFSE
       kind: CompletionItemKind.Snippet,
       insertText: "OFFSET ${1:0}",
       insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
-      detail: "结果偏移量",
+      detail: $t("soqlEditor.completion.limit.offset"),
       range,
     },
   ];
@@ -668,7 +688,11 @@ export function registerSoqlCompletion(
         const now = Date.now();
         if (ctxSignature !== lastCtxSignature || now - lastCtxLogTs > 1500) {
           onLog?.(
-            `补全触发: clause=${ctx.clause}, trigger=${ctx.triggerKind}, primary=${ctx.primaryObject ?? "-"}`,
+            $t("soqlEditor.completion.logTriggered", {
+              clause: ctx.clause,
+              trigger: ctx.triggerKind,
+              primary: ctx.primaryObject ?? "-",
+            }),
             "info",
           );
           lastCtxSignature = ctxSignature;
@@ -678,13 +702,13 @@ export function registerSoqlCompletion(
         if (ctx.clause === "FROM" && ctx.triggerKind === "OBJECT") {
           const objects = await getObjectsCached(orgId, onLoading);
           if (objects.length === 0) {
-            onLog?.("补全提示：对象列表为空或返回格式异常", "error");
+            onLog?.($t("soqlEditor.completion.logEmptyObjects"), "error");
           }
           return {
             suggestions: objects.map((obj) => ({
               label: obj.api_name,
               kind: CompletionItemKind.Class,
-              detail: `${obj.label} | ${obj.is_custom ? "自定义对象" : "标准对象"}`,
+              detail: `${obj.label} | ${obj.is_custom ? $t("soqlEditor.completion.customObject") : $t("soqlEditor.completion.standardObject")}`,
               insertText: obj.api_name,
               range,
               sortText: obj.is_custom ? `1_${obj.api_name}` : `0_${obj.api_name}`,
@@ -704,7 +728,7 @@ export function registerSoqlCompletion(
             suggestions: targets.map((obj) => ({
               label: obj,
               kind: CompletionItemKind.Class,
-              detail: "TYPEOF 可选对象",
+              detail: $t("soqlEditor.completion.typeofWhen"),
               insertText: obj,
               range,
             })),
@@ -763,27 +787,27 @@ export function registerSoqlCompletion(
                   label: "0",
                   kind: CompletionItemKind.Value,
                   insertText: "0",
-                  detail: "数值",
+                  detail: $t("soqlEditor.completion.numeric"),
                   range,
                 },
                 {
                   label: "1",
                   kind: CompletionItemKind.Value,
                   insertText: "1",
-                  detail: "数值",
+                  detail: $t("soqlEditor.completion.numeric"),
                   range,
                 },
                 {
                   label: "10",
                   kind: CompletionItemKind.Value,
                   insertText: "10",
-                  detail: "数值",
+                  detail: $t("soqlEditor.completion.numeric"),
                   range,
                 },
               ],
             };
           }
-          return { suggestions: AGGREGATE_FUNCTIONS.map((fn) => ({ ...fn, range })) };
+          return { suggestions: getAggregateFunctions().map((fn) => ({ ...fn, range })) };
         }
 
         if (ctx.clause === "LIMIT" || ctx.clause === "OFFSET") {
@@ -801,14 +825,14 @@ export function registerSoqlCompletion(
               const item = relationshipPrefixCompletion(f, range);
               if (item) extras.push(item);
             });
-          extras.push(...AGGREGATE_FUNCTIONS.map((fn) => ({ ...fn, range })));
-          extras.push(...SPECIAL_FUNCTIONS.map((fn) => ({ ...fn, range })));
+          extras.push(...getAggregateFunctions().map((fn) => ({ ...fn, range })));
+          extras.push(...getSpecialFunctions().map((fn) => ({ ...fn, range })));
         }
 
         if (ctx.clause === "ORDER_BY") {
           const orderState = parseOrderByTail(textBefore);
           if (orderState.needsDirection) {
-            return { suggestions: ORDER_DIRECTION_ITEMS.map((item) => ({ ...item, range })) };
+            return { suggestions: getOrderDirectionItems().map((item) => ({ ...item, range })) };
           }
           fields
             .filter((f) => f.field_type === "REFERENCE" && f.relationship_name)
@@ -847,7 +871,7 @@ export function registerSoqlCompletion(
         return { suggestions: [...filteredFields, ...extras] };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        onLog?.(`补全失败: ${message}`, "error");
+        onLog?.($t("soqlEditor.completion.logFailed", { message }), "error");
         return { suggestions: [] };
       }
     },

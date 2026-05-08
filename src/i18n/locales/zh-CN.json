@@ -129,6 +129,156 @@
       "clearFailed": "清除失败：{{message}}"
     }
   },
+  "soqlEditor": {
+    "title": "SOQL 编辑器",
+    "historyLabel": "历史输入",
+    "historyOptionEmpty": "暂无历史",
+    "historyOptionPick": "选择历史 SOQL…",
+    "clearHistory": "清空历史",
+    "toolbarFormatTitle": "格式化 SOQL",
+    "toolbarFormatAria": "格式化 SOQL",
+    "toolbarCopyTitle": "复制 SOQL",
+    "toolbarCopyAria": "复制 SOQL",
+    "toolbarRefreshTitle": "刷新模式缓存（当前 FROM 对象或全量列表）",
+    "toolbarRefreshAria": "刷新缓存",
+    "toolbarRunTitle": "执行 SOQL（⌘↩ 或 Ctrl+Enter）",
+    "toolbarRunAria": "执行 SOQL",
+    "resultsTitle": "结果",
+    "copyResultsTitle": "复制为制表符分隔（粘贴到 Excel）",
+    "copyLabelIdle": "复制",
+    "copyLabelOk": "已复制",
+    "copyLabelErr": "失败",
+    "exportCsvTitle": "导出当前表格为 CSV",
+    "exportJsonTitle": "导出 JSON",
+    "exportLabelIdle": "导出",
+    "exportLabelLoading": "保存中…",
+    "exportLabelOk": "已保存",
+    "exportLabelErr": "失败",
+    "summaryTotal": "总记录数: {{n}}",
+    "summaryDisplayed": "当前展示: {{n}}",
+    "summaryDuration": "耗时: {{n}}ms",
+    "summaryOrg": "Org: {{id}}",
+    "summaryExecutedAt": "执行时间: {{time}}",
+    "errorDetailsSummary": "错误详情",
+    "subqueryExpand": "展开",
+    "subqueryCollapse": "收起",
+    "subqueryRows": "{{count}} 条",
+    "subqueryPanelTitle": "{{label}}（第 {{row}} 行）",
+    "subqueryEmptyRow": "该行无子查询记录。",
+    "resultPlaceholder": "执行查询后在此显示结果。",
+    "execLogTitle": "执行日志",
+    "clearLog": "清空日志",
+    "logPanelEmpty": "暂无日志，执行一次 SOQL 后会显示详细过程。",
+    "errors": {
+      "needOrg": "请先选择或登录 Org"
+    },
+    "log": {
+      "runStart": "开始执行 SOQL，Org={{org}}",
+      "runQuery": "Query: {{snippet}}",
+      "runSuccess": "执行成功，返回记录数={{total}}，耗时={{ms}}ms",
+      "runFail": "执行失败: {{message}}",
+      "cacheManualObj": "手动刷新缓存: {{name}}",
+      "cacheManualAll": "手动刷新缓存: 全量对象列表",
+      "cacheDoneObj": "缓存已刷新: {{name}}",
+      "cacheDoneAll": "缓存已刷新: 全量对象列表",
+      "cacheFail": "刷新缓存失败: {{message}}",
+      "formatted": "已格式化 SOQL",
+      "soqlCopied": "SOQL 已复制到剪贴板",
+      "copyFailApp": "复制失败（请检查应用剪贴板权限）",
+      "tsvCopied": "已复制为表格格式（可直接粘贴到 Excel）",
+      "copyFailClipboard": "复制失败（请检查剪贴板权限）",
+      "savedCsv": "已保存 CSV（{{rows}} 行）",
+      "savedJson": "已保存 JSON 文件",
+      "exportCancelled": "已取消保存",
+      "exportBrowserDownload": "已通过浏览器下载保存（若未弹出另存为，请查看下载目录）",
+      "exportFail": "导出失败: {{message}}"
+    },
+    "errorClass": {
+      "syntax": {
+        "category": "SOQL 语法错误",
+        "title": "查询语法有问题",
+        "suggestion": "检查关键字顺序、括号闭合、逗号以及字段拼写。"
+      },
+      "access": {
+        "category": "权限或字段可见性问题",
+        "title": "字段或对象不可访问",
+        "suggestion": "确认当前 Org 权限，并尝试改用可见字段（可先用 SELECT FIELDS(STANDARD)）。"
+      },
+      "session": {
+        "category": "登录会话问题",
+        "title": "Org 会话可能失效",
+        "suggestion": "请回到 Org 管理刷新登录状态后重试。"
+      },
+      "cli": {
+        "category": "CLI/网络问题",
+        "title": "执行环境异常",
+        "suggestion": "检查 Salesforce CLI 可用性与网络连接，必要时重试。"
+      },
+      "unknown": {
+        "category": "未知错误",
+        "title": "执行失败",
+        "suggestion": "请查看错误详情并重试。"
+      }
+    },
+    "excelNoDataHint": "提示\t无数据行（可在 JSON 中查看 totalSize）",
+    "monacoRunAction": "执行 SOQL",
+    "completion": {
+      "loadingDefault": "正在加载补全元数据…",
+      "loadingObjects": "正在加载对象列表…",
+      "loadingFields": "正在加载字段: {{name}}…",
+      "loadingChildRel": "正在加载子关系: {{name}}…",
+      "loadingPicklist": "正在加载选项值: {{name}}…",
+      "op": {
+        "exact": "精确匹配",
+        "notEq": "不等于",
+        "like": "模糊匹配",
+        "in": "多值匹配",
+        "null": "为空",
+        "lastNDays": "最近 N 天",
+        "refExact": "ID 精确匹配",
+        "refIn": "多 ID 匹配",
+        "subquery": "子查询",
+        "includes": "包含",
+        "excludes": "不包含"
+      },
+      "agg": {
+        "count": "聚合: 记录总数",
+        "countDistinct": "聚合: 唯一值数量",
+        "sum": "聚合: 求和",
+        "avg": "聚合: 平均值",
+        "min": "聚合: 最小值",
+        "max": "聚合: 最大值"
+      },
+      "special": {
+        "toLabel": "Picklist 标签",
+        "format": "格式化数字/日期",
+        "fieldsAll": "所有字段（需 LIMIT）"
+      },
+      "order": {
+        "asc": "升序（默认）",
+        "desc": "降序",
+        "nullsFirst": "null 值排在最前",
+        "nullsLast": "null 值排在最后"
+      },
+      "limit": {
+        "maxRows": "最大返回行数",
+        "commonCap": "SOQL 常见上限",
+        "offset": "结果偏移量"
+      },
+      "parentRel": "父关系 → {{to}}",
+      "childRel": "子关系 → {{child}}",
+      "dateLiteral": "日期字面量",
+      "pickValue": "Picklist 值: {{value}}",
+      "pickValueInactive": "Picklist 值: {{value}}（已停用）",
+      "typeofWhen": "TYPEOF 可选对象",
+      "numeric": "数值",
+      "standardObject": "标准对象",
+      "customObject": "自定义对象",
+      "logTriggered": "补全触发: clause={{clause}}, trigger={{trigger}}, primary={{primary}}",
+      "logEmptyObjects": "补全提示：对象列表为空或返回格式异常",
+      "logFailed": "补全失败: {{message}}"
+    }
+  },
   "comingSoon": {
     "apex": {
       "summary": "用于快速执行 Anonymous Apex，并展示结构化执行结果。",
