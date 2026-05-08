@@ -21,6 +21,64 @@
     "zh-CN": "中文",
     "en-US": "English"
   },
+  "logViewer": {
+    "noOrgHint": "未选择 Org，请先在 Org 管理中设置默认。",
+    "trace": {
+      "self": "追踪自己",
+      "processing": "处理中…",
+      "userPlaceholder": "按用户追踪…",
+      "classPlaceholder": "按 ApexClass 追踪…",
+      "searching": "搜索中…",
+      "userEmptyDefault": "暂无可选用户",
+      "userMinChars": "输入至少 2 个字符搜索用户",
+      "userNoMatch": "未找到匹配用户",
+      "classEmptyDefault": "暂无可选 ApexClass",
+      "classMinChars": "输入至少 2 个字符搜索 ApexClass",
+      "classNoMatch": "未找到匹配 ApexClass",
+      "presetStandard": "标准日志",
+      "presetVerbose": "详细日志",
+      "durationTitle": "追踪时长",
+      "duration30": "追踪 30 分钟",
+      "duration1d": "追踪 1 天",
+      "feedbackWorking": "处理中，请稍候…",
+      "stopTraceAria": "停止追踪 {{label}}"
+    },
+    "list": {
+      "filterPlaceholder": "过滤用户 / 操作…",
+      "colUserOp": "用户 / 操作",
+      "colSize": "大小",
+      "colTime": "时间",
+      "empty": "暂无日志"
+    },
+    "detail": {
+      "pickFirst": "选择一条日志后显示详情。",
+      "title": "日志详情",
+      "user": "用户",
+      "time": "时间",
+      "size": "大小",
+      "operation": "操作",
+      "request": "请求",
+      "duration": "耗时",
+      "status": "状态",
+      "download": "下载日志",
+      "downloading": "下载中…",
+      "openVscode": "VSCode 打开",
+      "settingsTitle": "下载设置",
+      "pickDir": "选择下载目录",
+      "dirLabel": "目录: {{path}}",
+      "autoOpenVscode": "下载后自动在 VSCode 打开",
+      "revealFile": "在文件管理器中显示",
+      "errorNoLog": "未选择日志"
+    },
+    "classMeta": {
+      "unknownEditor": "未知修改人",
+      "lastModifiedNoDate": "最近修改: -- · {{who}}",
+      "lastModified": "最近修改: {{date}} · {{who}}"
+    },
+    "errors": {
+      "classNotFound": "找不到 ApexClass: {{name}}"
+    }
+  },
   "comingSoon": {
     "apex": {
       "summary": "用于快速执行 Anonymous Apex，并展示结构化执行结果。",

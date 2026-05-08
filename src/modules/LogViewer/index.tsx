@@ -1,9 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { downloadDir, join } from "@tauri-apps/api/path";
+import type { TFunction } from "i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useOrgStore } from "../../store/org";
 import { type TraceTarget, useLogStore } from "./store";
+
+function dateLocaleFromI18n(lng: string): string {
+  return lng === "zh-CN" || lng.startsWith("zh") ? "zh-CN" : "en-US";
+}
 
 interface ApexLog {
   id: string;
@@ -37,6 +43,7 @@ interface ActiveTrace {
 }
 
 export function LogViewer() {
+  const { t } = useTranslation();
   const { currentOrg } = useOrgStore();
   const { userFilter, selectedLogId, setSelectedLogId, downloadConfig, setDownloadConfig } = useLogStore();
   const queryClient = useQueryClient();
@@ -78,8 +85,8 @@ export function LogViewer() {
   return (
     <section className="module log-viewer-module">
       <div className="module-header log-viewer-header">
-        <h2>Log Viewer</h2>
-        {!currentOrg ? <span className="soql-hint">未选择 Org，请先在 Org 管理中设置默认。</span> : null}
+        <h2>{t("modules.logs")}</h2>
+        {!currentOrg ? <span className="soql-hint">{t("logViewer.noOrgHint")}</span> : null}
       </div>
 
       <TraceBar
@@ -96,6 +103,8 @@ export function LogViewer() {
 }
 
 function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () => void }) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = dateLocaleFromI18n(i18n.language);
   const {
     targets,
     addTarget,
@@ -202,7 +211,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
 
   const runTraceAction = async (busyKey: string, action: () => Promise<void>) => {
     setTraceBusyKey(busyKey);
-    setTraceFeedback("处理中，请稍候…");
+    setTraceFeedback(t("logViewer.trace.feedbackWorking"));
     try {
       await action();
       setTraceFeedback("");
@@ -389,7 +398,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
         className,
       });
       if (!classId) {
-        throw new Error(`找不到 ApexClass: ${className}`);
+        throw new Error(t("logViewer.errors.classNotFound", { name: className }));
       }
       await enableTraceFor(
         {
@@ -481,13 +490,13 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
       <div className="log-trace-main-row">
         <button type="button" className={selfActive ? "trace-btn active" : "trace-btn"} onClick={() => void toggleSelfTrace()} disabled={!orgId || !currentUser}>
           <span className="trace-dot" />
-          {traceBusyKey === "self" ? "处理中…" : "追踪自己"}
+          {traceBusyKey === "self" ? t("logViewer.trace.processing") : t("logViewer.trace.self")}
         </button>
 
         <div className="trace-user-search">
           <input
             value={userSearch}
-            placeholder="按用户追踪…"
+            placeholder={t("logViewer.trace.userPlaceholder")}
             onChange={(e) => searchUsers(e.target.value)}
             onFocus={handleUserFocus}
             onBlur={handleUserBlur}
@@ -497,7 +506,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
           {orgId && userInputFocused ? (
             <div className="trace-user-dropdown" onMouseDown={(e) => e.preventDefault()}>
               {searchingUsers ? (
-                <div className="trace-dropdown-state">搜索中…</div>
+                <div className="trace-dropdown-state">{t("logViewer.trace.searching")}</div>
               ) : users.length > 0 ? (
                 users.map((user, idx) => (
                   <button
@@ -513,11 +522,11 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
                   </button>
                 ))
               ) : userSearch.trim().length === 0 ? (
-                <div className="trace-dropdown-state">暂无可选用户</div>
+                <div className="trace-dropdown-state">{t("logViewer.trace.userEmptyDefault")}</div>
               ) : userSearch.trim().length < 2 ? (
-                <div className="trace-dropdown-state">输入至少 2 个字符搜索用户</div>
+                <div className="trace-dropdown-state">{t("logViewer.trace.userMinChars")}</div>
               ) : (
-                <div className="trace-dropdown-state">未找到匹配用户</div>
+                <div className="trace-dropdown-state">{t("logViewer.trace.userNoMatch")}</div>
               )}
             </div>
           ) : null}
@@ -527,7 +536,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
           <div className="trace-class-search">
             <input
               value={classInput}
-              placeholder="按 ApexClass 追踪…"
+              placeholder={t("logViewer.trace.classPlaceholder")}
               onChange={(e) => searchApexClass(e.target.value)}
               onFocus={handleClassFocus}
               onBlur={handleClassBlur}
@@ -537,7 +546,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
             {orgId && classInputFocused ? (
               <div className="trace-user-dropdown" onMouseDown={(e) => e.preventDefault()}>
                 {searchingClass ? (
-                  <div className="trace-dropdown-state">搜索中…</div>
+                  <div className="trace-dropdown-state">{t("logViewer.trace.searching")}</div>
                 ) : classResults.length > 0 ? (
                   classResults.map((item, idx) => (
                     <button
@@ -549,15 +558,15 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
                       onClick={() => void addClassTraceByItem(item)}
                     >
                       <span>{item.name}</span>
-                      <small>{formatClassMeta(item)}</small>
+                      <small>{formatClassMeta(item, t, dateLocale)}</small>
                     </button>
                   ))
                 ) : classInput.trim().length === 0 ? (
-                  <div className="trace-dropdown-state">暂无可选 ApexClass</div>
+                  <div className="trace-dropdown-state">{t("logViewer.trace.classEmptyDefault")}</div>
                 ) : classInput.trim().length < 2 ? (
-                  <div className="trace-dropdown-state">输入至少 2 个字符搜索 ApexClass</div>
+                  <div className="trace-dropdown-state">{t("logViewer.trace.classMinChars")}</div>
                 ) : (
-                  <div className="trace-dropdown-state">未找到匹配 ApexClass</div>
+                  <div className="trace-dropdown-state">{t("logViewer.trace.classNoMatch")}</div>
                 )}
               </div>
             ) : null}
@@ -568,17 +577,17 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
           value={downloadConfig.preset}
           onChange={(e) => setDownloadConfig({ preset: e.target.value as "standard" | "verbose" })}
         >
-          <option value="standard">标准日志</option>
-          <option value="verbose">详细日志</option>
+          <option value="standard">{t("logViewer.trace.presetStandard")}</option>
+          <option value="verbose">{t("logViewer.trace.presetVerbose")}</option>
         </select>
 
         <select
           value={downloadConfig.durationMinutes}
           onChange={(e) => setDownloadConfig({ durationMinutes: Number(e.target.value) })}
-          title="追踪时长"
+          title={t("logViewer.trace.durationTitle")}
         >
-          <option value={30}>追踪 30 分钟</option>
-          <option value={1440}>追踪 1 天</option>
+          <option value={30}>{t("logViewer.trace.duration30")}</option>
+          <option value={1440}>{t("logViewer.trace.duration1d")}</option>
         </select>
 
       </div>
@@ -602,6 +611,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
 }
 
 function TraceTag({ target, onStop, busy }: { target: TraceTarget; onStop: () => void; busy: boolean }) {
+  const { t } = useTranslation();
   const remainSec = target.expiresAt
     ? Math.max(0, Math.floor((new Date(target.expiresAt).getTime() - Date.now()) / 1000))
     : 0;
@@ -614,7 +624,7 @@ function TraceTag({ target, onStop, busy }: { target: TraceTarget; onStop: () =>
     <span className={`trace-tag ${kindClass}`}>
       <strong>{target.label}</strong>
       {target.isActive ? <em>{mm}:{ss}</em> : null}
-      <button type="button" onClick={onStop} aria-label={`停止追踪 ${target.label}`}>
+      <button type="button" onClick={onStop} aria-label={t("logViewer.trace.stopTraceAria", { label: target.label })}>
         {busy ? "…" : "×"}
       </button>
     </span>
@@ -632,6 +642,8 @@ function LogList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = dateLocaleFromI18n(i18n.language);
   const { currentOrg } = useOrgStore();
   const { userFilter, setUserFilter, downloadConfig } = useLogStore();
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -663,13 +675,13 @@ function LogList({
         <input
           value={userFilter}
           onChange={(e) => setUserFilter(e.target.value)}
-          placeholder="过滤用户 / 操作…"
+          placeholder={t("logViewer.list.filterPlaceholder")}
         />
       </div>
       <div className="log-list-table-head">
-        <span>用户 / 操作</span>
-        <span>大小</span>
-        <span>时间</span>
+        <span>{t("logViewer.list.colUserOp")}</span>
+        <span>{t("logViewer.list.colSize")}</span>
+        <span>{t("logViewer.list.colTime")}</span>
         <span />
       </div>
       <div className="log-list-body">
@@ -689,7 +701,7 @@ function LogList({
               <small>{log.operation || "-"}</small>
             </div>
             <span>{formatSize(log.size)}</span>
-            <span>{toHHmm(log.start_time)}</span>
+            <span>{toHHmm(log.start_time, dateLocale)}</span>
             <span>
               <button
                 type="button"
@@ -705,19 +717,21 @@ function LogList({
             </span>
           </div>
         ))}
-        {!isFetching && logs.length === 0 ? <div className="empty-state">暂无日志</div> : null}
+        {!isFetching && logs.length === 0 ? <div className="empty-state">{t("logViewer.list.empty")}</div> : null}
       </div>
     </div>
   );
 }
 
 function LogDetail({ log, orgId }: { log: ApexLog | null; orgId: string | null }) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = dateLocaleFromI18n(i18n.language);
   const { downloadConfig, setDownloadConfig } = useLogStore();
   const [error, setError] = useState<string | null>(null);
   const [lastPath, setLastPath] = useState<string | null>(null);
   const downloadMutation = useMutation({
     mutationFn: async () => {
-      if (!orgId || !log) throw new Error("未选择日志");
+      if (!orgId || !log) throw new Error(t("logViewer.detail.errorNoLog"));
       const filePath = await invoke<string>("download_apex_log", {
         orgId,
         logId: log.id,
@@ -740,48 +754,48 @@ function LogDetail({ log, orgId }: { log: ApexLog | null; orgId: string | null }
   if (!log) {
     return (
       <aside className="log-detail">
-        <div className="empty-state">选择一条日志后显示详情。</div>
+        <div className="empty-state">{t("logViewer.detail.pickFirst")}</div>
       </aside>
     );
   }
 
   return (
     <aside className="log-detail">
-      <h3>日志详情</h3>
+      <h3>{t("logViewer.detail.title")}</h3>
       <dl>
-        <dt>用户</dt>
+        <dt>{t("logViewer.detail.user")}</dt>
         <dd>{log.log_user_name}</dd>
-        <dt>时间</dt>
-        <dd>{new Date(log.start_time).toLocaleString("zh-CN")}</dd>
-        <dt>大小</dt>
+        <dt>{t("logViewer.detail.time")}</dt>
+        <dd>{new Date(log.start_time).toLocaleString(dateLocale)}</dd>
+        <dt>{t("logViewer.detail.size")}</dt>
         <dd>{formatSize(log.size)}</dd>
-        <dt>操作</dt>
+        <dt>{t("logViewer.detail.operation")}</dt>
         <dd>{log.operation || "-"}</dd>
-        <dt>请求</dt>
+        <dt>{t("logViewer.detail.request")}</dt>
         <dd>{log.request || "-"}</dd>
-        <dt>耗时</dt>
-        <dd>{log.duration_millis.toLocaleString()} ms</dd>
-        <dt>状态</dt>
+        <dt>{t("logViewer.detail.duration")}</dt>
+        <dd>{log.duration_millis.toLocaleString(dateLocale)} ms</dd>
+        <dt>{t("logViewer.detail.status")}</dt>
         <dd>{log.status || "-"}</dd>
       </dl>
 
       <div className="log-detail-actions">
         <button type="button" onClick={() => downloadMutation.mutate()} disabled={downloadMutation.isPending}>
-          {downloadMutation.isPending ? "下载中…" : "下载日志"}
+          {downloadMutation.isPending ? t("logViewer.detail.downloading") : t("logViewer.detail.download")}
         </button>
         <button
           type="button"
           onClick={() => lastPath && invoke("open_in_vscode", { filePath: lastPath })}
           disabled={!lastPath}
         >
-          VSCode 打开
+          {t("logViewer.detail.openVscode")}
         </button>
       </div>
 
       <div className="log-download-settings">
-        <h4>下载设置</h4>
+        <h4>{t("logViewer.detail.settingsTitle")}</h4>
         <button type="button" onClick={() => void pickOutputDir()}>
-          {downloadConfig.outputDir ? `目录: ${downloadConfig.outputDir}` : "选择下载目录"}
+          {downloadConfig.outputDir ? t("logViewer.detail.dirLabel", { path: downloadConfig.outputDir }) : t("logViewer.detail.pickDir")}
         </button>
         <label>
           <input
@@ -789,7 +803,7 @@ function LogDetail({ log, orgId }: { log: ApexLog | null; orgId: string | null }
             checked={downloadConfig.autoOpenVscode}
             onChange={(e) => setDownloadConfig({ autoOpenVscode: e.target.checked })}
           />
-          下载后自动在 VSCode 打开
+          {t("logViewer.detail.autoOpenVscode")}
         </label>
       </div>
 
@@ -798,7 +812,7 @@ function LogDetail({ log, orgId }: { log: ApexLog | null; orgId: string | null }
           {error}
           {lastPath ? (
             <button type="button" onClick={() => invoke("reveal_log_file", { filePath: lastPath })}>
-              在 Finder 中显示文件
+              {t("logViewer.detail.revealFile")}
             </button>
           ) : null}
         </div>
@@ -819,17 +833,20 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}M`;
 }
 
-function toHHmm(dateText: string): string {
+function toHHmm(dateText: string, locale: string): string {
   const d = new Date(dateText);
   if (Number.isNaN(d.getTime())) return "--:--";
-  return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-function formatClassMeta(item: ApexClassItem): string {
-  const who = item.last_modified_by_name?.trim() || "未知修改人";
+function formatClassMeta(item: ApexClassItem, t: TFunction, dateLocale: string): string {
+  const who = item.last_modified_by_name?.trim() || t("logViewer.classMeta.unknownEditor");
   const raw = item.last_modified_date;
-  if (!raw) return `最近修改: -- · ${who}`;
+  if (!raw) return t("logViewer.classMeta.lastModifiedNoDate", { who });
   const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return `最近修改: -- · ${who}`;
-  return `最近修改: ${d.toLocaleString("zh-CN")} · ${who}`;
+  if (Number.isNaN(d.getTime())) return t("logViewer.classMeta.lastModifiedNoDate", { who });
+  return t("logViewer.classMeta.lastModified", {
+    date: d.toLocaleString(dateLocale),
+    who,
+  });
 }

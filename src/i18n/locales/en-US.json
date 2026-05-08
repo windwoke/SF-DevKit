@@ -21,6 +21,64 @@
     "zh-CN": "中文",
     "en-US": "English"
   },
+  "logViewer": {
+    "noOrgHint": "No org selected. Set a default org in Org Manager first.",
+    "trace": {
+      "self": "Trace self",
+      "processing": "Working…",
+      "userPlaceholder": "Trace by user…",
+      "classPlaceholder": "Trace by ApexClass…",
+      "searching": "Searching…",
+      "userEmptyDefault": "No users to show",
+      "userMinChars": "Type at least 2 characters to search users",
+      "userNoMatch": "No matching users",
+      "classEmptyDefault": "No ApexClasses to show",
+      "classMinChars": "Type at least 2 characters to search ApexClass",
+      "classNoMatch": "No matching ApexClasses",
+      "presetStandard": "Standard",
+      "presetVerbose": "Verbose",
+      "durationTitle": "Trace duration",
+      "duration30": "30 minutes",
+      "duration1d": "1 day",
+      "feedbackWorking": "Working, please wait…",
+      "stopTraceAria": "Stop tracing {{label}}"
+    },
+    "list": {
+      "filterPlaceholder": "Filter by user / operation…",
+      "colUserOp": "User / Operation",
+      "colSize": "Size",
+      "colTime": "Time",
+      "empty": "No logs"
+    },
+    "detail": {
+      "pickFirst": "Select a log to see details.",
+      "title": "Log details",
+      "user": "User",
+      "time": "Time",
+      "size": "Size",
+      "operation": "Operation",
+      "request": "Request",
+      "duration": "Duration",
+      "status": "Status",
+      "download": "Download log",
+      "downloading": "Downloading…",
+      "openVscode": "Open in VS Code",
+      "settingsTitle": "Download settings",
+      "pickDir": "Choose download folder",
+      "dirLabel": "Folder: {{path}}",
+      "autoOpenVscode": "Open in VS Code after download",
+      "revealFile": "Reveal in file manager",
+      "errorNoLog": "No log selected"
+    },
+    "classMeta": {
+      "unknownEditor": "Unknown editor",
+      "lastModifiedNoDate": "Last modified: -- · {{who}}",
+      "lastModified": "Last modified: {{date}} · {{who}}"
+    },
+    "errors": {
+      "classNotFound": "ApexClass not found: {{name}}"
+    }
+  },
   "comingSoon": {
     "apex": {
       "summary": "Run Anonymous Apex quickly with structured execution output.",
