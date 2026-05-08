@@ -1,5 +1,6 @@
 import type { ModuleId } from "../../store/ui";
 import { SidebarModuleIcon } from "./SidebarIcons";
+import { useTranslation } from "react-i18next";
 
 interface ModuleItem {
   id: ModuleId;
@@ -13,12 +14,13 @@ interface SidebarProps {
 }
 
 export function Sidebar({ modules, active, onSelect }: SidebarProps) {
+  const { t } = useTranslation();
   return (
     <aside className="sidebar">
       <div className="sidebar-brand" title="SF DevKit">
         <span className="sidebar-brand-text">SF</span>
       </div>
-      <nav className="sidebar-nav" aria-label="主功能">
+      <nav className="sidebar-nav" aria-label={t("sidebar.mainNav")}>
         {modules.map((m) => (
           <button
             key={m.id}

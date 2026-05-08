@@ -1,0 +1,42 @@
+{
+  "sidebar": {
+    "mainNav": "Main Navigation"
+  },
+  "modules": {
+    "orgs": "Org Manager",
+    "soql": "SOQL",
+    "metadata": "Metadata",
+    "apex": "Apex Runner",
+    "deployer": "Deployer",
+    "logs": "Log Viewer"
+  },
+  "topbar": {
+    "currentOrg": "Current Org: {{name}}",
+    "noOrg": "Current Org: None",
+    "open": "Open",
+    "opening": "Opening...",
+    "language": "Language"
+  },
+  "language": {
+    "zh-CN": "中文",
+    "en-US": "English"
+  },
+  "comingSoon": {
+    "apex": {
+      "summary": "Run Anonymous Apex quickly with structured execution output.",
+      "bullets": [
+        "Code editing and quick execution",
+        "Execution logs and error pinpointing",
+        "Reusable run history"
+      ]
+    },
+    "deployer": {
+      "summary": "Deploy and validate local project changes with faster failure diagnosis.",
+      "bullets": [
+        "One-click Deploy / Validate",
+        "Change scope and deployment log tracking",
+        "Failure details and retry support"
+      ]
+    }
+  }
+}

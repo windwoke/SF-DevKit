@@ -1,8 +1,11 @@
 import { useOrgStore } from "../../store/org";
 import { tauriApi } from "../../lib/tauri";
 import { useMutation } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { SUPPORTED_LANGUAGES } from "../../i18n";
 
 export function TopBar() {
+  const { t, i18n } = useTranslation();
   const { currentOrg, orgs } = useOrgStore();
   const org = orgs.find((o) => o.id === currentOrg);
   const openMutation = useMutation({
@@ -10,17 +13,29 @@ export function TopBar() {
   });
 
   return (
-    <header className="topbar">
-      <div>当前模块：开发工具台</div>
+    <header className="topbar topbar--right-only">
       <div className="topbar-right">
+        <label className="topbar-lang">
+          <span>{t("topbar.language")}</span>
+          <select
+            value={i18n.language.startsWith("zh") ? "zh-CN" : "en-US"}
+            onChange={(e) => void i18n.changeLanguage(e.target.value)}
+          >
+            {SUPPORTED_LANGUAGES.map((lng) => (
+              <option key={lng} value={lng}>
+                {t(`language.${lng}`)}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="topbar-org-info">
           {org ? (
             <>
-              <span>{`当前 Org: ${org.alias ?? org.id}`}</span>
+              <span>{t("topbar.currentOrg", { name: org.alias ?? org.id })}</span>
               <span className={`org-type org-type-${org.org_type}`}>{org.org_type}</span>
             </>
           ) : (
-            "当前 Org: 未选择"
+            t("topbar.noOrg")
           )}
         </div>
         <button
@@ -28,7 +43,7 @@ export function TopBar() {
           onClick={() => org && openMutation.mutate(org.id)}
           disabled={!org || openMutation.isPending}
         >
-          {openMutation.isPending ? "Opening..." : "Open"}
+          {openMutation.isPending ? t("topbar.opening") : t("topbar.open")}
         </button>
       </div>
     </header>

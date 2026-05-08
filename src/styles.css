@@ -33,6 +33,10 @@ body,
   font-size: 13px;
 }
 
+.topbar--right-only {
+  justify-content: flex-end;
+}
+
 .topbar-right {
   display: flex;
   align-items: center;
@@ -43,6 +47,22 @@ body,
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.topbar-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #aebad4;
+  font-size: 12px;
+}
+
+.topbar-lang select {
+  border: 1px solid #33425d;
+  border-radius: 8px;
+  padding: 3px 8px;
+  background: #131a27;
+  color: #f3f6ff;
 }
 
 .topbar-open-btn {

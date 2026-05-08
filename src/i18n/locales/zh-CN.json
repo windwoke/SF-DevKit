@@ -1,0 +1,42 @@
+{
+  "sidebar": {
+    "mainNav": "主功能"
+  },
+  "modules": {
+    "orgs": "Org 管理",
+    "soql": "SOQL",
+    "metadata": "Metadata",
+    "apex": "Apex Runner",
+    "deployer": "Deployer",
+    "logs": "Log Viewer"
+  },
+  "topbar": {
+    "currentOrg": "当前 Org: {{name}}",
+    "noOrg": "当前 Org: 未选择",
+    "open": "Open",
+    "opening": "Opening...",
+    "language": "语言"
+  },
+  "language": {
+    "zh-CN": "中文",
+    "en-US": "English"
+  },
+  "comingSoon": {
+    "apex": {
+      "summary": "用于快速执行 Anonymous Apex，并展示结构化执行结果。",
+      "bullets": [
+        "代码编辑与快捷执行",
+        "执行日志与错误定位",
+        "结果历史与复用"
+      ]
+    },
+    "deployer": {
+      "summary": "用于本地项目部署与校验，聚焦部署效率和失败定位。",
+      "bullets": [
+        "Deploy / Validate 一键执行",
+        "变更范围与部署日志追踪",
+        "失败明细与重试"
+      ]
+    }
+  }
+}
