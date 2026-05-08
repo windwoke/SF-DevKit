@@ -111,10 +111,14 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   const [users, setUsers] = useState<SfUser[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [userInputFocused, setUserInputFocused] = useState(false);
+  const [userActiveIndex, setUserActiveIndex] = useState(-1);
   const [classInput, setClassInput] = useState("");
   const [classResults, setClassResults] = useState<ApexClassItem[]>([]);
   const [searchingClass, setSearchingClass] = useState(false);
   const [classInputFocused, setClassInputFocused] = useState(false);
+  const [classActiveIndex, setClassActiveIndex] = useState(-1);
+  const [traceBusyKey, setTraceBusyKey] = useState<string | null>(null);
+  const [traceFeedback, setTraceFeedback] = useState<string>("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const classSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -132,6 +136,17 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     () => targets.filter((it) => (it.orgId ?? orgId) === orgId),
     [targets, orgId],
   );
+  const orderedTargets = useMemo(() => {
+    const rank: Record<TraceTarget["kind"], number> = {
+      SELF: 0,
+      USER: 1,
+      APEX_CLASS: 2,
+    };
+    return scopedTargets
+      .map((target, idx) => ({ target, idx }))
+      .sort((a, b) => rank[a.target.kind] - rank[b.target.kind] || a.idx - b.idx)
+      .map((it) => it.target);
+  }, [scopedTargets]);
   const selfTarget = scopedTargets.find((it) => it.kind === "SELF") ?? null;
   const selfActive = Boolean(selfTarget?.isActive);
 
@@ -150,6 +165,8 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     apexClassSearchCache.current.clear();
     setUsers([]);
     setClassResults([]);
+    setUserActiveIndex(-1);
+    setClassActiveIndex(-1);
   }, [orgId]);
 
   useEffect(() => {
@@ -183,46 +200,71 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     onRefresh();
   };
 
+  const runTraceAction = async (busyKey: string, action: () => Promise<void>) => {
+    setTraceBusyKey(busyKey);
+    setTraceFeedback("处理中，请稍候…");
+    try {
+      await action();
+      setTraceFeedback("");
+    } catch (e) {
+      setTraceFeedback(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTraceBusyKey(null);
+    }
+  };
+
   const toggleSelfTrace = async () => {
     if (!orgId || !currentUser) return;
-    if (selfTarget?.traceFlagId) {
-      await invoke("disable_trace", { orgId, traceFlagId: selfTarget.traceFlagId });
-      stopRenewTimer(selfTarget.id);
-      removeTarget(selfTarget.id);
-      return;
-    }
-    const id = selfTarget?.id ?? crypto.randomUUID();
-    await enableTraceFor(
-      {
-        id,
-        orgId,
-        kind: "SELF",
-        label: currentUser.username,
-        entityId: currentUser.id,
-      },
-      "USER_DEBUG",
-    );
+    await runTraceAction("self", async () => {
+      if (selfTarget?.traceFlagId) {
+        await invoke("disable_trace", { orgId, traceFlagId: selfTarget.traceFlagId });
+        stopRenewTimer(selfTarget.id);
+        removeTarget(selfTarget.id);
+        return;
+      }
+      const id = selfTarget?.id ?? crypto.randomUUID();
+      await enableTraceFor(
+        {
+          id,
+          orgId,
+          kind: "SELF",
+          label: currentUser.username,
+          entityId: currentUser.id,
+        },
+        "USER_DEBUG",
+      );
+    });
   };
 
   const searchUsers = (text: string) => {
     setUserSearch(text);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     const keyword = text.trim().toLowerCase();
-    if (!orgId || keyword.length < 2) {
+    const loadDefault = keyword.length === 0;
+    if (!orgId) {
       setUsers([]);
+      setUserActiveIndex(-1);
       return;
     }
-    const cached = userSearchCache.current.get(keyword);
+    if (!loadDefault && keyword.length < 2) {
+      setUsers([]);
+      setUserActiveIndex(-1);
+      return;
+    }
+    const cacheKey = loadDefault ? "__default__" : keyword;
+    const cached = userSearchCache.current.get(cacheKey);
     if (cached) {
       setUsers(cached);
+      setUserActiveIndex(cached.length > 0 ? 0 : -1);
       return;
     }
     searchTimer.current = setTimeout(async () => {
       try {
         setSearchingUsers(true);
-        const result = await invoke<SfUser[]>("search_users", { orgId, keyword });
-        userSearchCache.current.set(keyword, result);
+        const result = await invoke<SfUser[]>("search_users", { orgId, keyword: loadDefault ? "" : keyword });
+        userSearchCache.current.set(cacheKey, result);
         setUsers(result);
+        setUserActiveIndex(result.length > 0 ? 0 : -1);
       } finally {
         setSearchingUsers(false);
       }
@@ -232,7 +274,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   const handleUserFocus = () => {
     if (userBlurTimer.current) clearTimeout(userBlurTimer.current);
     setUserInputFocused(true);
-    if (userSearch.trim().length >= 2 && users.length === 0 && !searchingUsers) {
+    if (users.length === 0 && !searchingUsers) {
       searchUsers(userSearch);
     }
   };
@@ -242,31 +284,72 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   };
 
   const addUserTrace = async (user: SfUser) => {
-    await enableTraceFor(
-      {
-        id: crypto.randomUUID(),
-        orgId,
-        kind: "USER",
-        label: user.username,
-        entityId: user.id,
-      },
-      "USER_DEBUG",
-    );
-    setUserSearch("");
-    setUsers([]);
+    setUserInputFocused(false);
+    setUserActiveIndex(-1);
+    await runTraceAction(`user:${user.id}`, async () => {
+      await enableTraceFor(
+        {
+          id: crypto.randomUUID(),
+          orgId,
+          kind: "USER",
+          label: user.username,
+          entityId: user.id,
+        },
+        "USER_DEBUG",
+      );
+      setUserSearch("");
+      setUsers([]);
+      setUserActiveIndex(-1);
+    });
+  };
+
+  const handleUserKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!orgId) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setUserInputFocused(false);
+      setUserActiveIndex(-1);
+      return;
+    }
+    if (users.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setUserActiveIndex((prev) => (prev + 1) % users.length);
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setUserActiveIndex((prev) => (prev <= 0 ? users.length - 1 : prev - 1));
+      return;
+    }
+    if (e.key === "Enter") {
+      const picked = users[userActiveIndex] ?? users[0];
+      if (!picked) return;
+      e.preventDefault();
+      void addUserTrace(picked);
+    }
   };
 
   const searchApexClass = (text: string) => {
     setClassInput(text);
     if (classSearchTimer.current) clearTimeout(classSearchTimer.current);
     const keyword = text.trim().toLowerCase();
-    if (!orgId || keyword.length < 2) {
+    const loadDefault = keyword.length === 0;
+    if (!orgId) {
       setClassResults([]);
+      setClassActiveIndex(-1);
       return;
     }
-    const cached = apexClassSearchCache.current.get(keyword);
+    if (!loadDefault && keyword.length < 2) {
+      setClassResults([]);
+      setClassActiveIndex(-1);
+      return;
+    }
+    const cacheKey = loadDefault ? "__default__" : keyword;
+    const cached = apexClassSearchCache.current.get(cacheKey);
     if (cached) {
       setClassResults(cached);
+      setClassActiveIndex(cached.length > 0 ? 0 : -1);
       return;
     }
     classSearchTimer.current = setTimeout(async () => {
@@ -274,10 +357,11 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
         setSearchingClass(true);
         const result = await invoke<ApexClassItem[]>("search_apex_classes", {
           orgId,
-          keyword,
+          keyword: loadDefault ? "" : keyword,
         });
-        apexClassSearchCache.current.set(keyword, result);
+        apexClassSearchCache.current.set(cacheKey, result);
         setClassResults(result);
+        setClassActiveIndex(result.length > 0 ? 0 : -1);
       } finally {
         setSearchingClass(false);
       }
@@ -287,7 +371,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   const handleClassFocus = () => {
     if (classBlurTimer.current) clearTimeout(classBlurTimer.current);
     setClassInputFocused(true);
-    if (classInput.trim().length >= 2 && classResults.length === 0 && !searchingClass) {
+    if (classResults.length === 0 && !searchingClass) {
       searchApexClass(classInput);
     }
   };
@@ -299,51 +383,97 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   const addClassTrace = async () => {
     if (!orgId || !classInput.trim()) return;
     const className = classInput.trim();
-    const classId = await invoke<string | null>("find_apex_class_id", {
-      orgId,
-      className,
-    });
-    if (!classId) {
-      window.alert(`找不到 ApexClass: ${className}`);
-      return;
-    }
-    await enableTraceFor(
-      {
-        id: crypto.randomUUID(),
+    await runTraceAction("class:manual", async () => {
+      const classId = await invoke<string | null>("find_apex_class_id", {
         orgId,
-        kind: "APEX_CLASS",
-        label: className,
-        entityId: classId,
-      },
-      "CLASS_TRACING",
-    );
-    setClassInput("");
-    setClassResults([]);
+        className,
+      });
+      if (!classId) {
+        throw new Error(`找不到 ApexClass: ${className}`);
+      }
+      await enableTraceFor(
+        {
+          id: crypto.randomUUID(),
+          orgId,
+          kind: "APEX_CLASS",
+          label: className,
+          entityId: classId,
+        },
+        "CLASS_TRACING",
+      );
+      setClassInput("");
+      setClassResults([]);
+      setClassActiveIndex(-1);
+    });
   };
 
   const addClassTraceByItem = async (item: ApexClassItem) => {
     if (!orgId) return;
-    await enableTraceFor(
-      {
-        id: crypto.randomUUID(),
-        orgId,
-        kind: "APEX_CLASS",
-        label: item.name,
-        entityId: item.id,
-      },
-      "CLASS_TRACING",
-    );
-    setClassInput("");
-    setClassResults([]);
+    setClassInputFocused(false);
+    setClassActiveIndex(-1);
+    await runTraceAction(`class:${item.id}`, async () => {
+      await enableTraceFor(
+        {
+          id: crypto.randomUUID(),
+          orgId,
+          kind: "APEX_CLASS",
+          label: item.name,
+          entityId: item.id,
+        },
+        "CLASS_TRACING",
+      );
+      setClassInput("");
+      setClassResults([]);
+      setClassActiveIndex(-1);
+    });
+  };
+
+  const handleClassKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!orgId) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setClassInputFocused(false);
+      setClassActiveIndex(-1);
+      return;
+    }
+    if (classResults.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setClassActiveIndex((prev) => (prev + 1) % classResults.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setClassActiveIndex((prev) => (prev <= 0 ? classResults.length - 1 : prev - 1));
+        return;
+      }
+      if (e.key === "Enter") {
+        const picked = classResults[classActiveIndex] ?? classResults[0];
+        if (!picked) return;
+        e.preventDefault();
+        void addClassTraceByItem(picked);
+        return;
+      }
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void addClassTrace();
+    }
   };
 
   const stopTraceTarget = async (target: TraceTarget) => {
     if (!orgId) return;
-    if (target.traceFlagId) {
-      await invoke("disable_trace", { orgId, traceFlagId: target.traceFlagId });
-    }
-    stopRenewTimer(target.id);
-    removeTarget(target.id);
+    await runTraceAction(`stop:${target.id}`, async () => {
+      if (target.traceFlagId) {
+        try {
+          await invoke("disable_trace", { orgId, traceFlagId: target.traceFlagId });
+        } catch {
+          // Remote trace may already expire/deleted; always clear local state.
+        }
+      }
+      stopRenewTimer(target.id);
+      removeTarget(target.id);
+    });
   };
 
   const latestSelfDownload = useMutation({
@@ -369,7 +499,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
       <div className="log-trace-main-row">
         <button type="button" className={selfActive ? "trace-btn active" : "trace-btn"} onClick={() => void toggleSelfTrace()} disabled={!orgId || !currentUser}>
           <span className="trace-dot" />
-          追踪自己
+          {traceBusyKey === "self" ? "处理中…" : "追踪自己"}
         </button>
 
         <div className="trace-user-search">
@@ -379,6 +509,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
             onChange={(e) => searchUsers(e.target.value)}
             onFocus={handleUserFocus}
             onBlur={handleUserBlur}
+            onKeyDown={handleUserKeyDown}
             disabled={!orgId}
           />
           {orgId && userInputFocused ? (
@@ -386,12 +517,21 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
               {searchingUsers ? (
                 <div className="trace-dropdown-state">搜索中…</div>
               ) : users.length > 0 ? (
-                users.map((user) => (
-                  <button key={user.id} type="button" onClick={() => void addUserTrace(user)}>
+                users.map((user, idx) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    className={idx === userActiveIndex ? "active" : undefined}
+                    onMouseEnter={() => setUserActiveIndex(idx)}
+                    disabled={Boolean(traceBusyKey)}
+                    onClick={() => void addUserTrace(user)}
+                  >
                     <span>{user.name}</span>
                     <small>{user.username}</small>
                   </button>
                 ))
+              ) : userSearch.trim().length === 0 ? (
+                <div className="trace-dropdown-state">暂无可选用户</div>
               ) : userSearch.trim().length < 2 ? (
                 <div className="trace-dropdown-state">输入至少 2 个字符搜索用户</div>
               ) : (
@@ -409,9 +549,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
               onChange={(e) => searchApexClass(e.target.value)}
               onFocus={handleClassFocus}
               onBlur={handleClassBlur}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void addClassTrace();
-              }}
+              onKeyDown={handleClassKeyDown}
               disabled={!orgId}
             />
             {orgId && classInputFocused ? (
@@ -419,12 +557,21 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
                 {searchingClass ? (
                   <div className="trace-dropdown-state">搜索中…</div>
                 ) : classResults.length > 0 ? (
-                  classResults.map((item) => (
-                    <button key={item.id} type="button" onClick={() => void addClassTraceByItem(item)}>
+                  classResults.map((item, idx) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={idx === classActiveIndex ? "active" : undefined}
+                      onMouseEnter={() => setClassActiveIndex(idx)}
+                      disabled={Boolean(traceBusyKey)}
+                      onClick={() => void addClassTraceByItem(item)}
+                    >
                       <span>{item.name}</span>
                       <small>{formatClassMeta(item)}</small>
                     </button>
                   ))
+                ) : classInput.trim().length === 0 ? (
+                  <div className="trace-dropdown-state">暂无可选 ApexClass</div>
                 ) : classInput.trim().length < 2 ? (
                   <div className="trace-dropdown-state">输入至少 2 个字符搜索 ApexClass</div>
                 ) : (
@@ -436,10 +583,10 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
           <button
             type="button"
             onClick={() => void addClassTrace()}
-            disabled={!orgId || !classInput.trim()}
+            disabled={!orgId || !classInput.trim() || Boolean(traceBusyKey)}
             title="按输入文本直接追踪（精确匹配）"
           >
-            追踪
+            {traceBusyKey === "class:manual" ? "处理中…" : "追踪"}
           </button>
         </div>
 
@@ -463,16 +610,23 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
         <button
           type="button"
           onClick={() => latestSelfDownload.mutate()}
-          disabled={!orgId || latestSelfDownload.isPending}
+          disabled={!orgId || latestSelfDownload.isPending || Boolean(traceBusyKey)}
         >
           {latestSelfDownload.isPending ? "下载中…" : "下载我的最新日志"}
         </button>
       </div>
 
-      {scopedTargets.length > 0 ? (
+      {traceFeedback ? <div className="trace-feedback">{traceFeedback}</div> : null}
+
+      {orderedTargets.length > 0 ? (
         <div className="trace-target-row">
-          {scopedTargets.map((target) => (
-            <TraceTag key={target.id} target={target} onStop={() => void stopTraceTarget(target)} />
+          {orderedTargets.map((target) => (
+            <TraceTag
+              key={target.id}
+              target={target}
+              busy={traceBusyKey === `stop:${target.id}`}
+              onStop={() => void stopTraceTarget(target)}
+            />
           ))}
         </div>
       ) : null}
@@ -480,18 +634,21 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   );
 }
 
-function TraceTag({ target, onStop }: { target: TraceTarget; onStop: () => void }) {
+function TraceTag({ target, onStop, busy }: { target: TraceTarget; onStop: () => void; busy: boolean }) {
   const remainSec = target.expiresAt
     ? Math.max(0, Math.floor((new Date(target.expiresAt).getTime() - Date.now()) / 1000))
     : 0;
   const mm = String(Math.floor(remainSec / 60)).padStart(2, "0");
   const ss = String(remainSec % 60).padStart(2, "0");
+  const kindClass =
+    target.kind === "APEX_CLASS" ? "trace-tag-apex" : target.kind === "USER" ? "trace-tag-user" : "trace-tag-self";
+
   return (
-    <span className="trace-tag">
+    <span className={`trace-tag ${kindClass}`}>
       <strong>{target.label}</strong>
       {target.isActive ? <em>{mm}:{ss}</em> : null}
       <button type="button" onClick={onStop} aria-label={`停止追踪 ${target.label}`}>
-        ×
+        {busy ? "…" : "×"}
       </button>
     </span>
   );

@@ -18,19 +18,8 @@ pub async fn list_apex_logs(
     limit: u32,
     user_filter: Option<&str>,
 ) -> anyhow::Result<Vec<ApexLog>> {
-    let output = run_command(
-        &[
-            "apex",
-            "log",
-            "list",
-            "--target-org",
-            org_id,
-            "--number",
-            &limit.to_string(),
-        ],
-        true,
-    )
-    .await?;
+    // Newer sf CLI uses: sf apex list log (no --number flag for list)
+    let output = run_command(&["apex", "list", "log", "--target-org", org_id], true).await?;
     if !output.success {
         anyhow::bail!("{}", cli_error_message(&output.stderr, &output.stdout));
     }
@@ -50,6 +39,9 @@ pub async fn list_apex_logs(
         });
     }
     logs.sort_by(|a, b| b.start_time.cmp(&a.start_time));
+    if limit > 0 && logs.len() > limit as usize {
+        logs.truncate(limit as usize);
+    }
     Ok(logs)
 }
 
@@ -166,19 +158,24 @@ pub async fn get_current_user(org_id: &str) -> anyhow::Result<SfUser> {
 
 pub async fn search_users(pool: &SqlitePool, org_id: &str, keyword: &str) -> anyhow::Result<Vec<SfUser>> {
     let k = keyword.trim();
-    if k.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let cached = search_users_cache(pool, org_id, k).await?;
+    let cached = if k.is_empty() {
+        search_users_cache(pool, org_id, None).await?
+    } else {
+        search_users_cache(pool, org_id, Some(k)).await?
+    };
     if cached.len() >= 5 {
         return Ok(cached);
     }
 
-    let query = format!(
-        "SELECT Id, Name, Username FROM User WHERE (Username LIKE '%{kw}%' OR Name LIKE '%{kw}%') AND IsActive = true ORDER BY LastModifiedDate DESC LIMIT 10",
-        kw = escape_soql(k)
-    );
+    let query = if k.is_empty() {
+        "SELECT Id, Name, Username FROM User WHERE IsActive = true ORDER BY LastModifiedDate DESC LIMIT 10"
+            .to_string()
+    } else {
+        format!(
+            "SELECT Id, Name, Username FROM User WHERE (Username LIKE '%{kw}%' OR Name LIKE '%{kw}%') AND IsActive = true ORDER BY LastModifiedDate DESC LIMIT 10",
+            kw = escape_soql(k)
+        )
+    };
     let resp = query_data(org_id, &query, false).await?;
     let users = parse_users(&resp);
 
@@ -225,13 +222,15 @@ pub async fn find_apex_class_id(org_id: &str, class_name: &str) -> anyhow::Resul
 
 pub async fn search_apex_classes(org_id: &str, keyword: &str) -> anyhow::Result<Vec<ApexClassItem>> {
     let k = keyword.trim();
-    if k.is_empty() {
-        return Ok(Vec::new());
-    }
-    let query = format!(
-        "SELECT Id, Name, LastModifiedDate, LastModifiedBy.Name FROM ApexClass WHERE Name LIKE '%{kw}%' ORDER BY LastModifiedDate DESC LIMIT 20",
-        kw = escape_soql(k)
-    );
+    let query = if k.is_empty() {
+        "SELECT Id, Name, LastModifiedDate, LastModifiedBy.Name FROM ApexClass ORDER BY LastModifiedDate DESC LIMIT 20"
+            .to_string()
+    } else {
+        format!(
+            "SELECT Id, Name, LastModifiedDate, LastModifiedBy.Name FROM ApexClass WHERE Name LIKE '%{kw}%' ORDER BY LastModifiedDate DESC LIMIT 20",
+            kw = escape_soql(k)
+        )
+    };
     let resp = query_data(org_id, &query, true).await?;
     let classes = resp
         .get("records")
@@ -398,8 +397,16 @@ pub async fn disable_trace(pool: &SqlitePool, org_id: &str, trace_flag_id: &str)
         session.instance_url, trace_flag_id
     );
     let resp = client.delete(url).bearer_auth(&session.access_token).send().await?;
-    if !resp.status().is_success() {
-        anyhow::bail!("关闭 TraceFlag 失败");
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        let ignore_not_found = status.as_u16() == 404
+            || body.contains("NOT_FOUND")
+            || body.contains("ENTITY_IS_DELETED")
+            || body.contains("INVALID_CROSS_REFERENCE_KEY");
+        if !ignore_not_found {
+            anyhow::bail!("关闭 TraceFlag 失败: {}", body);
+        }
     }
 
     let _ = sqlx::query(
@@ -506,22 +513,41 @@ struct CachedUserRow {
     username: String,
 }
 
-async fn search_users_cache(pool: &SqlitePool, org_id: &str, keyword: &str) -> anyhow::Result<Vec<SfUser>> {
-    let pattern = format!("%{}%", keyword);
-    let rows = sqlx::query_as::<_, CachedUserRow>(
-        r#"
-        SELECT id, name, username
-        FROM sf_users_cache
-        WHERE org_id = ?1
-          AND (username LIKE ?2 OR name LIKE ?2)
-        ORDER BY datetime(cached_at) DESC
-        LIMIT 10
-        "#,
-    )
-    .bind(org_id)
-    .bind(pattern)
-    .fetch_all(pool)
-    .await?;
+async fn search_users_cache(
+    pool: &SqlitePool,
+    org_id: &str,
+    keyword: Option<&str>,
+) -> anyhow::Result<Vec<SfUser>> {
+    let rows = if let Some(keyword) = keyword.filter(|v| !v.trim().is_empty()) {
+        let pattern = format!("%{}%", keyword);
+        sqlx::query_as::<_, CachedUserRow>(
+            r#"
+            SELECT id, name, username
+            FROM sf_users_cache
+            WHERE org_id = ?1
+              AND (username LIKE ?2 OR name LIKE ?2)
+            ORDER BY datetime(cached_at) DESC
+            LIMIT 10
+            "#,
+        )
+        .bind(org_id)
+        .bind(pattern)
+        .fetch_all(pool)
+        .await?
+    } else {
+        sqlx::query_as::<_, CachedUserRow>(
+            r#"
+            SELECT id, name, username
+            FROM sf_users_cache
+            WHERE org_id = ?1
+            ORDER BY datetime(cached_at) DESC
+            LIMIT 10
+            "#,
+        )
+        .bind(org_id)
+        .fetch_all(pool)
+        .await?
+    };
 
     Ok(rows
         .into_iter()
