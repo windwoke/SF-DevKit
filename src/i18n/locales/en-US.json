@@ -1,6 +1,8 @@
 {
   "sidebar": {
-    "mainNav": "Main Navigation"
+    "mainNav": "Main Navigation",
+    "settings": "Settings",
+    "settingsAria": "Open settings"
   },
   "modules": {
     "orgs": "Org Manager",

@@ -1,6 +1,8 @@
 {
   "sidebar": {
-    "mainNav": "主功能"
+    "mainNav": "主功能",
+    "settings": "设置",
+    "settingsAria": "打开设置"
   },
   "modules": {
     "orgs": "Org 管理",

@@ -3,10 +3,9 @@ import { tauriApi } from "../../lib/tauri";
 import { useOrgStore } from "../../store/org";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { SUPPORTED_LANGUAGES } from "../../i18n";
 
 export function TopBar() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { currentOrg, orgs } = useOrgStore();
   const org = orgs.find((o) => o.id === currentOrg);
   const openMutation = useMutation({
@@ -16,19 +15,6 @@ export function TopBar() {
   return (
     <header className="topbar topbar--right-only">
       <div className="topbar-right">
-        <label className="topbar-lang">
-          <span>{t("topbar.language")}</span>
-          <select
-            value={i18n.language.startsWith("zh") ? "zh-CN" : "en-US"}
-            onChange={(e) => void i18n.changeLanguage(e.target.value)}
-          >
-            {SUPPORTED_LANGUAGES.map((lng) => (
-              <option key={lng} value={lng}>
-                {t(`language.${lng}`)}
-              </option>
-            ))}
-          </select>
-        </label>
         <div className="topbar-org-info">
           {org ? (
             <>
