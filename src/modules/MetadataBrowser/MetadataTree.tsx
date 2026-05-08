@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { tauriApi, type MetadataComponentMeta, type MetadataTypeMeta } from "../../lib/tauri";
 import { useMetadataStore } from "../../store/metadata";
 import { useOrgStore } from "../../store/org";
@@ -32,6 +32,7 @@ async function loadMetadataComponentsWithFallback(orgId: string, metadataType: s
 }
 
 export function MetadataTree() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { currentOrg } = useOrgStore();
   const { searchQuery, setSearchQuery, selectedCount } = useMetadataStore();
@@ -65,8 +66,8 @@ export function MetadataTree() {
     return map;
   }, [typesQuery.data, searchQuery]);
 
-  if (!currentOrg) return <div className="empty-state">请先在 Org 管理中选择一个 Org。</div>;
-  if (typesQuery.isLoading) return <div className="empty-state">正在加载 Metadata Types…</div>;
+  if (!currentOrg) return <div className="empty-state">{t("metadataBrowser.tree.pickOrg")}</div>;
+  if (typesQuery.isLoading) return <div className="empty-state">{t("metadataBrowser.tree.loadingTypes")}</div>;
   if (typesQuery.isError) {
     const msg = (typesQuery.error as Error).message;
     console.error("[MetadataTree] listMetadataTypes:error", {
@@ -74,23 +75,23 @@ export function MetadataTree() {
       message: msg,
       fullError: typesQuery.error,
     });
-    return <div className="empty-state error">加载失败：{msg}。可先切换到 Org 管理确认当前 Org 可用后再点刷新。</div>;
+    return <div className="empty-state error">{t("metadataBrowser.tree.loadError", { message: msg })}</div>;
   }
 
   return (
     <section className="metadata-pane metadata-tree-pane">
       <header className="metadata-pane-header">
-        <h3>元数据树</h3>
+        <h3>{t("metadataBrowser.tree.paneTitle")}</h3>
         <div className="metadata-tree-tools">
           <input
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜索 Metadata Type 或组件名…"
+            placeholder={t("metadataBrowser.tree.searchPlaceholder")}
           />
-          <span className="metadata-selected-chip">已选 {selectedCount()}</span>
+          <span className="metadata-selected-chip">{t("metadataBrowser.tree.selectedChip", { count: selectedCount() })}</span>
           <button type="button" onClick={refresh}>
-            刷新
+            {t("metadataBrowser.tree.refresh")}
           </button>
         </div>
       </header>
@@ -113,6 +114,7 @@ export function MetadataTree() {
 }
 
 function TypeRow({ item }: { item: MetadataTypeMeta }) {
+  const { t } = useTranslation();
   const { currentOrg } = useOrgStore();
   const { expandedTypes, toggleExpand, getTypeSelectionState, toggleType, selection, toggleComponent } = useMetadataStore();
   const isExpanded = expandedTypes.includes(item.xml_name);
@@ -175,7 +177,7 @@ function TypeRow({ item }: { item: MetadataTypeMeta }) {
   return (
     <div className="metadata-type-block">
       <div className="metadata-type-row" onClick={() => toggleExpand(item.xml_name)}>
-        <button type="button" className={`metadata-caret ${isExpanded ? "expanded" : ""}`} aria-label="切换展开" />
+        <button type="button" className={`metadata-caret ${isExpanded ? "expanded" : ""}`} aria-label={t("metadataBrowser.tree.toggleExpandAria")} />
         <input
           type="checkbox"
           checked={selectionState === "all"}
@@ -198,25 +200,27 @@ function TypeRow({ item }: { item: MetadataTypeMeta }) {
                 type="search"
                 value={childQuery}
                 onChange={(e) => setChildQuery(e.target.value)}
-                placeholder="搜索当前类型子项…"
+                placeholder={t("metadataBrowser.tree.childSearchPlaceholder")}
               />
             </div>
             {childQuery.trim() ? (
               <div className="metadata-type-action-row">
                 <button type="button" onClick={handleSelectFiltered} disabled={filteredNames.length === 0 || allFilteredSelected}>
-                  全选结果
+                  {t("metadataBrowser.tree.selectAllFiltered")}
                 </button>
                 <button type="button" onClick={handleUnselectFiltered} disabled={filteredNames.length === 0 || !hasAnyFilteredSelected}>
-                  取消全选
+                  {t("metadataBrowser.tree.unselectAllFiltered")}
                 </button>
               </div>
             ) : null}
           </div>
-          {compQuery.isLoading ? <div className="metadata-muted">加载中…</div> : null}
+          {compQuery.isLoading ? <div className="metadata-muted">{t("metadataBrowser.tree.loadingComponents")}</div> : null}
           {filtered.map((component) => (
             <ComponentRow key={component.full_name} metadataType={item.xml_name} item={component} />
           ))}
-          {!compQuery.isLoading && filtered.length === 0 ? <div className="metadata-muted">无匹配组件</div> : null}
+          {!compQuery.isLoading && filtered.length === 0 ? (
+            <div className="metadata-muted">{t("metadataBrowser.tree.noMatchingComponents")}</div>
+          ) : null}
         </div>
       ) : null}
     </div>

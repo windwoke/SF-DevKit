@@ -1,7 +1,12 @@
 import type * as MonacoType from "monaco-editor";
 import type { MetadataComponentMeta, MetadataTypeMeta } from "../../../lib/tauri";
 import { tauriApi } from "../../../lib/tauri";
+import i18n from "../../../i18n";
 import { parseXmlCompletionContext } from "./contextParser";
+
+function $t(key: string, options?: Record<string, unknown>): string {
+  return String(i18n.t(key, options as never));
+}
 
 const API_VERSIONS = ["62.0", "61.0", "60.0", "59.0", "58.0", "57.0"];
 const PACKAGE_XMLNS = "http://soap.sforce.com/2006/04/metadata";
@@ -48,7 +53,7 @@ export function registerPackageXmlCompletion(monaco: typeof MonacoType, orgId: s
                 {
                   label: `xmlns="${PACKAGE_XMLNS}"`,
                   kind: monaco.languages.CompletionItemKind.Property,
-                  detail: "Metadata API 命名空间",
+                  detail: $t("metadataBrowser.completion.xmlnsDetail"),
                   insertText: `xmlns="${PACKAGE_XMLNS}"`,
                   range,
                   sortText: "0_xmlns",
@@ -105,7 +110,7 @@ function buildReplaceRange(
 
 function buildPackageSnippet(monaco: typeof MonacoType, range: MonacoType.IRange): MonacoType.languages.CompletionItem {
   return {
-    label: "package.xml 模板",
+    label: $t("metadataBrowser.completion.packageTemplate"),
     kind: monaco.languages.CompletionItemKind.Snippet,
     insertText: [
       '<?xml version="1.0" encoding="UTF-8"?>',
@@ -152,18 +157,18 @@ function buildBlankSnippets(
   if (parent === "Package") {
     return [
       {
-        label: "types 代码片段",
+        label: $t("metadataBrowser.completion.typesSnippet"),
         kind: monaco.languages.CompletionItemKind.Snippet,
-        detail: "插入完整 <types> 块",
+        detail: $t("metadataBrowser.completion.typesSnippetDetail"),
         insertText: "<types>\n    <members>${1:*}</members>\n    <name>${2:ApexClass}</name>\n</types>",
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         range,
         sortText: "0_types_snippet",
       },
       {
-        label: "version 代码片段",
+        label: $t("metadataBrowser.completion.versionSnippet"),
         kind: monaco.languages.CompletionItemKind.Snippet,
-        detail: "插入 <version> 标签",
+        detail: $t("metadataBrowser.completion.versionSnippetDetail"),
         insertText: "<version>${1:60.0}</version>",
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         range,
@@ -175,18 +180,18 @@ function buildBlankSnippets(
   if (parent === "types") {
     return [
       {
-        label: "members 代码片段",
+        label: $t("metadataBrowser.completion.membersSnippet"),
         kind: monaco.languages.CompletionItemKind.Snippet,
-        detail: "插入 <members> 标签",
+        detail: $t("metadataBrowser.completion.membersSnippetDetail"),
         insertText: "<members>${1:*}</members>",
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         range,
         sortText: "0_members_snippet",
       },
       {
-        label: "name 代码片段",
+        label: $t("metadataBrowser.completion.nameSnippet"),
         kind: monaco.languages.CompletionItemKind.Snippet,
-        detail: "插入 <name> 标签",
+        detail: $t("metadataBrowser.completion.nameSnippetDetail"),
         insertText: "<name>${1:ApexClass}</name>",
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         range,
@@ -257,7 +262,7 @@ async function buildMembersItems(
     {
       label: "*",
       kind: monaco.languages.CompletionItemKind.Keyword,
-      detail: "该类型全部组件",
+      detail: $t("metadataBrowser.completion.allMembersDetail"),
       insertText: "*",
       sortText: "0_*",
       range,
@@ -266,9 +271,9 @@ async function buildMembersItems(
 
   if (!resolvedType) {
     base.push({
-      label: "请先填写 <name>",
+      label: $t("metadataBrowser.completion.fillNameLabel"),
       kind: monaco.languages.CompletionItemKind.Text,
-      detail: "填写类型后才可列出 members",
+      detail: $t("metadataBrowser.completion.fillNameDetail"),
       insertText: "",
       sortText: "1_hint",
       range,
@@ -286,7 +291,7 @@ async function buildMembersItems(
   const items = components.map((c) => ({
     label: c.full_name,
     kind: monaco.languages.CompletionItemKind.Value,
-    detail: c.last_modified ? `最后修改: ${c.last_modified}` : resolvedType,
+    detail: c.last_modified ? $t("metadataBrowser.completion.lastModified", { date: c.last_modified }) : resolvedType,
     insertText: c.full_name,
     range,
     sortText: used.has(c.full_name) ? `z_${c.full_name}` : `b_${c.full_name}`,

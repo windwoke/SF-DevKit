@@ -1,4 +1,9 @@
 import type * as MonacoType from "monaco-editor";
+import i18n from "../../../i18n";
+
+function $t(key: string, options?: Record<string, unknown>): string {
+  return String(i18n.t(key, options as never));
+}
 
 export function computePackageXmlDiagnostics(
   monaco: typeof MonacoType,
@@ -21,7 +26,7 @@ export function computePackageXmlDiagnostics(
           fullText,
           block.nameOffset,
           typeName.length,
-          `重复的类型声明：${typeName}。建议合并到同一个 <types> 块。`,
+          $t("metadataBrowser.diagnostics.duplicateType", { type: typeName }),
         ),
       );
     } else {
@@ -38,7 +43,7 @@ export function computePackageXmlDiagnostics(
             fullText,
             member.offset,
             member.value.length,
-            `重复的成员：${member.value}（同一 <types> 块内）`,
+            $t("metadataBrowser.diagnostics.duplicateMemberSame", { member: member.value }),
           ),
         );
       } else if (seenInAllBlocks.has(member.value)) {
@@ -48,7 +53,7 @@ export function computePackageXmlDiagnostics(
             fullText,
             member.offset,
             member.value.length,
-            `重复的成员：${member.value}（在类型 ${typeName} 的其他 <types> 块已存在）`,
+            $t("metadataBrowser.diagnostics.duplicateMemberOther", { member: member.value, type: typeName }),
           ),
         );
       } else {

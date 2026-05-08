@@ -279,6 +279,81 @@
       "logFailed": "补全失败: {{message}}"
     }
   },
+  "metadataBrowser": {
+    "title": "元数据浏览器",
+    "tree": {
+      "pickOrg": "请先在 Org 管理中选择一个 Org。",
+      "loadingTypes": "正在加载 Metadata Types…",
+      "loadError": "加载失败：{{message}}。可先切换到 Org 管理确认当前 Org 可用后再点刷新。",
+      "paneTitle": "元数据树",
+      "searchPlaceholder": "搜索 Metadata Type 或组件名…",
+      "selectedChip": "已选 {{count}}",
+      "refresh": "刷新",
+      "toggleExpandAria": "切换展开",
+      "childSearchPlaceholder": "搜索当前类型子项…",
+      "selectAllFiltered": "全选结果",
+      "unselectAllFiltered": "取消全选",
+      "loadingComponents": "加载中…",
+      "noMatchingComponents": "无匹配组件"
+    },
+    "retrieve": {
+      "title": "下载面板",
+      "outputDir": "输出目录",
+      "outputDirPlaceholder": "请选择输出目录…",
+      "chooseDir": "选择",
+      "outputFormat": "输出格式",
+      "extract": "解压到目录",
+      "keepZip": "保留 zip",
+      "apiVersion": "API 版本",
+      "selectedComponents": "已选 {{count}} 个组件",
+      "clear": "清空",
+      "download": "下载",
+      "downloading": "执行中…",
+      "cancel": "取消",
+      "openFolder": "打开目录",
+      "logEmpty": "执行日志将显示在这里。",
+      "logDone": "完成，耗时 {{seconds}}s",
+      "logCancelRequested": "已请求取消任务。",
+      "errors": {
+        "needOrg": "请先选择 Org",
+        "needOutputDir": "请先选择输出目录",
+        "needSelection": "请先勾选至少一个组件"
+      }
+    },
+    "package": {
+      "title": "package.xml 预览",
+      "edit": "编辑 package.xml",
+      "exitEdit": "退出编辑",
+      "dirty": "草稿未应用",
+      "synced": "草稿已同步",
+      "overwriteDraft": "用左侧选择覆盖草稿",
+      "applyDraft": "将草稿应用到左侧选择",
+      "editModeBanner": "编辑模式已启用：左侧勾选不会自动覆盖当前草稿。",
+      "parseFailed": "解析失败：{{message}}",
+      "confirmDiscardDraft": "当前草稿有未应用修改，确定退出编辑并放弃草稿吗？"
+    },
+    "diagnostics": {
+      "duplicateType": "重复的类型声明：{{type}}。建议合并到同一个 <types> 块。",
+      "duplicateMemberSame": "重复的成员：{{member}}（同一 <types> 块内）",
+      "duplicateMemberOther": "重复的成员：{{member}}（在类型 {{type}} 的其他 <types> 块已存在）"
+    },
+    "completion": {
+      "xmlnsDetail": "Metadata API 命名空间",
+      "packageTemplate": "package.xml 模板",
+      "typesSnippet": "types 代码片段",
+      "typesSnippetDetail": "插入完整 <types> 块",
+      "versionSnippet": "version 代码片段",
+      "versionSnippetDetail": "插入 <version> 标签",
+      "membersSnippet": "members 代码片段",
+      "membersSnippetDetail": "插入 <members> 标签",
+      "nameSnippet": "name 代码片段",
+      "nameSnippetDetail": "插入 <name> 标签",
+      "allMembersDetail": "该类型全部组件",
+      "fillNameLabel": "请先填写 <name>",
+      "fillNameDetail": "填写类型后才可列出 members",
+      "lastModified": "最后修改: {{date}}"
+    }
+  },
   "comingSoon": {
     "apex": {
       "summary": "用于快速执行 Anonymous Apex，并展示结构化执行结果。",

@@ -1,6 +1,7 @@
 import Editor from "@monaco-editor/react";
-import { useEffect, useMemo, useRef, useState } from "react";
 import { useMonaco } from "@monaco-editor/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMetadataStore } from "../../store/metadata";
 import { generatePackageXml, parsePackageXml } from "./packageXml";
 import { registerPackageXmlCompletion } from "./xmlCompletion";
@@ -9,6 +10,7 @@ import { computePackageXmlDiagnostics } from "./xmlCompletion/diagnostics";
 import { parseXmlCompletionContext } from "./xmlCompletion/contextParser";
 
 export function PackageXmlPanel() {
+  const { t } = useTranslation();
   const monaco = useMonaco();
   const { currentOrg } = useOrgStore();
   const { apiVersion, selection, toSelectionList, replaceSelectionFromList } = useMetadataStore();
@@ -44,7 +46,7 @@ export function PackageXmlPanel() {
 
   const exitEditMode = () => {
     if (dirty) {
-      const shouldDiscard = window.confirm("当前草稿有未应用修改，确定退出编辑并放弃草稿吗？");
+      const shouldDiscard = window.confirm(t("metadataBrowser.package.confirmDiscardDraft"));
       if (!shouldDiscard) return;
     }
     setIsEditMode(false);
@@ -91,24 +93,28 @@ export function PackageXmlPanel() {
     <section className="metadata-pane">
       <header className="metadata-pane-header">
         <div className="metadata-package-header-row">
-          <h3>package.xml 预览</h3>
+          <h3>{t("metadataBrowser.package.title")}</h3>
           <button type="button" onClick={isEditMode ? exitEditMode : enterEditMode}>
-            {isEditMode ? "退出编辑" : "编辑 package.xml"}
+            {isEditMode ? t("metadataBrowser.package.exitEdit") : t("metadataBrowser.package.edit")}
           </button>
         </div>
         {isEditMode ? (
           <div className="metadata-package-tools">
-            <span className={`metadata-package-status ${dirty ? "dirty" : "synced"}`}>{dirty ? "草稿未应用" : "草稿已同步"}</span>
+            <span className={`metadata-package-status ${dirty ? "dirty" : "synced"}`}>
+              {dirty ? t("metadataBrowser.package.dirty") : t("metadataBrowser.package.synced")}
+            </span>
             <button type="button" onClick={overwriteDraftFromSelection}>
-              用左侧选择覆盖草稿
+              {t("metadataBrowser.package.overwriteDraft")}
             </button>
             <button type="button" onClick={applyDraftToSelection}>
-              将草稿应用到左侧选择
+              {t("metadataBrowser.package.applyDraft")}
             </button>
           </div>
         ) : null}
-        {isEditMode ? <div className="metadata-package-banner">编辑模式已启用：左侧勾选不会自动覆盖当前草稿。</div> : null}
-        {draftError ? <div className="metadata-package-error">解析失败：{draftError}</div> : null}
+        {isEditMode ? <div className="metadata-package-banner">{t("metadataBrowser.package.editModeBanner")}</div> : null}
+        {draftError ? (
+          <div className="metadata-package-error">{t("metadataBrowser.package.parseFailed", { message: draftError })}</div>
+        ) : null}
       </header>
       <div className="metadata-package-editor">
         <Editor

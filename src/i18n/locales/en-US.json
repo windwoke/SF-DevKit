@@ -279,6 +279,81 @@
       "logFailed": "Completion failed: {{message}}"
     }
   },
+  "metadataBrowser": {
+    "title": "Metadata Browser",
+    "tree": {
+      "pickOrg": "Select an org in Org Manager first.",
+      "loadingTypes": "Loading metadata types…",
+      "loadError": "Failed to load: {{message}}. Switch to Org Manager to verify the org, then refresh.",
+      "paneTitle": "Metadata tree",
+      "searchPlaceholder": "Search metadata type or component…",
+      "selectedChip": "Selected: {{count}}",
+      "refresh": "Refresh",
+      "toggleExpandAria": "Toggle expand",
+      "childSearchPlaceholder": "Search in this type…",
+      "selectAllFiltered": "Select all in filter",
+      "unselectAllFiltered": "Clear selection in filter",
+      "loadingComponents": "Loading…",
+      "noMatchingComponents": "No matching components"
+    },
+    "retrieve": {
+      "title": "Retrieve",
+      "outputDir": "Output folder",
+      "outputDirPlaceholder": "Choose an output folder…",
+      "chooseDir": "Browse…",
+      "outputFormat": "Output format",
+      "extract": "Extract to folder",
+      "keepZip": "Keep as zip",
+      "apiVersion": "API version",
+      "selectedComponents": "{{count}} component(s) selected",
+      "clear": "Clear",
+      "download": "Retrieve",
+      "downloading": "Running…",
+      "cancel": "Cancel",
+      "openFolder": "Open folder",
+      "logEmpty": "Execution log appears here.",
+      "logDone": "Done in {{seconds}} s",
+      "logCancelRequested": "Cancel requested.",
+      "errors": {
+        "needOrg": "Select an org first",
+        "needOutputDir": "Choose an output folder first",
+        "needSelection": "Select at least one component"
+      }
+    },
+    "package": {
+      "title": "package.xml preview",
+      "edit": "Edit package.xml",
+      "exitEdit": "Exit edit",
+      "dirty": "Draft not applied",
+      "synced": "Draft in sync",
+      "overwriteDraft": "Overwrite draft from tree",
+      "applyDraft": "Apply draft to tree selection",
+      "editModeBanner": "Edit mode: tree checkboxes will not overwrite the current draft.",
+      "parseFailed": "Parse error: {{message}}",
+      "confirmDiscardDraft": "Discard unapplied draft and exit edit mode?"
+    },
+    "diagnostics": {
+      "duplicateType": "Duplicate type {{type}}. Prefer a single <types> block.",
+      "duplicateMemberSame": "Duplicate member {{member}} in this <types> block.",
+      "duplicateMemberOther": "Duplicate member {{member}} (already in another <types> for {{type}})"
+    },
+    "completion": {
+      "xmlnsDetail": "Metadata API namespace",
+      "packageTemplate": "package.xml template",
+      "typesSnippet": "types snippet",
+      "typesSnippetDetail": "Insert full <types> block",
+      "versionSnippet": "version snippet",
+      "versionSnippetDetail": "Insert <version> tag",
+      "membersSnippet": "members snippet",
+      "membersSnippetDetail": "Insert <members> tag",
+      "nameSnippet": "name snippet",
+      "nameSnippetDetail": "Insert <name> tag",
+      "allMembersDetail": "All components of this type",
+      "fillNameLabel": "Fill <name> first",
+      "fillNameDetail": "Set the type name to list members",
+      "lastModified": "Last modified: {{date}}"
+    }
+  },
   "comingSoon": {
     "apex": {
       "summary": "Run Anonymous Apex quickly with structured execution output.",

@@ -1,6 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../../i18n";
 import { tauriApi } from "../../lib/tauri";
 import { useMetadataStore } from "../../store/metadata";
 import { useOrgStore } from "../../store/org";
@@ -11,6 +13,7 @@ interface LogLine {
 }
 
 export function RetrievePanel() {
+  const { t } = useTranslation();
   const { currentOrg } = useOrgStore();
   const { selectedCount, toSelectionList, clearSelection, outputDir, setOutputDir, outputMode, setOutputMode, apiVersion, setApiVersion } =
     useMetadataStore();
@@ -21,10 +24,10 @@ export function RetrievePanel() {
 
   const retrieveMutation = useMutation({
     mutationFn: async () => {
-      if (!currentOrg) throw new Error("请先选择 Org");
-      if (!outputDir) throw new Error("请先选择输出目录");
+      if (!currentOrg) throw new Error(String(i18n.t("metadataBrowser.retrieve.errors.needOrg")));
+      if (!outputDir) throw new Error(String(i18n.t("metadataBrowser.retrieve.errors.needOutputDir")));
       const selections = toSelectionList();
-      if (selections.length === 0) throw new Error("请先勾选至少一个组件");
+      if (selections.length === 0) throw new Error(String(i18n.t("metadataBrowser.retrieve.errors.needSelection")));
       const eventId = `metadata-retrieve-${Date.now()}`;
       eventIdRef.current = eventId;
       setLogs([]);
@@ -47,7 +50,13 @@ export function RetrievePanel() {
     },
     onSuccess: (result) => {
       setLastOutputPath(result.output_path);
-      setLogs((prev) => [...prev, { type: "info", text: `完成，耗时 ${(result.duration_ms / 1000).toFixed(1)}s` }]);
+      setLogs((prev) => [
+        ...prev,
+        {
+          type: "info",
+          text: String(i18n.t("metadataBrowser.retrieve.logDone", { seconds: (result.duration_ms / 1000).toFixed(1) })),
+        },
+      ]);
     },
     onError: (e) => {
       const message = e instanceof Error ? e.message : String(e);
@@ -63,7 +72,8 @@ export function RetrievePanel() {
 
   const cancelMutation = useMutation({
     mutationFn: () => tauriApi.cancelRetrieve(eventIdRef.current),
-    onSuccess: () => setLogs((prev) => [...prev, { type: "info", text: "已请求取消任务。" }]),
+    onSuccess: () =>
+      setLogs((prev) => [...prev, { type: "info", text: String(i18n.t("metadataBrowser.retrieve.logCancelRequested")) }]),
   });
 
   const chooseDir = async () => {
@@ -74,33 +84,34 @@ export function RetrievePanel() {
   return (
     <section className="metadata-pane metadata-retrieve-pane">
       <header className="metadata-pane-header">
-        <h3>下载面板</h3>
+        <h3>{t("metadataBrowser.retrieve.title")}</h3>
       </header>
 
       <div className="metadata-field">
-        <label>输出目录</label>
+        <label>{t("metadataBrowser.retrieve.outputDir")}</label>
         <div className="metadata-output-row">
-          <input readOnly value={outputDir} placeholder="请选择输出目录…" />
+          <input readOnly value={outputDir} placeholder={t("metadataBrowser.retrieve.outputDirPlaceholder")} />
           <button type="button" onClick={() => void chooseDir()}>
-            选择
+            {t("metadataBrowser.retrieve.chooseDir")}
           </button>
         </div>
       </div>
 
       <div className="metadata-field">
-        <label>输出格式</label>
+        <label>{t("metadataBrowser.retrieve.outputFormat")}</label>
         <div className="metadata-radio-row">
           <label>
-            <input type="radio" checked={outputMode === "extract"} onChange={() => setOutputMode("extract")} /> 解压到目录
+            <input type="radio" checked={outputMode === "extract"} onChange={() => setOutputMode("extract")} />{" "}
+            {t("metadataBrowser.retrieve.extract")}
           </label>
           <label>
-            <input type="radio" checked={outputMode === "zip"} onChange={() => setOutputMode("zip")} /> 保留 zip
+            <input type="radio" checked={outputMode === "zip"} onChange={() => setOutputMode("zip")} /> {t("metadataBrowser.retrieve.keepZip")}
           </label>
         </div>
       </div>
 
       <div className="metadata-field">
-        <label>API 版本</label>
+        <label>{t("metadataBrowser.retrieve.apiVersion")}</label>
         <select value={apiVersion} onChange={(e) => setApiVersion(e.target.value)}>
           {["62.0", "61.0", "60.0", "59.0", "58.0"].map((v) => (
             <option key={v} value={v}>
@@ -111,9 +122,9 @@ export function RetrievePanel() {
       </div>
 
       <div className="metadata-summary-row">
-        <span>已选 {selectedCount()} 个组件</span>
+        <span>{t("metadataBrowser.retrieve.selectedComponents", { count: selectedCount() })}</span>
         <button type="button" onClick={clearSelection} disabled={selectedCount() === 0}>
-          清空
+          {t("metadataBrowser.retrieve.clear")}
         </button>
       </div>
 
@@ -124,18 +135,18 @@ export function RetrievePanel() {
           onClick={() => void retrieveMutation.mutateAsync()}
           disabled={retrieveMutation.isPending || !currentOrg}
         >
-          {retrieveMutation.isPending ? "执行中…" : "下载"}
+          {retrieveMutation.isPending ? t("metadataBrowser.retrieve.downloading") : t("metadataBrowser.retrieve.download")}
         </button>
         <button type="button" onClick={() => cancelMutation.mutate()} disabled={!retrieveMutation.isPending}>
-          取消
+          {t("metadataBrowser.retrieve.cancel")}
         </button>
         <button type="button" onClick={() => tauriApi.revealInFinder(lastOutputPath)} disabled={!lastOutputPath}>
-          打开目录
+          {t("metadataBrowser.retrieve.openFolder")}
         </button>
       </div>
 
       <div className="metadata-log-panel">
-        {logs.length === 0 ? <div className="metadata-muted">执行日志将显示在这里。</div> : null}
+        {logs.length === 0 ? <div className="metadata-muted">{t("metadataBrowser.retrieve.logEmpty")}</div> : null}
         {logs.map((line, idx) => (
           <div key={`${line.type}-${idx}`} className={`metadata-log-line metadata-log-${line.type}`}>
             {line.text}
