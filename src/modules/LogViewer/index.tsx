@@ -476,24 +476,6 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     });
   };
 
-  const latestSelfDownload = useMutation({
-    mutationFn: async () => {
-      if (!orgId) throw new Error("请先选择 Org");
-      const path = await invoke<string | null>("download_latest_self_log", {
-        orgId,
-        currentUserName: currentUser?.username ?? "",
-        outputDir: downloadConfig.outputDir,
-      });
-      if (!path) throw new Error("未找到可下载的日志");
-      if (downloadConfig.autoOpenVscode) {
-        await invoke("open_in_vscode", { filePath: path });
-      } else {
-        await invoke("reveal_log_file", { filePath: path });
-      }
-    },
-    onSuccess: onRefresh,
-  });
-
   return (
     <div className="log-trace-bar">
       <div className="log-trace-main-row">
@@ -580,14 +562,6 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
               </div>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => void addClassTrace()}
-            disabled={!orgId || !classInput.trim() || Boolean(traceBusyKey)}
-            title="按输入文本直接追踪（精确匹配）"
-          >
-            {traceBusyKey === "class:manual" ? "处理中…" : "追踪"}
-          </button>
         </div>
 
         <select
@@ -607,13 +581,6 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
           <option value={1440}>追踪 1 天</option>
         </select>
 
-        <button
-          type="button"
-          onClick={() => latestSelfDownload.mutate()}
-          disabled={!orgId || latestSelfDownload.isPending || Boolean(traceBusyKey)}
-        >
-          {latestSelfDownload.isPending ? "下载中…" : "下载我的最新日志"}
-        </button>
       </div>
 
       {traceFeedback ? <div className="trace-feedback">{traceFeedback}</div> : null}

@@ -65,8 +65,9 @@ pub async fn download_apex_log(
         anyhow::bail!("{}", cli_error_message(&output.stderr, &output.stdout));
     }
 
+    let clean_log_text = strip_terminal_escape_sequences(&output.stdout);
     let file_path = Path::new(output_dir).join(file_name);
-    tokio::fs::write(&file_path, output.stdout.as_bytes())
+    tokio::fs::write(&file_path, clean_log_text.as_bytes())
         .await
         .with_context(|| format!("写入日志文件失败：{}", file_path.display()))?;
 
@@ -85,6 +86,52 @@ pub async fn download_apex_log(
     .await;
 
     Ok(file_path.to_string_lossy().to_string())
+}
+
+fn strip_terminal_escape_sequences(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0usize;
+
+    while i < bytes.len() {
+        if bytes[i] == 0x1b {
+            i += 1;
+            if i < bytes.len() && bytes[i] == b'[' {
+                // CSI: ESC [ ... final-byte(@-~)
+                i += 1;
+                while i < bytes.len() {
+                    let b = bytes[i];
+                    i += 1;
+                    if (0x40..=0x7e).contains(&b) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if i < bytes.len() && bytes[i] == b']' {
+                // OSC: ESC ] ... BEL or ESC \
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == 0x07 {
+                        i += 1;
+                        break;
+                    }
+                    if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
+                        i += 2;
+                        break;
+                    }
+                    i += 1;
+                }
+                continue;
+            }
+            continue;
+        }
+
+        out.push(bytes[i]);
+        i += 1;
+    }
+
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 pub async fn download_latest_self_log(
