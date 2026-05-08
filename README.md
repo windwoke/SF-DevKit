@@ -48,20 +48,29 @@ Other useful commands:
 
 ### Metadata browser
 
-- Placeholder module; full implementation is planned for a later phase.
+- Browse **metadata types** and **components** from the connected org; search and multi-select for retrieve.
+- Edit or preview **`package.xml`** in Monaco (with diagnostics and completion when an org is selected).
+- **Retrieve** to a chosen folder (extract or zip), stream CLI logs in the panel, cancel in flight, and reveal the output folder.
+
+### Log Viewer
+
+- Lists recent **Apex debug logs** for the current org (refreshed on an interval); optional **user filter** on list and fetch.
+- **Trace flags**: trace yourself, another user (search), or an **ApexClass** (search); choose log preset (standard / verbose) and trace duration (e.g. 30 minutes or 1 day); see active targets with countdown and stop controls.
+- **Log detail**: download a log (output folder + optional **open in VS Code**), or download from the list row; downloaded files strip **ANSI** escape sequences for clean text.
 
 ## Tech stack
 
 - **UI**: React 18, Vite, Zustand, TanStack Query, Monaco Editor (`@monaco-editor/react`)
 - **Desktop**: Tauri 2, `rfd` for export save dialogs
-- **Backend**: Rust (`tokio`, `sqlx` + SQLite for local auth / cache state), Tauri commands for org sync, schema describe, SOQL execution, etc.
+- **Backend**: Rust (`tokio`, `sqlx` + SQLite for local auth / cache state), Tauri commands for org sync, schema describe, SOQL execution, metadata list/retrieve, Apex logs and trace flags, etc.
 
 ## Design documents
 
 - `SF-DevKit-Design.md` — product / architecture overview  
 - `IMPLEMENTATION-PLAN.md` — phased delivery plan  
 - `SOQL-Completion-Design.md` — SOQL completion context and rules  
-- `Metadata-Browser-Design.md`, `PackageXml-Completion-Design.md` — related future work
+- `Metadata-Browser-Design.md`, `PackageXml-Completion-Design.md` — metadata UI and `package.xml` completion  
+- `LogViewer-Simple-Design.md` — Log Viewer behaviour and CLI integration notes
 
 ## License
 
