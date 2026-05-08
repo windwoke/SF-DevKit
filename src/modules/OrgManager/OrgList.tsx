@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { orgTypeLabel } from "../../lib/orgTypeLabel";
 import { tauriApi, type LoginDomain } from "../../lib/tauri";
 import { useOrgStore } from "../../store/org";
 
@@ -46,6 +48,7 @@ function IconSwitch() {
 }
 
 export function OrgList() {
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const { setCurrentOrg, setOrgs } = useOrgStore();
   const [keyword, setKeyword] = useState("");
@@ -101,10 +104,14 @@ export function OrgList() {
     mutationFn: (orgId: string) => tauriApi.openOrgLinkedProjectInIde(orgId),
     onError: (e) => {
       const message = e instanceof Error ? e.message : String(e);
-      setNotice({ text: `无法在 IDE 中打开：${message}`, autoHide: true, variant: "error" });
+      setNotice({
+        text: i18n.t("orgManager.notice.openIdeError", { message }),
+        autoHide: true,
+        variant: "error",
+      });
     },
     onSuccess: () => {
-      setNotice({ text: "已在 IDE 中打开关联项目。", autoHide: true, variant: "success" });
+      setNotice({ text: i18n.t("orgManager.notice.openIdeSuccess"), autoHide: true, variant: "success" });
     },
   });
 
@@ -113,7 +120,7 @@ export function OrgList() {
     onSuccess: (orgs) => {
       setOrgs(orgs);
       queryClient.setQueryData(["orgs"], orgs);
-      setNotice({ text: "Org 列表已刷新。", autoHide: true, variant: "success" });
+      setNotice({ text: i18n.t("orgManager.notice.listRefreshed"), autoHide: true, variant: "success" });
     },
   });
 
@@ -127,7 +134,7 @@ export function OrgList() {
       setLoginAlias("");
       setLoginDomain("production");
       browserAuthDone = true;
-      setNotice({ text: "浏览器授权成功，正在同步 Org 列表…", autoHide: false, variant: "success" });
+      setNotice({ text: i18n.t("orgManager.notice.browserAuthSyncing"), autoHide: false, variant: "success" });
       const orgs = await tauriApi.syncOrgs();
       setOrgs(orgs);
       queryClient.setQueryData(["orgs"], orgs);
@@ -136,16 +143,18 @@ export function OrgList() {
       setNotice(
         defaultOrg
           ? {
-              text: `同步完成，默认 Org：${defaultOrg.alias ?? defaultOrg.id}。`,
+              text: i18n.t("orgManager.notice.syncDoneDefault", {
+                name: defaultOrg.alias ?? defaultOrg.id,
+              }),
               autoHide: true,
               variant: "success",
             }
-          : { text: "同步完成，未检测到默认 Org，请手动设置。", autoHide: true, variant: "success" },
+          : { text: i18n.t("orgManager.notice.syncDoneNoDefault"), autoHide: true, variant: "success" },
       );
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       if (browserAuthDone) {
-        setNotice({ text: `同步失败：${message}`, autoHide: true, variant: "error" });
+        setNotice({ text: i18n.t("orgManager.notice.syncFailed", { message }), autoHide: true, variant: "error" });
       } else {
         setLoginError(message);
       }
@@ -160,10 +169,10 @@ export function OrgList() {
       if (picked == null) return;
       await tauriApi.setOrgLinkedProjectPath(orgId, picked);
       await queryClient.invalidateQueries({ queryKey: ["orgs"] });
-      setNotice({ text: "已保存本地项目路径。", autoHide: true, variant: "success" });
+      setNotice({ text: i18n.t("orgManager.notice.linkedSaved"), autoHide: true, variant: "success" });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      setNotice({ text: `关联路径失败：${message}`, autoHide: true, variant: "error" });
+      setNotice({ text: i18n.t("orgManager.notice.linkFailed", { message }), autoHide: true, variant: "error" });
     }
   };
 
@@ -171,10 +180,10 @@ export function OrgList() {
     try {
       await tauriApi.setOrgLinkedProjectPath(orgId, null);
       await queryClient.invalidateQueries({ queryKey: ["orgs"] });
-      setNotice({ text: "已清除本地项目关联。", autoHide: true, variant: "success" });
+      setNotice({ text: i18n.t("orgManager.notice.linkCleared"), autoHide: true, variant: "success" });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      setNotice({ text: `清除失败：${message}`, autoHide: true, variant: "error" });
+      setNotice({ text: i18n.t("orgManager.notice.clearFailed", { message }), autoHide: true, variant: "error" });
     }
   };
 
@@ -189,8 +198,11 @@ export function OrgList() {
     );
   }, [data, keyword]);
 
-  if (isLoading) return <div className="empty-state">正在同步 Org 列表...</div>;
-  if (isError) return <div className="empty-state error">加载失败：{(error as Error).message}</div>;
+  if (isLoading) return <div className="empty-state">{t("orgManager.loading")}</div>;
+  if (isError)
+    return (
+      <div className="empty-state error">{t("orgManager.loadError", { message: (error as Error).message })}</div>
+    );
 
   return (
     <div className="org-list">
@@ -205,41 +217,41 @@ export function OrgList() {
           type="text"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
-          placeholder="搜索 Org（用户名 / 别名 / URL）"
+          placeholder={t("orgManager.searchPlaceholder")}
         />
         <button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending}>
-          {refreshMutation.isPending ? "刷新中..." : "刷新"}
+          {refreshMutation.isPending ? t("orgManager.refreshing") : t("orgManager.refresh")}
         </button>
         <button onClick={() => setShowLoginModal(true)} disabled={loginBusy}>
-          添加 Org
+          {t("orgManager.addOrg")}
         </button>
       </div>
       {showLoginModal ? (
         <div className="org-login-modal-backdrop" onClick={() => !loginBusy && setShowLoginModal(false)}>
           <div className="org-login-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="org-login-title">添加 Org</h3>
+            <h3 className="org-login-title">{t("orgManager.modalTitle")}</h3>
             <input
               type="text"
               className="org-form-input"
               value={loginAlias}
               onChange={(e) => setLoginAlias(e.target.value)}
-              placeholder="Org 别名（可选）"
+              placeholder={t("orgManager.aliasPlaceholder")}
             />
             <select
               className="org-form-select"
               value={loginDomain}
               onChange={(e) => setLoginDomain(e.target.value as LoginDomain)}
             >
-              <option value="production">正式环境（login.salesforce.com）</option>
-              <option value="sandbox">测试环境（test.salesforce.com）</option>
+              <option value="production">{t("orgManager.domainProduction")}</option>
+              <option value="sandbox">{t("orgManager.domainSandbox")}</option>
             </select>
             {loginError ? <div className="org-login-error">{loginError}</div> : null}
             <div className="org-login-modal-actions">
               <button onClick={() => setShowLoginModal(false)} disabled={loginBusy}>
-                取消
+                {t("orgManager.cancel")}
               </button>
               <button onClick={() => void handleLoginConfirm()} disabled={loginBusy}>
-                {loginBusy ? "等待浏览器授权…" : "登录并设为默认"}
+                {loginBusy ? t("orgManager.loginWaitingBrowser") : t("orgManager.loginAndSetDefault")}
               </button>
             </div>
           </div>
@@ -252,31 +264,37 @@ export function OrgList() {
               <div className="org-name-block">
                 <div className="org-name">
                   {org.alias ?? org.id}
-                  {org.is_default ? <span className="org-default-tag">默认</span> : null}
-                  <span className={`org-type org-type-${org.org_type}`}>{org.org_type}</span>
+                  {org.is_default ? <span className="org-default-tag">{t("orgManager.defaultTag")}</span> : null}
+                  <span className={`org-type org-type-${org.org_type}`}>{orgTypeLabel(org.org_type, t)}</span>
                 </div>
                 <div className="org-sub">{org.instance_url}</div>
               </div>
             </div>
             <div className="org-linked-row">
-              <span className="org-linked-label">本地项目</span>
+              <span className="org-linked-label">{t("orgManager.linkedProject")}</span>
               <div
                 className="org-linked-path-wrap"
                 title={org.linked_project_path?.trim() ? org.linked_project_path : undefined}
               >
                 <span className="org-linked-path">
-                  {org.linked_project_path?.trim() ? org.linked_project_path : "未关联"}
+                  {org.linked_project_path?.trim() ? org.linked_project_path : t("orgManager.notLinked")}
                 </span>
               </div>
               <div className="org-linked-actions">
-                <button type="button" className="org-icon-btn" title="选择本地项目文件夹" aria-label="选择本地项目文件夹" onClick={() => void linkLocalProject(org.id)}>
+                <button
+                  type="button"
+                  className="org-icon-btn"
+                  title={t("orgManager.pickFolderTitle")}
+                  aria-label={t("orgManager.pickFolderAria")}
+                  onClick={() => void linkLocalProject(org.id)}
+                >
                   <IconFolder />
                 </button>
                 <button
                   type="button"
                   className="org-icon-btn"
-                  title="在本地 IDE 中打开项目"
-                  aria-label="在本地 IDE 中打开项目"
+                  title={t("orgManager.openIdeTitle")}
+                  aria-label={t("orgManager.openIdeAria")}
                   disabled={!org.linked_project_path?.trim() || openIdeMutation.isPending}
                   onClick={() => openIdeMutation.mutate(org.id)}
                 >
@@ -285,8 +303,8 @@ export function OrgList() {
                 <button
                   type="button"
                   className="org-icon-btn org-link-clear"
-                  title="清除关联路径"
-                  aria-label="清除关联路径"
+                  title={t("orgManager.clearLinkTitle")}
+                  aria-label={t("orgManager.clearLinkAria")}
                   disabled={!org.linked_project_path?.trim()}
                   onClick={() => void clearLinkedProject(org.id)}
                 >
@@ -294,13 +312,31 @@ export function OrgList() {
                 </button>
               </div>
               <div className="org-manage-actions">
-                <button className="org-icon-btn" title="在 Salesforce 打开 Org" aria-label="在 Salesforce 打开 Org" onClick={() => openMutation.mutate(org.id)} disabled={openMutation.isPending}>
+                <button
+                  className="org-icon-btn"
+                  title={t("orgManager.openSfTitle")}
+                  aria-label={t("orgManager.openSfAria")}
+                  onClick={() => openMutation.mutate(org.id)}
+                  disabled={openMutation.isPending}
+                >
                   <IconCompass />
                 </button>
-                <button className="org-icon-btn" title="切换为默认 Org" aria-label="切换为默认 Org" onClick={() => switchMutation.mutate(org.id)} disabled={switchMutation.isPending}>
+                <button
+                  className="org-icon-btn"
+                  title={t("orgManager.setDefaultTitle")}
+                  aria-label={t("orgManager.setDefaultAria")}
+                  onClick={() => switchMutation.mutate(org.id)}
+                  disabled={switchMutation.isPending}
+                >
                   <IconSwitch />
                 </button>
-                <button className="org-icon-btn danger" title="登出当前 Org" aria-label="登出当前 Org" onClick={() => logoutMutation.mutate(org.id)} disabled={logoutMutation.isPending}>
+                <button
+                  className="org-icon-btn danger"
+                  title={t("orgManager.logoutTitle")}
+                  aria-label={t("orgManager.logoutAria")}
+                  onClick={() => logoutMutation.mutate(org.id)}
+                  disabled={logoutMutation.isPending}
+                >
                   <IconTrash />
                 </button>
               </div>
@@ -310,8 +346,8 @@ export function OrgList() {
       ) : (
         <div className="empty-state">
           {keyword.trim()
-            ? "没有匹配的 Org，请调整关键词后重试。"
-            : "暂无已认证 Org，点击“添加 Org”开始登录。"}
+            ? t("orgManager.emptyNoMatch")
+            : t("orgManager.emptyNoOrgs", { action: t("orgManager.addOrg") })}
         </div>
       )}
     </div>

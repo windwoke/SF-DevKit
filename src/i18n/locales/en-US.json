@@ -79,6 +79,56 @@
       "classNotFound": "ApexClass not found: {{name}}"
     }
   },
+  "orgManager": {
+    "loading": "Syncing org list…",
+    "loadError": "Failed to load: {{message}}",
+    "searchPlaceholder": "Search orgs (username / alias / URL)",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "addOrg": "Add org",
+    "modalTitle": "Add org",
+    "aliasPlaceholder": "Org alias (optional)",
+    "domainProduction": "Production (login.salesforce.com)",
+    "domainSandbox": "Sandbox (test.salesforce.com)",
+    "cancel": "Cancel",
+    "loginWaitingBrowser": "Waiting for browser sign-in…",
+    "loginAndSetDefault": "Sign in and set as default",
+    "defaultTag": "Default",
+    "orgType": {
+      "production": "Production",
+      "sandbox": "Sandbox",
+      "scratch": "Scratch"
+    },
+    "linkedProject": "Local project",
+    "notLinked": "Not linked",
+    "pickFolderTitle": "Choose local project folder",
+    "pickFolderAria": "Choose local project folder",
+    "openIdeTitle": "Open linked project in local IDE",
+    "openIdeAria": "Open linked project in local IDE",
+    "clearLinkTitle": "Clear linked path",
+    "clearLinkAria": "Clear linked path",
+    "openSfTitle": "Open org in Salesforce",
+    "openSfAria": "Open org in Salesforce",
+    "setDefaultTitle": "Set as default org",
+    "setDefaultAria": "Set as default org",
+    "logoutTitle": "Log out this org",
+    "logoutAria": "Log out this org",
+    "emptyNoMatch": "No matching orgs. Try different keywords.",
+    "emptyNoOrgs": "No authenticated orgs yet. Click “{{action}}” to sign in.",
+    "notice": {
+      "openIdeError": "Could not open in IDE: {{message}}",
+      "openIdeSuccess": "Opened linked project in IDE.",
+      "listRefreshed": "Org list refreshed.",
+      "browserAuthSyncing": "Browser sign-in succeeded. Syncing org list…",
+      "syncDoneDefault": "Sync complete. Default org: {{name}}.",
+      "syncDoneNoDefault": "Sync complete. No default org detected; set one manually.",
+      "syncFailed": "Sync failed: {{message}}",
+      "linkedSaved": "Local project path saved.",
+      "linkFailed": "Failed to link path: {{message}}",
+      "linkCleared": "Local project link cleared.",
+      "clearFailed": "Clear failed: {{message}}"
+    }
+  },
   "comingSoon": {
     "apex": {
       "summary": "Run Anonymous Apex quickly with structured execution output.",

@@ -1,5 +1,6 @@
-import { useOrgStore } from "../../store/org";
+import { orgTypeLabel } from "../../lib/orgTypeLabel";
 import { tauriApi } from "../../lib/tauri";
+import { useOrgStore } from "../../store/org";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGUAGES } from "../../i18n";
@@ -32,7 +33,7 @@ export function TopBar() {
           {org ? (
             <>
               <span>{t("topbar.currentOrg", { name: org.alias ?? org.id })}</span>
-              <span className={`org-type org-type-${org.org_type}`}>{org.org_type}</span>
+              <span className={`org-type org-type-${org.org_type}`}>{orgTypeLabel(org.org_type, t)}</span>
             </>
           ) : (
             t("topbar.noOrg")

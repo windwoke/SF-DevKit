@@ -79,6 +79,56 @@
       "classNotFound": "找不到 ApexClass: {{name}}"
     }
   },
+  "orgManager": {
+    "loading": "正在同步 Org 列表…",
+    "loadError": "加载失败：{{message}}",
+    "searchPlaceholder": "搜索 Org（用户名 / 别名 / URL）",
+    "refresh": "刷新",
+    "refreshing": "刷新中…",
+    "addOrg": "添加 Org",
+    "modalTitle": "添加 Org",
+    "aliasPlaceholder": "Org 别名（可选）",
+    "domainProduction": "正式环境（login.salesforce.com）",
+    "domainSandbox": "测试环境（test.salesforce.com）",
+    "cancel": "取消",
+    "loginWaitingBrowser": "等待浏览器授权…",
+    "loginAndSetDefault": "登录并设为默认",
+    "defaultTag": "默认",
+    "orgType": {
+      "production": "生产",
+      "sandbox": "沙盒",
+      "scratch": "Scratch"
+    },
+    "linkedProject": "本地项目",
+    "notLinked": "未关联",
+    "pickFolderTitle": "选择本地项目文件夹",
+    "pickFolderAria": "选择本地项目文件夹",
+    "openIdeTitle": "在本地 IDE 中打开项目",
+    "openIdeAria": "在本地 IDE 中打开项目",
+    "clearLinkTitle": "清除关联路径",
+    "clearLinkAria": "清除关联路径",
+    "openSfTitle": "在 Salesforce 打开 Org",
+    "openSfAria": "在 Salesforce 打开 Org",
+    "setDefaultTitle": "切换为默认 Org",
+    "setDefaultAria": "切换为默认 Org",
+    "logoutTitle": "登出当前 Org",
+    "logoutAria": "登出当前 Org",
+    "emptyNoMatch": "没有匹配的 Org，请调整关键词后重试。",
+    "emptyNoOrgs": "暂无已认证 Org，点击「{{action}}」开始登录。",
+    "notice": {
+      "openIdeError": "无法在 IDE 中打开：{{message}}",
+      "openIdeSuccess": "已在 IDE 中打开关联项目。",
+      "listRefreshed": "Org 列表已刷新。",
+      "browserAuthSyncing": "浏览器授权成功，正在同步 Org 列表…",
+      "syncDoneDefault": "同步完成，默认 Org：{{name}}。",
+      "syncDoneNoDefault": "同步完成，未检测到默认 Org，请手动设置。",
+      "syncFailed": "同步失败：{{message}}",
+      "linkedSaved": "已保存本地项目路径。",
+      "linkFailed": "关联路径失败：{{message}}",
+      "linkCleared": "已清除本地项目关联。",
+      "clearFailed": "清除失败：{{message}}"
+    }
+  },
   "comingSoon": {
     "apex": {
       "summary": "用于快速执行 Anonymous Apex，并展示结构化执行结果。",
