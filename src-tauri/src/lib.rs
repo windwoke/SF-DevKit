@@ -47,6 +47,7 @@ pub fn run() {
             commands::log_viewer::get_current_user,
             commands::log_viewer::search_users,
             commands::log_viewer::find_apex_class_id,
+            commands::log_viewer::search_apex_classes,
             commands::log_viewer::ensure_debug_level,
             commands::log_viewer::enable_trace,
             commands::log_viewer::renew_trace,

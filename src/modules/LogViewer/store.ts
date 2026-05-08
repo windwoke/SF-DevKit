@@ -7,6 +7,7 @@ export type TracePreset = "standard" | "verbose";
 
 export interface TraceTarget {
   id: string;
+  orgId: string | null;
   kind: TraceTargetKind;
   label: string;
   entityId: string;
@@ -35,6 +36,7 @@ interface LogViewerState {
   setSelectedLogId: (value: string | null) => void;
   startRenewTimer: (orgId: string, targetId: string) => void;
   stopRenewTimer: (targetId: string) => void;
+  ensureRenewTimers: (orgId: string) => void;
 }
 
 const renewTimers = new Map<string, ReturnType<typeof setInterval>>();
@@ -102,6 +104,54 @@ export const useLogStore = create<LogViewerState>()(
         if (!timer) return;
         clearInterval(timer);
         renewTimers.delete(targetId);
+      },
+      ensureRenewTimers: (orgId) => {
+        const state = get();
+        const activeTargetIds = new Set<string>();
+
+        for (const target of state.targets) {
+          const belongsToOrg = (target.orgId ?? orgId) === orgId;
+          if (!belongsToOrg) {
+            const timer = renewTimers.get(target.id);
+            if (timer) {
+              clearInterval(timer);
+              renewTimers.delete(target.id);
+            }
+            continue;
+          }
+
+          if (!target.isActive || !target.traceFlagId || !target.expiresAt) {
+            const timer = renewTimers.get(target.id);
+            if (timer) {
+              clearInterval(timer);
+              renewTimers.delete(target.id);
+            }
+            continue;
+          }
+
+          const expiresAtMs = new Date(target.expiresAt).getTime();
+          if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+            get().updateTarget(target.id, { isActive: false, traceFlagId: null, expiresAt: null });
+            const timer = renewTimers.get(target.id);
+            if (timer) {
+              clearInterval(timer);
+              renewTimers.delete(target.id);
+            }
+            continue;
+          }
+
+          activeTargetIds.add(target.id);
+          if (!renewTimers.has(target.id)) {
+            get().startRenewTimer(orgId, target.id);
+          }
+        }
+
+        for (const [targetId, timer] of renewTimers.entries()) {
+          if (!activeTargetIds.has(targetId)) {
+            clearInterval(timer);
+            renewTimers.delete(targetId);
+          }
+        }
       },
     }),
     {

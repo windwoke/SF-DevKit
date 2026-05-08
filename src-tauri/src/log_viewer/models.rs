@@ -22,6 +22,12 @@ pub struct SfUser {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApexClassItem {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveTrace {
     pub trace_flag_id: String,
     pub entity_id: String,

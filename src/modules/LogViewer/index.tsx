@@ -24,6 +24,11 @@ interface SfUser {
   username: string;
 }
 
+interface ApexClassItem {
+  id: string;
+  name: string;
+}
+
 interface ActiveTrace {
   trace_flag_id: string;
   expires_at: string;
@@ -96,6 +101,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     removeTarget,
     startRenewTimer,
     stopRenewTimer,
+    ensureRenewTimers,
     downloadConfig,
     setDownloadConfig,
   } = useLogStore();
@@ -103,7 +109,10 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   const [users, setUsers] = useState<SfUser[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [classInput, setClassInput] = useState("");
+  const [classResults, setClassResults] = useState<ApexClassItem[]>([]);
+  const [searchingClass, setSearchingClass] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const classSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: currentUser } = useQuery({
     queryKey: ["log-current-user", orgId],
@@ -111,15 +120,25 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     enabled: Boolean(orgId),
   });
 
-  const selfTarget = targets.find((it) => it.kind === "SELF") ?? null;
+  const scopedTargets = useMemo(
+    () => targets.filter((it) => (it.orgId ?? orgId) === orgId),
+    [targets, orgId],
+  );
+  const selfTarget = scopedTargets.find((it) => it.kind === "SELF") ?? null;
   const selfActive = Boolean(selfTarget?.isActive);
 
   useEffect(
     () => () => {
       if (searchTimer.current) clearTimeout(searchTimer.current);
+      if (classSearchTimer.current) clearTimeout(classSearchTimer.current);
     },
     [],
   );
+
+  useEffect(() => {
+    if (!orgId) return;
+    ensureRenewTimers(orgId);
+  }, [orgId, scopedTargets, ensureRenewTimers]);
 
   const enableTraceFor = async (
     target: Omit<TraceTarget, "traceFlagId" | "expiresAt" | "isActive">,
@@ -159,6 +178,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     await enableTraceFor(
       {
         id,
+        orgId,
         kind: "SELF",
         label: currentUser.username,
         entityId: currentUser.id,
@@ -189,6 +209,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     await enableTraceFor(
       {
         id: crypto.randomUUID(),
+        orgId,
         kind: "USER",
         label: user.username,
         entityId: user.id,
@@ -197,6 +218,27 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     );
     setUserSearch("");
     setUsers([]);
+  };
+
+  const searchApexClass = (text: string) => {
+    setClassInput(text);
+    if (classSearchTimer.current) clearTimeout(classSearchTimer.current);
+    if (!orgId || text.trim().length < 2) {
+      setClassResults([]);
+      return;
+    }
+    classSearchTimer.current = setTimeout(async () => {
+      try {
+        setSearchingClass(true);
+        const result = await invoke<ApexClassItem[]>("search_apex_classes", {
+          orgId,
+          keyword: text.trim(),
+        });
+        setClassResults(result);
+      } finally {
+        setSearchingClass(false);
+      }
+    }, 250);
   };
 
   const addClassTrace = async () => {
@@ -213,6 +255,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     await enableTraceFor(
       {
         id: crypto.randomUUID(),
+        orgId,
         kind: "APEX_CLASS",
         label: className,
         entityId: classId,
@@ -220,6 +263,23 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
       "CLASS_TRACING",
     );
     setClassInput("");
+    setClassResults([]);
+  };
+
+  const addClassTraceByItem = async (item: ApexClassItem) => {
+    if (!orgId) return;
+    await enableTraceFor(
+      {
+        id: crypto.randomUUID(),
+        orgId,
+        kind: "APEX_CLASS",
+        label: item.name,
+        entityId: item.id,
+      },
+      "CLASS_TRACING",
+    );
+    setClassInput("");
+    setClassResults([]);
   };
 
   const stopTraceTarget = async (target: TraceTarget) => {
@@ -278,16 +338,34 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
         </div>
 
         <div className="trace-class-input">
-          <input
-            value={classInput}
-            placeholder="按 ApexClass 追踪…"
-            onChange={(e) => setClassInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void addClassTrace();
-            }}
-            disabled={!orgId}
-          />
-          <button type="button" onClick={() => void addClassTrace()} disabled={!orgId || !classInput.trim()}>
+          <div className="trace-class-search">
+            <input
+              value={classInput}
+              placeholder="按 ApexClass 追踪…"
+              onChange={(e) => searchApexClass(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void addClassTrace();
+              }}
+              disabled={!orgId}
+            />
+            {classResults.length > 0 ? (
+              <div className="trace-user-dropdown">
+                {classResults.map((item) => (
+                  <button key={item.id} type="button" onClick={() => void addClassTraceByItem(item)}>
+                    <span>{item.name}</span>
+                    <small>{item.id}</small>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {searchingClass ? <div className="trace-searching">搜索中…</div> : null}
+          </div>
+          <button
+            type="button"
+            onClick={() => void addClassTrace()}
+            disabled={!orgId || !classInput.trim()}
+            title="按输入文本直接追踪（精确匹配）"
+          >
             追踪
           </button>
         </div>
@@ -300,6 +378,15 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
           <option value="verbose">详细日志</option>
         </select>
 
+        <select
+          value={downloadConfig.durationMinutes}
+          onChange={(e) => setDownloadConfig({ durationMinutes: Number(e.target.value) })}
+          title="追踪时长"
+        >
+          <option value={30}>追踪 30 分钟</option>
+          <option value={1440}>追踪 1 天</option>
+        </select>
+
         <button
           type="button"
           onClick={() => latestSelfDownload.mutate()}
@@ -309,9 +396,9 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
         </button>
       </div>
 
-      {targets.length > 0 ? (
+      {scopedTargets.length > 0 ? (
         <div className="trace-target-row">
-          {targets.map((target) => (
+          {scopedTargets.map((target) => (
             <TraceTag key={target.id} target={target} onStop={() => void stopTraceTarget(target)} />
           ))}
         </div>

@@ -10,7 +10,7 @@ use tokio::process::Command;
 
 use crate::cli::runner::run_command;
 
-use super::models::{ActiveTrace, ApexLog, SfUser};
+use super::models::{ActiveTrace, ApexClassItem, ApexLog, SfUser};
 
 pub async fn list_apex_logs(
     org_id: &str,
@@ -211,6 +211,32 @@ pub async fn find_apex_class_id(org_id: &str, class_name: &str) -> anyhow::Resul
         .and_then(|v| v.as_array())
         .and_then(|rows| rows.first())
         .and_then(|row| get_string(row, &["Id", "id"])))
+}
+
+pub async fn search_apex_classes(org_id: &str, keyword: &str) -> anyhow::Result<Vec<ApexClassItem>> {
+    let k = keyword.trim();
+    if k.is_empty() {
+        return Ok(Vec::new());
+    }
+    let query = format!(
+        "SELECT Id, Name FROM ApexClass WHERE Name LIKE '%{kw}%' ORDER BY Name ASC LIMIT 20",
+        kw = escape_soql(k)
+    );
+    let resp = query_data(org_id, &query, true).await?;
+    let classes = resp
+        .get("records")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|row| {
+            Some(ApexClassItem {
+                id: get_string(row, &["Id", "id"])?,
+                name: get_string(row, &["Name", "name"])?,
+            })
+        })
+        .collect();
+    Ok(classes)
 }
 
 pub async fn ensure_debug_level(org_id: &str, preset: &str) -> anyhow::Result<String> {

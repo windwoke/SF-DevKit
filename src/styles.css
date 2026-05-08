@@ -1348,6 +1348,11 @@ button.danger {
   gap: 6px;
 }
 
+.trace-class-search {
+  position: relative;
+  flex: 1;
+}
+
 .trace-class-input button {
   flex-shrink: 0;
 }
