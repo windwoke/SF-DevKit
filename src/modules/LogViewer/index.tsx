@@ -27,6 +27,8 @@ interface SfUser {
 interface ApexClassItem {
   id: string;
   name: string;
+  last_modified_date?: string | null;
+  last_modified_by_name?: string | null;
 }
 
 interface ActiveTrace {
@@ -108,11 +110,17 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   const [userSearch, setUserSearch] = useState("");
   const [users, setUsers] = useState<SfUser[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
+  const [userInputFocused, setUserInputFocused] = useState(false);
   const [classInput, setClassInput] = useState("");
   const [classResults, setClassResults] = useState<ApexClassItem[]>([]);
   const [searchingClass, setSearchingClass] = useState(false);
+  const [classInputFocused, setClassInputFocused] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const classSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const classBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userSearchCache = useRef<Map<string, SfUser[]>>(new Map());
+  const apexClassSearchCache = useRef<Map<string, ApexClassItem[]>>(new Map());
 
   const { data: currentUser } = useQuery({
     queryKey: ["log-current-user", orgId],
@@ -131,9 +139,18 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     () => () => {
       if (searchTimer.current) clearTimeout(searchTimer.current);
       if (classSearchTimer.current) clearTimeout(classSearchTimer.current);
+      if (userBlurTimer.current) clearTimeout(userBlurTimer.current);
+      if (classBlurTimer.current) clearTimeout(classBlurTimer.current);
     },
     [],
   );
+
+  useEffect(() => {
+    userSearchCache.current.clear();
+    apexClassSearchCache.current.clear();
+    setUsers([]);
+    setClassResults([]);
+  }, [orgId]);
 
   useEffect(() => {
     if (!orgId) return;
@@ -190,19 +207,38 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   const searchUsers = (text: string) => {
     setUserSearch(text);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!orgId || text.trim().length < 2) {
+    const keyword = text.trim().toLowerCase();
+    if (!orgId || keyword.length < 2) {
       setUsers([]);
+      return;
+    }
+    const cached = userSearchCache.current.get(keyword);
+    if (cached) {
+      setUsers(cached);
       return;
     }
     searchTimer.current = setTimeout(async () => {
       try {
         setSearchingUsers(true);
-        const result = await invoke<SfUser[]>("search_users", { orgId, keyword: text.trim() });
+        const result = await invoke<SfUser[]>("search_users", { orgId, keyword });
+        userSearchCache.current.set(keyword, result);
         setUsers(result);
       } finally {
         setSearchingUsers(false);
       }
-    }, 250);
+    }, 380);
+  };
+
+  const handleUserFocus = () => {
+    if (userBlurTimer.current) clearTimeout(userBlurTimer.current);
+    setUserInputFocused(true);
+    if (userSearch.trim().length >= 2 && users.length === 0 && !searchingUsers) {
+      searchUsers(userSearch);
+    }
+  };
+
+  const handleUserBlur = () => {
+    userBlurTimer.current = setTimeout(() => setUserInputFocused(false), 120);
   };
 
   const addUserTrace = async (user: SfUser) => {
@@ -223,8 +259,14 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   const searchApexClass = (text: string) => {
     setClassInput(text);
     if (classSearchTimer.current) clearTimeout(classSearchTimer.current);
-    if (!orgId || text.trim().length < 2) {
+    const keyword = text.trim().toLowerCase();
+    if (!orgId || keyword.length < 2) {
       setClassResults([]);
+      return;
+    }
+    const cached = apexClassSearchCache.current.get(keyword);
+    if (cached) {
+      setClassResults(cached);
       return;
     }
     classSearchTimer.current = setTimeout(async () => {
@@ -232,13 +274,26 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
         setSearchingClass(true);
         const result = await invoke<ApexClassItem[]>("search_apex_classes", {
           orgId,
-          keyword: text.trim(),
+          keyword,
         });
+        apexClassSearchCache.current.set(keyword, result);
         setClassResults(result);
       } finally {
         setSearchingClass(false);
       }
-    }, 250);
+    }, 380);
+  };
+
+  const handleClassFocus = () => {
+    if (classBlurTimer.current) clearTimeout(classBlurTimer.current);
+    setClassInputFocused(true);
+    if (classInput.trim().length >= 2 && classResults.length === 0 && !searchingClass) {
+      searchApexClass(classInput);
+    }
+  };
+
+  const handleClassBlur = () => {
+    classBlurTimer.current = setTimeout(() => setClassInputFocused(false), 120);
   };
 
   const addClassTrace = async () => {
@@ -322,19 +377,28 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
             value={userSearch}
             placeholder="按用户追踪…"
             onChange={(e) => searchUsers(e.target.value)}
+            onFocus={handleUserFocus}
+            onBlur={handleUserBlur}
             disabled={!orgId}
           />
-          {users.length > 0 ? (
-            <div className="trace-user-dropdown">
-              {users.map((user) => (
-                <button key={user.id} type="button" onClick={() => void addUserTrace(user)}>
-                  <span>{user.name}</span>
-                  <small>{user.username}</small>
-                </button>
-              ))}
+          {orgId && userInputFocused ? (
+            <div className="trace-user-dropdown" onMouseDown={(e) => e.preventDefault()}>
+              {searchingUsers ? (
+                <div className="trace-dropdown-state">搜索中…</div>
+              ) : users.length > 0 ? (
+                users.map((user) => (
+                  <button key={user.id} type="button" onClick={() => void addUserTrace(user)}>
+                    <span>{user.name}</span>
+                    <small>{user.username}</small>
+                  </button>
+                ))
+              ) : userSearch.trim().length < 2 ? (
+                <div className="trace-dropdown-state">输入至少 2 个字符搜索用户</div>
+              ) : (
+                <div className="trace-dropdown-state">未找到匹配用户</div>
+              )}
             </div>
           ) : null}
-          {searchingUsers ? <div className="trace-searching">搜索中…</div> : null}
         </div>
 
         <div className="trace-class-input">
@@ -343,22 +407,31 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
               value={classInput}
               placeholder="按 ApexClass 追踪…"
               onChange={(e) => searchApexClass(e.target.value)}
+              onFocus={handleClassFocus}
+              onBlur={handleClassBlur}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void addClassTrace();
               }}
               disabled={!orgId}
             />
-            {classResults.length > 0 ? (
-              <div className="trace-user-dropdown">
-                {classResults.map((item) => (
-                  <button key={item.id} type="button" onClick={() => void addClassTraceByItem(item)}>
-                    <span>{item.name}</span>
-                    <small>{item.id}</small>
-                  </button>
-                ))}
+            {orgId && classInputFocused ? (
+              <div className="trace-user-dropdown" onMouseDown={(e) => e.preventDefault()}>
+                {searchingClass ? (
+                  <div className="trace-dropdown-state">搜索中…</div>
+                ) : classResults.length > 0 ? (
+                  classResults.map((item) => (
+                    <button key={item.id} type="button" onClick={() => void addClassTraceByItem(item)}>
+                      <span>{item.name}</span>
+                      <small>{formatClassMeta(item)}</small>
+                    </button>
+                  ))
+                ) : classInput.trim().length < 2 ? (
+                  <div className="trace-dropdown-state">输入至少 2 个字符搜索 ApexClass</div>
+                ) : (
+                  <div className="trace-dropdown-state">未找到匹配 ApexClass</div>
+                )}
               </div>
             ) : null}
-            {searchingClass ? <div className="trace-searching">搜索中…</div> : null}
           </div>
           <button
             type="button"
@@ -626,4 +699,13 @@ function toHHmm(dateText: string): string {
   const d = new Date(dateText);
   if (Number.isNaN(d.getTime())) return "--:--";
   return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function formatClassMeta(item: ApexClassItem): string {
+  const who = item.last_modified_by_name?.trim() || "未知修改人";
+  const raw = item.last_modified_date;
+  if (!raw) return `最近修改: -- · ${who}`;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return `最近修改: -- · ${who}`;
+  return `最近修改: ${d.toLocaleString("zh-CN")} · ${who}`;
 }

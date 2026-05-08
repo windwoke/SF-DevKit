@@ -1398,6 +1398,12 @@ button.danger {
   color: #9aa3ba;
 }
 
+.trace-dropdown-state {
+  padding: 10px;
+  font-size: 12px;
+  color: #9aa3ba;
+}
+
 .trace-target-row {
   margin-top: 8px;
   display: flex;

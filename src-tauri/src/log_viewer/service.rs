@@ -5,6 +5,7 @@ use chrono::{Duration, Utc};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
+use sqlx::FromRow;
 use sqlx::SqlitePool;
 use tokio::process::Command;
 
@@ -169,6 +170,11 @@ pub async fn search_users(pool: &SqlitePool, org_id: &str, keyword: &str) -> any
         return Ok(Vec::new());
     }
 
+    let cached = search_users_cache(pool, org_id, k).await?;
+    if cached.len() >= 5 {
+        return Ok(cached);
+    }
+
     let query = format!(
         "SELECT Id, Name, Username FROM User WHERE (Username LIKE '%{kw}%' OR Name LIKE '%{kw}%') AND IsActive = true ORDER BY LastModifiedDate DESC LIMIT 10",
         kw = escape_soql(k)
@@ -197,7 +203,11 @@ pub async fn search_users(pool: &SqlitePool, org_id: &str, keyword: &str) -> any
     }
     tx.commit().await?;
 
-    Ok(users)
+    if users.is_empty() {
+        Ok(cached)
+    } else {
+        Ok(users)
+    }
 }
 
 pub async fn find_apex_class_id(org_id: &str, class_name: &str) -> anyhow::Result<Option<String>> {
@@ -219,7 +229,7 @@ pub async fn search_apex_classes(org_id: &str, keyword: &str) -> anyhow::Result<
         return Ok(Vec::new());
     }
     let query = format!(
-        "SELECT Id, Name FROM ApexClass WHERE Name LIKE '%{kw}%' ORDER BY Name ASC LIMIT 20",
+        "SELECT Id, Name, LastModifiedDate, LastModifiedBy.Name FROM ApexClass WHERE Name LIKE '%{kw}%' ORDER BY LastModifiedDate DESC LIMIT 20",
         kw = escape_soql(k)
     );
     let resp = query_data(org_id, &query, true).await?;
@@ -233,6 +243,11 @@ pub async fn search_apex_classes(org_id: &str, keyword: &str) -> anyhow::Result<
             Some(ApexClassItem {
                 id: get_string(row, &["Id", "id"])?,
                 name: get_string(row, &["Name", "name"])?,
+                last_modified_date: get_string(row, &["LastModifiedDate", "lastModifiedDate"]),
+                last_modified_by_name: get_string(
+                    row,
+                    &["LastModifiedBy.Name", "LastModifiedByName", "lastModifiedByName"],
+                ),
             })
         })
         .collect();
@@ -482,6 +497,40 @@ fn parse_user_row(v: &Value) -> Option<SfUser> {
         name: get_string(v, &["Name", "name"])?,
         username: get_string(v, &["Username", "username"])?,
     })
+}
+
+#[derive(Debug, FromRow)]
+struct CachedUserRow {
+    id: String,
+    name: String,
+    username: String,
+}
+
+async fn search_users_cache(pool: &SqlitePool, org_id: &str, keyword: &str) -> anyhow::Result<Vec<SfUser>> {
+    let pattern = format!("%{}%", keyword);
+    let rows = sqlx::query_as::<_, CachedUserRow>(
+        r#"
+        SELECT id, name, username
+        FROM sf_users_cache
+        WHERE org_id = ?1
+          AND (username LIKE ?2 OR name LIKE ?2)
+        ORDER BY datetime(cached_at) DESC
+        LIMIT 10
+        "#,
+    )
+    .bind(org_id)
+    .bind(pattern)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| SfUser {
+            id: r.id,
+            name: r.name,
+            username: r.username,
+        })
+        .collect())
 }
 
 async fn delete_entity_trace_flags(org_id: &str, entity_id: &str) -> anyhow::Result<()> {

@@ -25,6 +25,8 @@ pub struct SfUser {
 pub struct ApexClassItem {
     pub id: String,
     pub name: String,
+    pub last_modified_date: Option<String>,
+    pub last_modified_by_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
