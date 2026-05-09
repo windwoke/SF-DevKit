@@ -1,6 +1,6 @@
 # SF DevKit
 
-[▶ Watch Demo](https://github.com/windwoke/SF-DevKit/releases/tag/v0.1.0-beta)
+[⬇ Download](https://github.com/windwoke/SF-DevKit/releases/latest) — macOS (.dmg) & Linux (.AppImage)
 
 A desktop toolkit for Salesforce developers. The app is built with **Tauri 2** (Rust backend + React + TypeScript frontend) and talks to your orgs via the **Salesforce CLI** (`sf`).
 
