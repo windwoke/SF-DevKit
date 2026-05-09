@@ -86,5 +86,5 @@ jobs:
 
             将 `.dmg` 安装到 Applications 文件夹，或运行 `.AppImage`。
           files: |
-            sf-devkit-*/*
+            sf-devkit-*/**
           generate_release_notes: true
