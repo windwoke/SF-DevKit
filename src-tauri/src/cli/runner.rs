@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::Stdio;
 
 use serde::Serialize;
@@ -12,15 +13,48 @@ pub struct CliOutput {
     pub success: bool,
 }
 
+/// Common install paths for the `sf` CLI on macOS (Homebrew, npm, sf installer).
+const COMMON_SF_PATHS: &[&str] = &[
+    "/opt/homebrew/bin/sf",
+    "/usr/local/bin/sf",
+    "/usr/local/lib/node_modules/@salesforce/cli/bin/sf",
+    "/usr/local/bin/sfdx",
+    "/opt/homebrew/bin/sfdx",
+];
+
+fn find_sf() -> Option<PathBuf> {
+    // 1. Try PATH lookup first (works in dev mode).
+    if let Ok(path) = which::which("sf") {
+        return Some(path);
+    }
+    if let Ok(path) = which::which("sfdx") {
+        return Some(path);
+    }
+    // 2. Fallback: check common install paths (for bundled macOS app).
+    for &p in COMMON_SF_PATHS {
+        let candidate = PathBuf::from(p);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 pub async fn run_command(args: &[&str], force_json: bool) -> anyhow::Result<CliOutput> {
-    let sf_path = which::which("sf")
-        .or_else(|_| which::which("sfdx"))
-        .map_err(|_| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
+    let sf_path = find_sf()
+        .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
 
     let mut cmd = Command::new(&sf_path);
     cmd.args(args);
     if force_json {
         cmd.arg("--json");
+    }
+
+    // Bundle macOS GUI apps lack user shell PATH – inject common Homebrew paths.
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
+    if !current_path.contains("/opt/homebrew") {
+        cmd.env("PATH", format!("{}:{}", extra, current_path));
     }
 
     let mut child = cmd

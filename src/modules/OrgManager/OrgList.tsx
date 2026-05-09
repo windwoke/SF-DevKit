@@ -122,6 +122,10 @@ export function OrgList() {
       queryClient.setQueryData(["orgs"], orgs);
       setNotice({ text: i18n.t("orgManager.notice.listRefreshed"), autoHide: true, variant: "success" });
     },
+    onError: (e) => {
+      const message = e instanceof Error ? e.message : String(e);
+      setNotice({ text: message, autoHide: true, variant: "error" });
+    },
   });
 
   const handleLoginConfirm = async () => {
