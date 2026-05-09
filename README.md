@@ -1,6 +1,6 @@
 # SF DevKit
 
-[![SF DevKit](https://img.youtube.com/vi/bbsbVlp84l4/maxresdefault.jpg)](https://youtu.be/bbsbVlp84l4)
+<video src="https://github.com/windwoke/SF-DevKit/releases/download/v0.2.0/sf-devkit-demo.mp4" controls width="720"></video>
 
 [⬇ Download](https://github.com/windwoke/SF-DevKit/releases/latest) — macOS (.dmg) & Linux (.AppImage)
 
