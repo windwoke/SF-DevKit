@@ -78,4 +78,4 @@ Other useful commands:
 
 ## License
 
-Private project (`"private": true` in `package.json`). Adjust licensing here if you open-source the repository.
+MIT
