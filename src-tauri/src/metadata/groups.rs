@@ -25,6 +25,7 @@ pub fn get_type_group(xml_name: &str) -> &'static str {
         | "CustomTab"
         | "CustomApplication"
         | "CustomLabel"
+        | "CustomLabels"
         | "ListView"
         | "HomePageLayout"
         | "CustomPageWebLink"

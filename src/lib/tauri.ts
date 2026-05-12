@@ -10,6 +10,8 @@ export interface MetadataTypeMeta {
   suffix: string | null;
   in_folder: boolean;
   group_name: string;
+  /** 子类型时为其父类型的 xmlName（如 CustomObject）；顶层为 null */
+  parent_xml_name: string | null;
 }
 
 export interface MetadataComponentMeta {

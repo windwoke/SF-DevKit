@@ -1,8 +1,13 @@
+use std::collections::HashSet;
+
 use sqlx::SqlitePool;
 
 use crate::cli::runner::run_command;
 use crate::metadata::groups::get_type_group;
 use crate::metadata::models::{ComponentMeta, MetadataTypeMeta};
+
+/// 标记该 org 的 types 列表已按 childXmlNames 展开逻辑重建，避免长期命中无子类型的旧缓存。
+const META_KEY_TYPES_CHILDREN_V2: &str = "metadata_types_children_v2";
 
 pub struct MetadataService {
     pool: SqlitePool,
@@ -19,6 +24,21 @@ impl MetadataService {
         force_refresh: bool,
     ) -> anyhow::Result<Vec<MetadataTypeMeta>> {
         eprintln!("[metadata.service] get_types enter org_id={} force_refresh={}", org_id, force_refresh);
+
+        if force_refresh {
+            sqlx::query("DELETE FROM metadata_types WHERE org_id = ?1")
+                .bind(org_id)
+                .execute(&self.pool)
+                .await?;
+            sqlx::query(
+                "DELETE FROM metadata_cache_meta WHERE org_id = ?1 AND cache_key = ?2",
+            )
+            .bind(org_id)
+            .bind(META_KEY_TYPES_CHILDREN_V2)
+            .execute(&self.pool)
+            .await?;
+        }
+
         if !force_refresh {
             let cached = sqlx::query_as::<_, MetadataTypeMeta>(
                 r#"
@@ -27,7 +47,8 @@ impl MetadataService {
                     directory_name,
                     suffix,
                     CAST(in_folder AS INTEGER) AS in_folder,
-                    COALESCE(group_name, '') AS group_name
+                    COALESCE(group_name, '') AS group_name,
+                    parent_xml_name
                 FROM metadata_types
                 WHERE org_id = ?1
                   AND datetime(last_synced, '+24 hours') > datetime('now')
@@ -39,7 +60,36 @@ impl MetadataService {
             .await?;
             eprintln!("[metadata.service] get_types cache rows={}", cached.len());
             if !cached.is_empty() {
-                return Ok(attach_groups(cached));
+                let has_child = cached.iter().any(|r| r.parent_xml_name.is_some());
+                if has_child {
+                    return Ok(attach_groups(cached));
+                }
+                let marker: Option<i32> = sqlx::query_scalar(
+                    "SELECT value_int FROM metadata_cache_meta WHERE org_id = ?1 AND cache_key = ?2",
+                )
+                .bind(org_id)
+                .bind(META_KEY_TYPES_CHILDREN_V2)
+                .fetch_optional(&self.pool)
+                .await?;
+                if marker == Some(1) {
+                    // 已由 v2 逻辑拉取过且 describe 下无独立子类型行（极少见）
+                    return Ok(attach_groups(cached));
+                }
+                eprintln!(
+                    "[metadata.service] get_types invalidate stale types cache org_id={} (no child rows, no v2 marker)",
+                    org_id
+                );
+                sqlx::query("DELETE FROM metadata_types WHERE org_id = ?1")
+                    .bind(org_id)
+                    .execute(&self.pool)
+                    .await?;
+                sqlx::query(
+                    "DELETE FROM metadata_cache_meta WHERE org_id = ?1 AND cache_key = ?2",
+                )
+                .bind(org_id)
+                .bind(META_KEY_TYPES_CHILDREN_V2)
+                .execute(&self.pool)
+                .await?;
             }
         }
 
@@ -55,12 +105,15 @@ impl MetadataService {
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("解析 metadata types 失败"))?;
 
-        let mut types = Vec::with_capacity(list.len());
+        let mut declared: HashSet<String> = HashSet::new();
+        let mut rows: Vec<MetadataTypeMeta> = Vec::new();
+
         for item in list {
             let xml_name = item["xmlName"].as_str().unwrap_or_default().to_string();
             if xml_name.is_empty() {
                 continue;
             }
+            declared.insert(xml_name.clone());
             let directory_name = item["directoryName"].as_str().map(str::to_string);
             let suffix = item["suffix"].as_str().map(str::to_string);
             let in_folder = item["inFolder"].as_bool().unwrap_or(false);
@@ -70,14 +123,15 @@ impl MetadataService {
             sqlx::query(
                 r#"
                 INSERT INTO metadata_types
-                    (org_id, xml_name, directory_name, suffix, in_folder, group_name, meta_file, last_synced)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
+                    (org_id, xml_name, directory_name, suffix, in_folder, group_name, meta_file, parent_xml_name, last_synced)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, datetime('now'))
                 ON CONFLICT(org_id, xml_name) DO UPDATE SET
                     directory_name = excluded.directory_name,
                     suffix = excluded.suffix,
                     in_folder = excluded.in_folder,
                     group_name = excluded.group_name,
                     meta_file = excluded.meta_file,
+                    parent_xml_name = NULL,
                     last_synced = datetime('now')
                 "#,
             )
@@ -91,17 +145,85 @@ impl MetadataService {
             .execute(&self.pool)
             .await?;
 
-            types.push(MetadataTypeMeta {
+            rows.push(MetadataTypeMeta {
                 xml_name,
                 directory_name,
                 suffix,
                 in_folder,
                 group_name,
+                parent_xml_name: None,
             });
         }
 
-        eprintln!("[metadata.service] get_types fetched types={}", types.len());
-        Ok(attach_groups(types))
+        for item in list {
+            let parent_xml = item["xmlName"].as_str().unwrap_or_default().to_string();
+            if parent_xml.is_empty() {
+                continue;
+            }
+            let Some(children) = item
+                .get("childXmlNames")
+                .or_else(|| item.get("childXMLNames"))
+                .and_then(|v| v.as_array())
+            else {
+                continue;
+            };
+            for c in children {
+                let Some(child_name) = c.as_str() else {
+                    continue;
+                };
+                if child_name.is_empty() {
+                    continue;
+                }
+                if declared.contains(child_name) {
+                    continue;
+                }
+                declared.insert(child_name.to_string());
+                let group_name = get_type_group(child_name).to_string();
+
+                sqlx::query(
+                    r#"
+                    INSERT INTO metadata_types
+                        (org_id, xml_name, directory_name, suffix, in_folder, group_name, meta_file, parent_xml_name, last_synced)
+                    VALUES (?1, ?2, NULL, NULL, 0, ?3, 1, ?4, datetime('now'))
+                    ON CONFLICT(org_id, xml_name) DO UPDATE SET
+                        group_name = excluded.group_name,
+                        parent_xml_name = excluded.parent_xml_name,
+                        last_synced = datetime('now')
+                    "#,
+                )
+                .bind(org_id)
+                .bind(child_name)
+                .bind(&group_name)
+                .bind(&parent_xml)
+                .execute(&self.pool)
+                .await?;
+
+                rows.push(MetadataTypeMeta {
+                    xml_name: child_name.to_string(),
+                    directory_name: None,
+                    suffix: None,
+                    in_folder: false,
+                    group_name,
+                    parent_xml_name: Some(parent_xml.clone()),
+                });
+            }
+        }
+
+        eprintln!("[metadata.service] get_types fetched types={}", rows.len());
+
+        sqlx::query(
+            r#"
+            INSERT INTO metadata_cache_meta (org_id, cache_key, value_int)
+            VALUES (?1, ?2, 1)
+            ON CONFLICT(org_id, cache_key) DO UPDATE SET value_int = excluded.value_int
+            "#,
+        )
+        .bind(org_id)
+        .bind(META_KEY_TYPES_CHILDREN_V2)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(attach_groups(rows))
     }
 
     pub async fn get_components(

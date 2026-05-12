@@ -233,6 +233,19 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
         .execute(&pool)
         .await?;
 
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS metadata_cache_meta (
+              org_id TEXT NOT NULL,
+              cache_key TEXT NOT NULL,
+              value_int INTEGER NOT NULL DEFAULT 0,
+              PRIMARY KEY (org_id, cache_key)
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
         for ddl in [
             "ALTER TABLE metadata_types ADD COLUMN directory_name TEXT",
             "ALTER TABLE metadata_types ADD COLUMN suffix TEXT",
@@ -240,6 +253,7 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
             "ALTER TABLE metadata_types ADD COLUMN group_name TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE metadata_types ADD COLUMN meta_file INTEGER DEFAULT 1",
             "ALTER TABLE metadata_types ADD COLUMN last_synced TEXT",
+            "ALTER TABLE metadata_types ADD COLUMN parent_xml_name TEXT",
             "ALTER TABLE metadata_components ADD COLUMN file_name TEXT",
             "ALTER TABLE metadata_components ADD COLUMN last_modified TEXT",
             "ALTER TABLE metadata_components ADD COLUMN created_by_name TEXT",

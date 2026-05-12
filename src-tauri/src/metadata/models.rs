@@ -8,6 +8,8 @@ pub struct MetadataTypeMeta {
     pub suffix: Option<String>,
     pub in_folder: bool,
     pub group_name: String,
+    /// 顶层类型为 `None`；来自 `childXmlNames` 的为父类型 `xmlName`（如 CustomObject → CustomField）。
+    pub parent_xml_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

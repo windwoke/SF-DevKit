@@ -686,6 +686,11 @@ button.danger {
   font-weight: 600;
 }
 
+.metadata-type-parent {
+  font-weight: 400;
+  color: #7f8ca8;
+}
+
 .metadata-count {
   color: #7f8ca8;
   font-size: 11px;
@@ -707,6 +712,47 @@ button.danger {
 
 .metadata-type-search-row {
   width: 100%;
+}
+
+.metadata-type-tools-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metadata-type-tools-bar .metadata-type-search-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.metadata-type-tools button.metadata-type-members-sync {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #33425d;
+  border-radius: 6px;
+  background: #1a2232;
+  color: #9fc0ff;
+  cursor: pointer;
+}
+
+.metadata-type-tools button.metadata-type-members-sync:hover:not(:disabled) {
+  border-color: #4a6aaf;
+  color: #cfe4ff;
+}
+
+.metadata-type-tools button.metadata-type-members-sync:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.metadata-type-tools button.metadata-type-members-sync svg {
+  width: 14px;
+  height: 14px;
 }
 
 .metadata-type-tools input {

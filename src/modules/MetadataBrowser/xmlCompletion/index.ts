@@ -228,7 +228,7 @@ function buildNameItems(
   return types.map((t) => ({
     label: t.xml_name,
     kind: monaco.languages.CompletionItemKind.EnumMember,
-    detail: t.group_name,
+    detail: t.parent_xml_name ? `${t.group_name} · ${t.parent_xml_name}` : t.group_name,
     insertText: t.xml_name,
     range,
     sortText: used.has(t.xml_name) ? `z_${t.xml_name}` : `a_${t.group_name}_${t.xml_name}`,
@@ -246,6 +246,7 @@ async function safeListMetadataTypes(orgId: string): Promise<MetadataTypeMeta[]>
       suffix: null,
       in_folder: false,
       group_name: "Fallback",
+      parent_xml_name: null,
     }));
   }
 }
