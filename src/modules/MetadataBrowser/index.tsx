@@ -1,7 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { MetadataTree } from "./MetadataTree";
-import { PackageXmlPanel } from "./PackageXmlPanel";
-import { RetrievePanel } from "./RetrievePanel";
+import { MetadataLayoutResizable } from "./MetadataLayoutResizable";
 
 export function MetadataBrowser() {
   const { t } = useTranslation();
@@ -10,11 +8,7 @@ export function MetadataBrowser() {
       <div className="module-header metadata-header">
         <h2>{t("metadataBrowser.title")}</h2>
       </div>
-      <div className="metadata-layout">
-        <MetadataTree />
-        <PackageXmlPanel />
-        <RetrievePanel />
-      </div>
+      <MetadataLayoutResizable />
     </section>
   );
 }

@@ -603,18 +603,61 @@ button.danger {
 .metadata-layout {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   border: 1px solid #2f3443;
   border-radius: 10px;
   overflow: hidden;
-  display: grid;
-  grid-template-columns: 300px 1fr 320px;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   background: #131925;
+}
+
+.metadata-layout-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.metadata-layout-pane > .metadata-pane {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.metadata-layout-pane-center {
+  flex: 1 1 0%;
+}
+
+.metadata-layout-resizer {
+  flex: 0 0 var(--metadata-resizer-w, 6px);
+  width: var(--metadata-resizer-w, 6px);
+  cursor: col-resize;
+  align-self: stretch;
+  background: #1a1f2e;
+  border-left: 1px solid #2f3443;
+  border-right: 1px solid #2f3443;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.metadata-layout-resizer:hover,
+.metadata-layout-resizer.dragging {
+  background: #243049;
+}
+
+.metadata-layout-resizer:focus-visible {
+  outline: 2px solid #4a6aaf;
+  outline-offset: -2px;
 }
 
 .metadata-pane {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
 }
 
 .metadata-pane + .metadata-pane {
@@ -639,10 +682,15 @@ button.danger {
 .metadata-tree-body {
   padding: 8px;
   overflow: auto;
+  min-width: 0;
 }
 
 .metadata-group {
   margin-bottom: 8px;
+}
+
+.metadata-type-block {
+  min-width: 0;
 }
 
 .metadata-group-title {
@@ -662,12 +710,22 @@ button.danger {
   padding: 4px 6px;
   border-radius: 6px;
   cursor: pointer;
+  min-width: 0;
 }
 
 .metadata-type-row {
   background: #1a2335;
   border: 1px solid #2e3f62;
   margin-bottom: 2px;
+}
+
+.metadata-type-row > .metadata-caret,
+.metadata-type-row > input[type="checkbox"] {
+  flex-shrink: 0;
+}
+
+.metadata-component-row > input[type="checkbox"] {
+  flex-shrink: 0;
 }
 
 .metadata-component-row:hover {
@@ -683,7 +741,11 @@ button.danger {
   font-size: 12px;
   color: #e7ecf8;
   flex: 1;
+  min-width: 0;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .metadata-type-parent {
@@ -694,12 +756,16 @@ button.danger {
 .metadata-count {
   color: #7f8ca8;
   font-size: 11px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  tabular-nums;
 }
 
 .metadata-component-list {
   margin: 4px 0 0 16px;
   padding-left: 8px;
   border-left: 1px solid #2c364c;
+  min-width: 0;
 }
 
 .metadata-type-tools {
@@ -779,6 +845,7 @@ button.danger {
 .metadata-component-row {
   margin: 1px 0;
   padding-left: 8px;
+  min-width: 0;
 }
 
 .metadata-component-row:hover {

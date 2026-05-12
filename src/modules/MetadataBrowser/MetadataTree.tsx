@@ -133,10 +133,8 @@ export function MetadataTree() {
       list.push(item);
       map.set(group, list);
     }
-    for (const list of map.values()) {
-      const sorted = sortTypesWithinGroup(list);
-      list.length = 0;
-      list.push(...sorted);
+    for (const [group, list] of map) {
+      map.set(group, sortTypesWithinGroup(list));
     }
     return map;
   }, [typesQuery.data, searchQuery]);
