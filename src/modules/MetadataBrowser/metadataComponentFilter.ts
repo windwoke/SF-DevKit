@@ -17,5 +17,10 @@ export function filterMetadataComponents(
   const normalized = normKey(query);
   if (!normalized) return items;
 
-  return items.filter((item) => normKey(item.full_name).includes(normalized));
+  return items.filter((item) => {
+    const fn = normKey(item.full_name);
+    if (fn.includes(normalized)) return true;
+    const compact = normKey(item.full_name.replace(/[^a-zA-Z0-9_]+/g, ""));
+    return compact.includes(normalized);
+  });
 }

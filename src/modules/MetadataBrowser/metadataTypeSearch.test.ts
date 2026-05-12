@@ -37,7 +37,7 @@ describe("normalizeMetadataSearchQuery", () => {
 });
 
 describe("typeMatchesMetadataSearch", () => {
-  it("matches CustomLabel by custom or label", () => {
+  it("matches by xmlName substring", () => {
     const row = typeRow({
       xml_name: "CustomLabel",
       parent_xml_name: "CustomLabels",
@@ -45,11 +45,24 @@ describe("typeMatchesMetadataSearch", () => {
     });
     expect(typeMatchesMetadataSearch(row, "custom")).toBe(true);
     expect(typeMatchesMetadataSearch(row, "label")).toBe(true);
+    expect(typeMatchesMetadataSearch(row, "customlabel")).toBe(true);
   });
 
-  it("matches CustomLabels bundle and exposes singular alias", () => {
+  it("matches child type by dotted and interpunct forms and compact customf", () => {
+    const row = typeRow({
+      xml_name: "CustomField",
+      parent_xml_name: "CustomObject",
+      group_name: "Data model",
+    });
+    expect(typeMatchesMetadataSearch(row, "customfield.customobject")).toBe(true);
+    expect(typeMatchesMetadataSearch(row, "customfield · customobject")).toBe(true);
+    expect(typeMatchesMetadataSearch(row, "customobject.customfield")).toBe(true);
+    expect(typeMatchesMetadataSearch(row, "customf")).toBe(true);
+  });
+
+  it("matches CustomLabels and singular alias without spaced CamelCase", () => {
     const row = typeRow({ xml_name: "CustomLabels", group_name: "Other" });
     expect(typeMatchesMetadataSearch(row, "customlabel")).toBe(true);
-    expect(typeMatchesMetadataSearch(row, "custom label")).toBe(true);
+    expect(typeMatchesMetadataSearch(row, "customlabels")).toBe(true);
   });
 });

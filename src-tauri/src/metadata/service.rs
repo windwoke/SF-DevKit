@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use sqlx::SqlitePool;
 
@@ -8,6 +8,21 @@ use crate::metadata::models::{ComponentMeta, MetadataTypeMeta};
 
 /// 标记该 org 的 types 列表已按 childXmlNames 展开逻辑重建，避免长期命中无子类型的旧缓存。
 const META_KEY_TYPES_CHILDREN_V2: &str = "metadata_types_children_v2";
+
+/// 正常 `sf org list metadata-types` 下，这些父类型在解析 `childXmlNames` 后一定会出现对应子类型行。
+/// 若 SQLite 里只有父、没有子，且所有行的 `parent_xml_name` 都为空，则多为「打了 v2 标记却从未写入子行」的损坏缓存，不能信任 marker。
+const EXPECTED_PARENT_CHILD_PAIRS: &[(&str, &str)] = &[
+    ("CustomObject", "CustomField"),
+    ("CustomLabels", "CustomLabel"),
+    ("ExternalDataSource", "ExternalDataSrcDescriptor"),
+];
+
+fn cache_likely_missing_child_expansion(cached: &[MetadataTypeMeta]) -> bool {
+    let names: HashSet<&str> = cached.iter().map(|r| r.xml_name.as_str()).collect();
+    EXPECTED_PARENT_CHILD_PAIRS
+        .iter()
+        .any(|(parent, child)| names.contains(parent) && !names.contains(child))
+}
 
 pub struct MetadataService {
     pool: SqlitePool,
@@ -71,13 +86,19 @@ impl MetadataService {
                 .bind(META_KEY_TYPES_CHILDREN_V2)
                 .fetch_optional(&self.pool)
                 .await?;
-                if marker == Some(1) {
+                let missing_expected = cache_likely_missing_child_expansion(&cached);
+                if marker == Some(1) && !missing_expected {
                     // 已由 v2 逻辑拉取过且 describe 下无独立子类型行（极少见）
                     return Ok(attach_groups(cached));
                 }
                 eprintln!(
-                    "[metadata.service] get_types invalidate stale types cache org_id={} (no child rows, no v2 marker)",
-                    org_id
+                    "[metadata.service] get_types invalidate stale types cache org_id={} reason={}",
+                    org_id,
+                    if missing_expected {
+                        "expected child xml rows absent (ignore v2 marker)"
+                    } else {
+                        "no child rows, no v2 marker"
+                    }
                 );
                 sqlx::query("DELETE FROM metadata_types WHERE org_id = ?1")
                     .bind(org_id)
@@ -335,13 +356,43 @@ impl MetadataService {
 }
 
 fn attach_groups(items: Vec<MetadataTypeMeta>) -> Vec<MetadataTypeMeta> {
-    items
+    let mut out: Vec<MetadataTypeMeta> = items
         .into_iter()
         .map(|mut item| {
             item.group_name = get_type_group(&item.xml_name).to_string();
             item
         })
-        .collect()
+        .collect();
+
+    // 子类型在 groups.rs 未单独列出时会落在 Other；若其父类型已有明确分组，则继承父分组
+    // （可多轮：父先被提升后，子再在下一轮跟上）。
+    for _ in 0..24 {
+        let xml_to_group: HashMap<String, String> = out
+            .iter()
+            .map(|i| (i.xml_name.clone(), i.group_name.clone()))
+            .collect();
+        let mut changed = false;
+        for item in &mut out {
+            if item.group_name != "Other" {
+                continue;
+            }
+            let Some(parent) = item.parent_xml_name.as_ref() else {
+                continue;
+            };
+            let Some(g) = xml_to_group.get(parent) else {
+                continue;
+            };
+            if g != "Other" && g.as_str() != item.group_name.as_str() {
+                item.group_name.clone_from(g);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    out
 }
 
 fn parse_cli_json(stdout: &str) -> anyhow::Result<serde_json::Value> {

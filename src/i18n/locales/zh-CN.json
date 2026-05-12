@@ -283,13 +283,16 @@
   },
   "metadataBrowser": {
     "title": "元数据浏览器",
+    "layout": {
+      "splitterAria": "拖动调节相邻栏宽度"
+    },
     "tree": {
       "pickOrg": "请先在 Org 管理中选择一个 Org。",
       "loadingTypes": "正在加载 Metadata Types…",
       "loadError": "加载失败：{{message}}。可先切换到 Org 管理确认当前 Org 可用后再点「同步」。",
       "paneTitle": "元数据树",
-      "searchPlaceholder": "筛选类型：输入关键字…",
-      "searchTitle": "在类型的 xmlName、父类型、Parent.Child 组合、CamelCase 拆词（如 CustomLabel → custom label）及目录名中做连续子串匹配（忽略大小写）。仅过滤左侧类型树，不搜索各类型下的成员列表。",
+      "searchPlaceholder": "筛选类型或子类型…",
+      "searchTitle": "在类型的 xmlName、父类型、Parent.Child / Child.Parent、「子 · 父」展示形式及目录名中做连续子串匹配（忽略大小写）；不拆 CamelCase、不插空格。仅过滤左侧类型树，不搜索各类型下的成员列表。",
       "selectedChip": "已选 {{count}}",
       "refresh": "同步",
       "refreshTitle": "仅从 Salesforce（sf CLI）强制重新拉取当前 Org 的元数据类型目录；不会批量拉取各类型成员。各类型展开后的成员列表请点该类型下的刷新图标单独更新。不会收起已展开行，也不会清空勾选。",

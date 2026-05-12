@@ -283,13 +283,16 @@
   },
   "metadataBrowser": {
     "title": "Metadata Browser",
+    "layout": {
+      "splitterAria": "Drag to resize adjacent panels"
+    },
     "tree": {
       "pickOrg": "Select an org in Org Manager first.",
       "loadingTypes": "Loading metadata types…",
       "loadError": "Failed to load: {{message}}. Switch to Org Manager to verify the org, then Sync.",
       "paneTitle": "Metadata tree",
-      "searchPlaceholder": "Filter types: enter a keyword…",
-      "searchTitle": "Case-insensitive substring match against type xmlName, parent type, Parent.Child, CamelCase-split words (e.g. CustomLabel → custom label), and directory names. Only filters the left type tree, not members under each type.",
+      "searchPlaceholder": "Filter types or subtypes…",
+      "searchTitle": "Case-insensitive substring match on xmlName, parent, Parent.Child / Child.Parent, UI-style “child · parent”, and directory name. Does not split CamelCase or insert spaces. Only filters the left type tree, not members under each type.",
       "selectedChip": "Selected: {{count}}",
       "refresh": "Sync",
       "refreshTitle": "Force-refresh only the metadata type catalog for this org (sf CLI). Does not reload every type's members. After expanding a type, use its refresh icon to reload that type's member list. Does not collapse rows or clear checkboxes.",

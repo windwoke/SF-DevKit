@@ -18,43 +18,45 @@ function normalizeSearchText(s: string): string {
     .toLowerCase();
 }
 
+/** 去掉非字母数字下划线后拼成一串，便于跨 `.`、`·` 仍按连续子串搜（如 customf）。 */
+function compactIdentifier(s: string): string {
+  return normalizeSearchText(s.replace(/[^a-zA-Z0-9_]+/g, ""));
+}
+
 export function normalizeMetadataSearchQuery(raw: string): string {
   return normalizeSearchText(raw.trim());
 }
 
-/** 将 CamelCase 的 xmlName 转成带空格短语，便于搜「custom label」这类自然语言。 */
-function camelCaseXmlNameToSpaced(s: string): string {
-  return s
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
-    .trim();
-}
-
-/** 类型搜索用的合并文本：API 名、分词后的可读形式、父类型、目录名等。 */
-function typeSearchHaystackRaw(item: MetadataTypeMeta): string {
-  const parts: string[] = [
-    item.xml_name,
-    camelCaseXmlNameToSpaced(item.xml_name),
-  ];
+/** 参与匹配的原始片段（不拆 CamelCase、不插空格）。 */
+function typeSearchTokens(item: MetadataTypeMeta): string[] {
+  const out: string[] = [item.xml_name];
   if (item.parent_xml_name) {
-    parts.push(item.parent_xml_name);
-    parts.push(camelCaseXmlNameToSpaced(item.parent_xml_name));
-    parts.push(`${item.parent_xml_name}.${item.xml_name}`);
+    const p = item.parent_xml_name;
+    const c = item.xml_name;
+    out.push(p, `${p}.${c}`, `${c}.${p}`, `${c} · ${p}`, `${p} · ${c}`);
   }
   if (item.directory_name) {
-    parts.push(item.directory_name);
+    out.push(item.directory_name);
   }
-  // Salesforce 顶层为 CustomLabels（复数），子类型为 CustomLabel；用户常按单数搜。
   if (item.xml_name === "CustomLabels") {
-    parts.push("CustomLabel", camelCaseXmlNameToSpaced("CustomLabel"));
+    out.push("CustomLabel");
   }
-  return parts.join(" ");
+  return out;
 }
 
 export function typeMatchesMetadataSearch(item: MetadataTypeMeta, queryLower: string): boolean {
   if (!queryLower) return true;
-  const haystack = normalizeSearchText(typeSearchHaystackRaw(item));
   const q = normalizeSearchText(queryLower.trim());
   if (!q) return true;
-  return haystack.includes(q);
+
+  const tokens = typeSearchTokens(item);
+  for (const t of tokens) {
+    const n = normalizeSearchText(t);
+    if (n.includes(q)) return true;
+  }
+
+  const glued = compactIdentifier(tokens.join(""));
+  if (glued.includes(q)) return true;
+
+  return false;
 }

@@ -159,7 +159,10 @@ export function MetadataTree() {
         <h3>{t("metadataBrowser.tree.paneTitle")}</h3>
         <div className="metadata-tree-tools">
           <input
-            type="search"
+            type="text"
+            enterKeyHint="search"
+            autoComplete="off"
+            spellCheck={false}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("metadataBrowser.tree.searchPlaceholder")}
