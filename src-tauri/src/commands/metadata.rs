@@ -65,6 +65,7 @@ pub async fn retrieve_metadata(
     app: tauri::AppHandle,
     state: State<'_, DbState>,
     org_id: String,
+    org_alias: String,
     selections: Vec<SelectionItem>,
     output_dir: String,
     output_mode: String,
@@ -76,6 +77,7 @@ pub async fn retrieve_metadata(
         .execute(
             app,
             &org_id,
+            &org_alias,
             selections,
             &output_dir,
             &output_mode,

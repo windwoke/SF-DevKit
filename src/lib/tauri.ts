@@ -63,13 +63,22 @@ export const tauriApi = {
     }),
   retrieveMetadata: (payload: {
     orgId: string;
+    orgAlias: string;
     selections: MetadataSelectionItem[];
     outputDir: string;
     outputMode: RetrieveOutputMode;
     apiVersion: string;
     eventId: string;
   }) =>
-    invoke<RetrieveResult>("retrieve_metadata", payload),
+    invoke<RetrieveResult>("retrieve_metadata", {
+      orgId: payload.orgId,
+      orgAlias: payload.orgAlias,
+      selections: payload.selections,
+      outputDir: payload.outputDir,
+      outputMode: payload.outputMode,
+      apiVersion: payload.apiVersion,
+      eventId: payload.eventId,
+    }),
   cancelRetrieve: (eventId: string) => invoke<void>("cancel_retrieve", { eventId }),
   revealInFinder: (path: string) => invoke<void>("reveal_in_finder", { path }),
   refreshSchemaCache: (payload: { orgId: string; objectName?: string | null }) =>

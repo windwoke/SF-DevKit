@@ -323,6 +323,8 @@
       "logEmpty": "执行日志将显示在这里。",
       "logDone": "完成，耗时 {{seconds}}s",
       "logCancelRequested": "已请求取消任务。",
+      "running": "正在下载 {{count}} 个组件…",
+      "successMessage": "下载完成！输出目录：",
       "errors": {
         "needOrg": "请先选择 Org",
         "needOutputDir": "请先选择输出目录",

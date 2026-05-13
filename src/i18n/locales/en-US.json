@@ -323,6 +323,8 @@
       "logEmpty": "Execution log appears here.",
       "logDone": "Done in {{seconds}} s",
       "logCancelRequested": "Cancel requested.",
+      "running": "Retrieving {{count}} items…",
+      "successMessage": "Retrieve completed successfully! Output:",
       "errors": {
         "needOrg": "Select an org first",
         "needOutputDir": "Choose an output folder first",

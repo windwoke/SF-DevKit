@@ -32,6 +32,7 @@ impl RetrieveRunner {
         &self,
         app: AppHandle,
         org_id: &str,
+        org_alias: &str,
         selections: Vec<SelectionItem>,
         output_dir: &str,
         output_mode: &str,
@@ -54,8 +55,13 @@ impl RetrieveRunner {
         let internal_output_arg = ".sfdevkit-output";
         tokio::fs::create_dir_all(&internal_output_dir).await?;
         let output_token = build_output_token();
-        let target_extract_dir = PathBuf::from(output_dir).join(format!("retrieve-{}", output_token));
-        let target_zip_file = PathBuf::from(output_dir).join(format!("retrieve-{}.zip", output_token));
+        let safe_alias: String = org_alias
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .collect();
+        let prefix = if safe_alias.is_empty() { "retrieve".to_string() } else { safe_alias };
+        let target_extract_dir = PathBuf::from(output_dir).join(format!("{}-{}", prefix, output_token));
+        let target_zip_file = PathBuf::from(output_dir).join(format!("{}-{}.zip", prefix, output_token));
 
         let mut cmd = Command::new(&sf_path);
         cmd.args([

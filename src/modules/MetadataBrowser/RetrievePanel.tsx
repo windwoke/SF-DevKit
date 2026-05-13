@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "../../i18n";
 import { tauriApi } from "../../lib/tauri";
@@ -14,24 +14,57 @@ interface LogLine {
 
 export function RetrievePanel() {
   const { t } = useTranslation();
-  const { currentOrg } = useOrgStore();
-  const { selectedCount, toSelectionList, clearSelection, outputDir, setOutputDir, outputMode, setOutputMode, apiVersion, setApiVersion } =
-    useMetadataStore();
+  const { currentOrg, orgs } = useOrgStore();
+  const currentOrgInfo = orgs.find((o) => o.id === currentOrg);
+  const orgAlias = currentOrgInfo?.alias ?? currentOrg ?? "";
+  const {
+    selectedCount,
+    toSelectionList,
+    clearSelection,
+    outputDir,
+    setOutputDir,
+    outputMode,
+    setOutputMode,
+    apiVersion,
+    setApiVersion,
+  } = useMetadataStore();
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [lastOutputPath, setLastOutputPath] = useState("");
+  const [showSuccess, setShowSuccess] = useState(false);
   const eventIdRef = useRef("");
   const unlistenRef = useRef<null | (() => void)>(null);
+  const logPanelRef = useRef<HTMLDivElement>(null);
+  const runningRef = useRef(false);
 
-  const retrieveMutation = useMutation({
-    mutationFn: async () => {
+  // Auto-scroll to bottom when new logs appear
+  useEffect(() => {
+    if (logPanelRef.current) {
+      logPanelRef.current.scrollTop = logPanelRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  // Auto-dismiss success banner after 5 seconds
+  useEffect(() => {
+    if (!showSuccess) return;
+    const timer = setTimeout(() => setShowSuccess(false), 5000);
+    return () => clearTimeout(timer);
+  }, [showSuccess]);
+
+  const doRetrieve = useCallback(async () => {
+    if (runningRef.current) throw new Error("Already running");
+    runningRef.current = true;
+
+    try {
       if (!currentOrg) throw new Error(String(i18n.t("metadataBrowser.retrieve.errors.needOrg")));
       if (!outputDir) throw new Error(String(i18n.t("metadataBrowser.retrieve.errors.needOutputDir")));
       const selections = toSelectionList();
       if (selections.length === 0) throw new Error(String(i18n.t("metadataBrowser.retrieve.errors.needSelection")));
-      const eventId = `metadata-retrieve-${Date.now()}`;
+
+      const eventId = `metadata-retrieve-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       eventIdRef.current = eventId;
       setLogs([]);
       setLastOutputPath("");
+      setShowSuccess(false);
 
       const unlisten = await listen<{ event_type: LogLine["type"]; data: string }>(eventId, ({ payload }) => {
         setLogs((prev) => [...prev, { type: payload.event_type, text: payload.data }]);
@@ -40,6 +73,7 @@ export function RetrievePanel() {
 
       const result = await tauriApi.retrieveMetadata({
         orgId: currentOrg,
+        orgAlias,
         selections,
         outputDir,
         outputMode,
@@ -47,9 +81,16 @@ export function RetrievePanel() {
         eventId,
       });
       return result;
-    },
+    } finally {
+      runningRef.current = false;
+    }
+  }, [currentOrg, orgAlias, outputDir, outputMode, apiVersion, toSelectionList]);
+
+  const retrieveMutation = useMutation({
+    mutationFn: doRetrieve,
     onSuccess: (result) => {
       setLastOutputPath(result.output_path);
+      setShowSuccess(true);
       setLogs((prev) => [
         ...prev,
         {
@@ -81,11 +122,21 @@ export function RetrievePanel() {
     if (picked) setOutputDir(picked);
   };
 
+  const isRunning = retrieveMutation.isPending;
+  const selectedComponentCount = selectedCount();
+
   return (
     <section className="metadata-pane metadata-retrieve-pane">
       <header className="metadata-pane-header">
         <h3>{t("metadataBrowser.retrieve.title")}</h3>
       </header>
+
+      {showSuccess ? (
+        <div className="metadata-success-banner">
+          {t("metadataBrowser.retrieve.successMessage")}
+          {lastOutputPath ? <span className="metadata-success-path">{lastOutputPath}</span> : null}
+        </div>
+      ) : null}
 
       <div className="metadata-field">
         <label>{t("metadataBrowser.retrieve.outputDir")}</label>
@@ -105,7 +156,8 @@ export function RetrievePanel() {
             {t("metadataBrowser.retrieve.extract")}
           </label>
           <label>
-            <input type="radio" checked={outputMode === "zip"} onChange={() => setOutputMode("zip")} /> {t("metadataBrowser.retrieve.keepZip")}
+            <input type="radio" checked={outputMode === "zip"} onChange={() => setOutputMode("zip")} />{" "}
+            {t("metadataBrowser.retrieve.keepZip")}
           </label>
         </div>
       </div>
@@ -122,8 +174,8 @@ export function RetrievePanel() {
       </div>
 
       <div className="metadata-summary-row">
-        <span>{t("metadataBrowser.retrieve.selectedComponents", { count: selectedCount() })}</span>
-        <button type="button" onClick={clearSelection} disabled={selectedCount() === 0}>
+        <span>{t("metadataBrowser.retrieve.selectedComponents", { count: selectedComponentCount })}</span>
+        <button type="button" onClick={clearSelection} disabled={selectedComponentCount === 0}>
           {t("metadataBrowser.retrieve.clear")}
         </button>
       </div>
@@ -133,11 +185,11 @@ export function RetrievePanel() {
           type="button"
           className="metadata-primary-btn"
           onClick={() => void retrieveMutation.mutateAsync()}
-          disabled={retrieveMutation.isPending || !currentOrg}
+          disabled={isRunning || !currentOrg}
         >
-          {retrieveMutation.isPending ? t("metadataBrowser.retrieve.downloading") : t("metadataBrowser.retrieve.download")}
+          {isRunning ? t("metadataBrowser.retrieve.downloading") : t("metadataBrowser.retrieve.download")}
         </button>
-        <button type="button" onClick={() => cancelMutation.mutate()} disabled={!retrieveMutation.isPending}>
+        <button type="button" onClick={() => cancelMutation.mutate()} disabled={!isRunning}>
           {t("metadataBrowser.retrieve.cancel")}
         </button>
         <button type="button" onClick={() => tauriApi.revealInFinder(lastOutputPath)} disabled={!lastOutputPath}>
@@ -145,7 +197,16 @@ export function RetrievePanel() {
         </button>
       </div>
 
-      <div className="metadata-log-panel">
+      {isRunning ? (
+        <div className="metadata-progress-bar-track">
+          <div className="metadata-progress-bar-indeterminate" />
+          <span className="metadata-progress-label">
+            {t("metadataBrowser.retrieve.running", { count: selectedComponentCount })}
+          </span>
+        </div>
+      ) : null}
+
+      <div className="metadata-log-panel" ref={logPanelRef}>
         {logs.length === 0 ? <div className="metadata-muted">{t("metadataBrowser.retrieve.logEmpty")}</div> : null}
         {logs.map((line, idx) => (
           <div key={`${line.type}-${idx}`} className={`metadata-log-line metadata-log-${line.type}`}>
