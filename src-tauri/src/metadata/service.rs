@@ -309,9 +309,14 @@ impl MetadataService {
             .ok_or_else(|| anyhow::anyhow!("解析 metadata components 失败"))?;
 
         let mut out = Vec::with_capacity(list.len());
+        let mut seen = HashSet::new();
         for item in list {
             let full_name = item["fullName"].as_str().unwrap_or_default().to_string();
             if full_name.is_empty() {
+                continue;
+            }
+            // sf CLI 偶有重复 full_name，去重避免前端 React key 冲突
+            if !seen.insert(full_name.clone()) {
                 continue;
             }
             let file_name = item["fileName"].as_str().map(str::to_string);

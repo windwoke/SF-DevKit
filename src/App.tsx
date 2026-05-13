@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Sidebar } from "./components/Layout/Sidebar";
 import { TopBar } from "./components/Layout/TopBar";
 import { ComingSoon } from "./modules/ComingSoon";
@@ -43,6 +44,21 @@ export default function App() {
       render: LogViewer,
     },
   ];
+  // Keyboard shortcuts: Cmd/Ctrl + 1..6 to switch modules
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const idx = Number(e.key) - 1; // "1" → 0, "2" → 1, ...
+      if (idx >= 0 && idx < moduleRegistry.length) {
+        setActiveModule(moduleRegistry[idx].id);
+        e.preventDefault();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  });
+
   const active = moduleRegistry.find((m) => m.id === activeModule) ?? moduleRegistry[0];
   const ActiveComponent = active.render;
 

@@ -263,14 +263,23 @@ function TypeRow({ item }: { item: MetadataTypeMeta }) {
   const sortedComponents = useMemo(() => {
     const data = compQuery.data ?? [];
     if (data.length <= 1) return data;
-    return [...data].sort((a, b) =>
+    // 去重：sf CLI 可能返回重复的 full_name，React key 冲突会导致子项被重复渲染
+    const seen = new Set<string>();
+    const deduped: MetadataComponentMeta[] = [];
+    for (const item of data) {
+      if (!seen.has(item.full_name)) {
+        seen.add(item.full_name);
+        deduped.push(item);
+      }
+    }
+    return deduped.sort((a, b) =>
       a.full_name.localeCompare(b.full_name, undefined, { sensitivity: "base", numeric: true }),
     );
   }, [compQuery.data]);
 
   const members = sortedComponents.map((c) => c.full_name);
   const selectionState = getTypeSelectionState(item.xml_name, members);
-  const filtered = filterMetadataComponents(sortedComponents, childQuery, item.xml_name);
+  const filtered = filterMetadataComponents(sortedComponents, childQuery);
   const filteredNames = filtered.map((item) => item.full_name);
   const selectedSet = new Set(selection[item.xml_name] ?? []);
   const hasLoadedMembers = !!compQuery.data;

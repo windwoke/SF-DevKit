@@ -8,19 +8,15 @@ function normKey(s: string): string {
     .toLowerCase();
 }
 
-/** 子项过滤：整条 full_name 与搜索词同一套规范化后，做忽略大小写的子串包含。 */
+/** 子项过滤：对整条 full_name 做忽略大小写的子串包含。
+ *  注意：只对原始 full_name 做匹配，不使用 compact 形式（去除分隔符）以避免
+ *  跨 Object.Field 边界的误匹配（如 "hdCl" 误匹配 Opportunity__hd.CloseDate__c）。 */
 export function filterMetadataComponents(
   items: MetadataComponentMeta[],
   query: string,
-  _metadataType: string,
 ): MetadataComponentMeta[] {
   const normalized = normKey(query);
   if (!normalized) return items;
 
-  return items.filter((item) => {
-    const fn = normKey(item.full_name);
-    if (fn.includes(normalized)) return true;
-    const compact = normKey(item.full_name.replace(/[^a-zA-Z0-9_]+/g, ""));
-    return compact.includes(normalized);
-  });
+  return items.filter((item) => normKey(item.full_name).includes(normalized));
 }

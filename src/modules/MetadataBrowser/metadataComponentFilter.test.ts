@@ -14,22 +14,22 @@ describe("filterMetadataComponents", () => {
   ];
 
   it("contains match on object part", () => {
-    const out = filterMetadataComponents(sample, "AI_Chat_Message__c", "CustomField");
+    const out = filterMetadataComponents(sample, "AI_Chat_Message__c");
     expect(out.map((r) => r.full_name)).toEqual(["AI_Chat_Message__c.Body__c"]);
   });
 
   it("contains match is case-insensitive on full Object.Field", () => {
-    const out = filterMetadataComponents(sample, "OPPORTUNITY__HD.CLOSEDATE", "CustomField");
+    const out = filterMetadataComponents(sample, "OPPORTUNITY__HD.CLOSEDATE");
     expect(out.map((r) => r.full_name)).toEqual(["Opportunity__hd.CloseDate__c"]);
   });
 
   it("contains field fragment", () => {
-    const out = filterMetadataComponents(sample, "CloseDate", "CustomField");
+    const out = filterMetadataComponents(sample, "CloseDate");
     expect(out.map((r) => r.full_name)).toEqual(["Opportunity__hd.CloseDate__c"]);
   });
 
   it("no false match when substring absent", () => {
-    const out = filterMetadataComponents(sample, "AI_Chat_Message__c", "CustomField");
+    const out = filterMetadataComponents(sample, "AI_Chat_Message__c");
     expect(out.some((r) => r.full_name === "Opportunity__hd.CloseDate__c")).toBe(false);
   });
 });
