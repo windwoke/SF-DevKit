@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Sidebar } from "./components/Layout/Sidebar";
 import { TopBar } from "./components/Layout/TopBar";
 import { ComingSoon } from "./modules/ComingSoon";
+import { Deployer } from "./modules/Deployer";
 import { LogViewer } from "./modules/LogViewer";
 import { MetadataBrowser } from "./modules/MetadataBrowser";
 import { OrgManager } from "./modules/OrgManager";
@@ -30,13 +31,7 @@ export default function App() {
     {
       id: "deployer",
       label: t("modules.deployer"),
-      render: () => (
-        <ComingSoon
-          title={t("modules.deployer")}
-          summary={t("comingSoon.deployer.summary")}
-          bullets={t("comingSoon.deployer.bullets", { returnObjects: true }) as string[]}
-        />
-      ),
+      render: Deployer,
     },
     {
       id: "logs",

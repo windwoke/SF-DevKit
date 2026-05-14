@@ -1,3 +1,4 @@
+pub mod deployer;
 pub mod export;
 pub mod log_viewer;
 pub mod metadata;

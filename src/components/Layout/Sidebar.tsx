@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGUAGES } from "../../i18n";
+import { useSettingsStore, type DiffTool } from "../../store/settings";
 import type { ModuleId } from "../../store/ui";
 import { IconSettingsNav, SidebarModuleIcon } from "./SidebarIcons";
 
@@ -19,6 +20,14 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
   const { t, i18n } = useTranslation();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsWrapRef = useRef<HTMLDivElement>(null);
+  const {
+    diffTool,
+    diffToolPath,
+    diffCustomCommand,
+    setDiffTool,
+    setDiffToolPath,
+    setDiffCustomCommand,
+  } = useSettingsStore();
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -37,6 +46,12 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [settingsOpen]);
+
+  const diffToolOptions: { value: DiffTool; label: string }[] = [
+    { value: "vscode", label: "VSCode" },
+    { value: "beyond_compare", label: "Beyond Compare" },
+    { value: "custom", label: t("settings.custom") },
+  ];
 
   return (
     <aside className="sidebar">
@@ -73,6 +88,8 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
         {settingsOpen ? (
           <div className="sidebar-settings-panel" role="dialog" aria-label={t("sidebar.settings")}>
             <div className="sidebar-settings-panel-title">{t("sidebar.settings")}</div>
+
+            {/* Language */}
             <label className="sidebar-settings-lang">
               <span>{t("topbar.language")}</span>
               <select
@@ -86,6 +103,59 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
                 ))}
               </select>
             </label>
+
+            {/* Diff Tool */}
+            <div className="sidebar-settings-divider" />
+            <div className="sidebar-settings-section-title">{t("settings.diffTool")}</div>
+            <div className="sidebar-settings-diff-options">
+              {diffToolOptions.map((opt) => (
+                <label key={opt.value} className="sidebar-settings-radio">
+                  <input
+                    type="radio"
+                    name="diffTool"
+                    checked={diffTool === opt.value}
+                    onChange={() => setDiffTool(opt.value)}
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))}
+            </div>
+
+            {diffTool === "vscode" && (
+              <label className="sidebar-settings-field">
+                <span>{t("settings.path")}</span>
+                <input
+                  value={diffToolPath}
+                  onChange={(e) => setDiffToolPath(e.target.value)}
+                  placeholder="code (auto-detect)"
+                />
+              </label>
+            )}
+
+            {diffTool === "beyond_compare" && (
+              <label className="sidebar-settings-field">
+                <span>{t("settings.path")}</span>
+                <input
+                  value={diffToolPath}
+                  onChange={(e) => setDiffToolPath(e.target.value)}
+                  placeholder="bcompare (auto-detect)"
+                />
+              </label>
+            )}
+
+            {diffTool === "custom" && (
+              <label className="sidebar-settings-field">
+                <span>{t("settings.command")}</span>
+                <input
+                  value={diffCustomCommand}
+                  onChange={(e) => setDiffCustomCommand(e.target.value)}
+                  placeholder={'bcompare "{working}" "{reference}"'}
+                />
+                <span className="sidebar-settings-hint">
+                  {t("settings.commandHint")}
+                </span>
+              </label>
+            )}
           </div>
         ) : null}
       </div>

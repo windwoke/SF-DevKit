@@ -373,14 +373,61 @@
         "Execution logs and error pinpointing",
         "Reusable run history"
       ]
-    },
-    "deployer": {
-      "summary": "Deploy and validate local project changes with faster failure diagnosis.",
-      "bullets": [
-        "One-click Deploy / Validate",
-        "Change scope and deployment log tracking",
-        "Failure details and retry support"
-      ]
     }
+  },
+  "deployer": {
+    "workingDir": "Working Directory",
+    "workingDirPlaceholder": "Click to select working directory…",
+    "fromMetadataBrowser": "(from Metadata Browser · {{time}})",
+    "openInFinder": "Reveal in Finder",
+    "targetOrg": "Target Org",
+    "selectOrg": "Select org…",
+    "diffOptional": "Diff (optional)",
+    "retrieveAndDiff": "Retrieve & Diff",
+    "retrieving": "Retrieving…",
+    "reopenDiff": "Reopen Diff Tool",
+    "referenceReady": "Reference ready · edit working dir then deploy",
+    "diffToolConfig": "Diff tool settings",
+    "diffCommandLabel": "Diff Command",
+    "diffCommandHint": "Variables: {working} = working dir, {reference} = reference dir. Example: code --diff \"{working}\" \"{reference}\"",
+    "error": "Error",
+    "mode": "Mode",
+    "modeDeploy": "Deploy",
+    "modeValidateDeploy": "Validate + Deploy",
+    "modeValidateOnly": "Validate Only",
+    "testLevel": "Tests",
+    "testClassPlaceholder": "Type test class name (Enter to add), or search org…",
+    "searching": "Searching…",
+    "startValidate": "Start Validation",
+    "startDeploy": "Start Deploy",
+    "deploying": "Deploying…",
+    "running": "Running…",
+    "logTitle": "Deploy Log",
+    "logEmpty": "Deploy log will appear here.",
+    "deployHistory": "Deploy History",
+    "noHistory": "No deployment records yet",
+    "quickDeployAvailable": "Quick Deploy Available",
+    "components": "components",
+    "daysToExpire": "days until expiry",
+    "quickDeploy": "Quick Deploy",
+    "warningNoPackageXml": "No package.xml found in the working directory. Deploy requires a package.xml manifest.",
+    "errorNoPackageXml": "Deploy cancelled: package.xml not found in the working directory.",
+    "justNow": "just now",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}} hr ago",
+    "modeValidateOnlyShort": "Validate",
+    "modeQuickDeploy": "Quick Deploy",
+    "modeDeployShort": "Deploy",
+    "errorCount": "{{count}} error(s)",
+    "testNoRun": "No Run",
+    "testLocal": "Local Tests",
+    "testSpecified": "Specified"
+  },
+  "settings": {
+    "diffTool": "Diff Tool",
+    "path": "Path",
+    "custom": "Custom",
+    "command": "Command",
+    "commandHint": "Variables: {working} = working dir, {reference} = reference dir"
   }
 }

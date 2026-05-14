@@ -2,6 +2,7 @@ mod auth;
 mod cli;
 mod commands;
 mod db;
+mod deployer;
 mod log_viewer;
 mod metadata;
 mod schema;
@@ -53,6 +54,15 @@ pub fn run() {
             commands::log_viewer::renew_trace,
             commands::log_viewer::disable_trace,
             commands::log_viewer::pick_log_output_directory,
+            commands::deployer::deploy_metadata,
+            commands::deployer::check_package_xml,
+            commands::deployer::cancel_deploy,
+            commands::deployer::quick_deploy,
+            commands::deployer::list_deploy_history,
+            commands::deployer::list_quick_deploys,
+            commands::deployer::retrieve_for_diff,
+            commands::deployer::open_diff_tool,
+            commands::deployer::search_apex_test_classes,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start SF DevKit");

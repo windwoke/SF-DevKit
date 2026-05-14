@@ -373,14 +373,61 @@
         "执行日志与错误定位",
         "结果历史与复用"
       ]
-    },
-    "deployer": {
-      "summary": "用于本地项目部署与校验，聚焦部署效率和失败定位。",
-      "bullets": [
-        "Deploy / Validate 一键执行",
-        "变更范围与部署日志追踪",
-        "失败明细与重试"
-      ]
     }
+  },
+  "deployer": {
+    "workingDir": "工作目录",
+    "workingDirPlaceholder": "点击选择工作目录…",
+    "fromMetadataBrowser": "（来自 Metadata Browser · {{time}}）",
+    "openInFinder": "在 Finder 中显示",
+    "targetOrg": "Target Org",
+    "selectOrg": "选择 Org…",
+    "diffOptional": "Diff（可选）",
+    "retrieveAndDiff": "获取 Target 内容并对比",
+    "retrieving": "Retrieving…",
+    "reopenDiff": "重新打开 Diff 工具",
+    "referenceReady": "参考目录已就绪 · 编辑完工作目录后点击部署",
+    "diffToolConfig": "Diff 工具设置",
+    "diffCommandLabel": "Diff 命令",
+    "diffCommandHint": "变量: {working} = 工作目录, {reference} = 参考目录。示例: code --diff \"{working}\" \"{reference}\"",
+    "error": "错误",
+    "mode": "模式",
+    "modeDeploy": "部署",
+    "modeValidateDeploy": "验证 + 部署",
+    "modeValidateOnly": "仅验证",
+    "testLevel": "测试",
+    "testClassPlaceholder": "输入测试类名，Enter 添加，或搜索 Org 中的类…",
+    "searching": "搜索中…",
+    "startValidate": "开始验证",
+    "startDeploy": "开始部署",
+    "deploying": "部署中…",
+    "running": "运行中…",
+    "logTitle": "部署日志",
+    "logEmpty": "部署日志将显示在这里。",
+    "deployHistory": "部署历史",
+    "noHistory": "暂无部署记录",
+    "quickDeployAvailable": "可 Quick Deploy",
+    "components": "个组件",
+    "daysToExpire": "天后失效",
+    "quickDeploy": "Quick Deploy",
+    "warningNoPackageXml": "工作目录中未找到 package.xml。部署需要 package.xml 清单文件。",
+    "errorNoPackageXml": "部署已取消：工作目录中未找到 package.xml。",
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "modeValidateOnlyShort": "仅验证",
+    "modeQuickDeploy": "Quick Deploy",
+    "modeDeployShort": "部署",
+    "errorCount": "{{count}} 个错误",
+    "testNoRun": "不运行",
+    "testLocal": "本地测试",
+    "testSpecified": "指定类"
+  },
+  "settings": {
+    "diffTool": "Diff 工具",
+    "path": "路径",
+    "custom": "自定义",
+    "command": "命令",
+    "commandHint": "变量: {working} = 工作目录, {reference} = 参考目录"
   }
 }

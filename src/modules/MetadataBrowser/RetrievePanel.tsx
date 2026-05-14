@@ -6,6 +6,7 @@ import i18n from "../../i18n";
 import { tauriApi } from "../../lib/tauri";
 import { useMetadataStore } from "../../store/metadata";
 import { useOrgStore } from "../../store/org";
+import { useWorkspaceStore } from "../../store/workspace";
 
 interface LogLine {
   type: "start" | "stdout" | "stderr" | "exit" | "info";
@@ -91,6 +92,7 @@ export function RetrievePanel() {
     onSuccess: (result) => {
       setLastOutputPath(result.output_path);
       setShowSuccess(true);
+      useWorkspaceStore.getState().setLastRetrieve(result.output_path, currentOrg ?? "");
       setLogs((prev) => [
         ...prev,
         {

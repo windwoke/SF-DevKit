@@ -11,6 +11,10 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 use crate::metadata::models::{RetrieveEvent, RetrieveResult, SelectionItem};
+
+fn strip_ansi(text: &str) -> String {
+    String::from_utf8(strip_ansi_escapes::strip(text)).unwrap_or_else(|_| text.to_string())
+}
 use crate::metadata::package_xml::generate_package_xml;
 
 static ACTIVE_RETRIEVES: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
@@ -123,11 +127,12 @@ impl RetrieveRunner {
                 line = out_lines.next_line() => {
                     match line? {
                         Some(text) => {
-                            log_buf.push_str(&text);
+                            let clean = strip_ansi(&text);
+                            log_buf.push_str(&clean);
                             log_buf.push('\n');
                             let _ = app.emit(event_id, RetrieveEvent {
                                 event_type: "stdout".to_string(),
-                                data: text,
+                                data: clean,
                             });
                         }
                         None => break,
@@ -135,11 +140,12 @@ impl RetrieveRunner {
                 }
                 line = err_lines.next_line() => {
                     if let Some(text) = line? {
-                        log_buf.push_str(&text);
+                        let clean = strip_ansi(&text);
+                        log_buf.push_str(&clean);
                         log_buf.push('\n');
                         let _ = app.emit(event_id, RetrieveEvent {
                             event_type: "stderr".to_string(),
-                            data: text,
+                            data: clean,
                         });
                     }
                 }
@@ -200,20 +206,8 @@ impl RetrieveRunner {
                 target_zip_file.to_string_lossy().into_owned()
             } else {
                 tokio::fs::create_dir_all(&target_extract_dir).await?;
-                let internal_force_app_dir = internal_output_dir.join("force-app");
-                let workspace_force_app_dir = workspace.join("force-app");
-                let source_force_app_dir = if dir_has_entries(&internal_force_app_dir).await? {
-                    internal_force_app_dir
-                } else if dir_has_entries(&workspace_force_app_dir).await? {
-                    workspace_force_app_dir
-                } else if dir_has_entries(&internal_output_dir).await? {
-                    internal_output_dir.clone()
-                } else {
-                    workspace_force_app_dir
-                };
-                let target_force_app_dir = target_extract_dir.join("force-app");
-                tokio::fs::create_dir_all(&target_force_app_dir).await?;
-                copy_dir_recursive(&source_force_app_dir, &target_force_app_dir).await?;
+                // Copy the entire .sfdevkit-output contents (same structure as diff retrieve)
+                copy_dir_recursive(&internal_output_dir, &target_extract_dir).await?;
                 tokio::fs::write(target_extract_dir.join("package.xml"), package_xml.as_bytes()).await?;
                 target_extract_dir.to_string_lossy().into_owned()
             }

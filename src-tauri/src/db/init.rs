@@ -246,6 +246,54 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
         .execute(&pool)
         .await?;
 
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS deploy_history (
+              id              INTEGER PRIMARY KEY AUTOINCREMENT,
+              org_id          TEXT NOT NULL,
+              working_dir     TEXT NOT NULL,
+              mode            TEXT NOT NULL,
+              test_level      TEXT NOT NULL,
+              success         INTEGER NOT NULL,
+              deploy_id       TEXT,
+              component_count INTEGER DEFAULT 0,
+              error_count     INTEGER DEFAULT 0,
+              duration_ms     INTEGER,
+              errors_json     TEXT DEFAULT '[]',
+              executed_at     TEXT DEFAULT (datetime('now'))
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS deploy_validations (
+              deploy_id       TEXT PRIMARY KEY,
+              org_id          TEXT NOT NULL,
+              working_dir     TEXT NOT NULL,
+              component_count INTEGER DEFAULT 0,
+              expires_at      TEXT NOT NULL,
+              used            INTEGER DEFAULT 0,
+              created_at      TEXT DEFAULT (datetime('now'))
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_deploy_history_org ON deploy_history(org_id, executed_at DESC);",
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_deploy_validations_org ON deploy_validations(org_id, expires_at);",
+        )
+        .execute(&pool)
+        .await?;
+
         for ddl in [
             "ALTER TABLE metadata_types ADD COLUMN directory_name TEXT",
             "ALTER TABLE metadata_types ADD COLUMN suffix TEXT",
