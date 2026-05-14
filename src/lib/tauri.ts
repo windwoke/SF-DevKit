@@ -87,8 +87,9 @@ export const tauriApi = {
   loginOrg: (payload: { alias?: string; loginDomain: LoginDomain }) =>
     invoke<void>("login_org", {
       alias: payload.alias?.trim() || null,
-      login_domain: payload.loginDomain,
+      loginDomain: payload.loginDomain,
     }),
+  cancelLogin: () => invoke<void>("cancel_login"),
   openOrg: (username: string) => invoke<void>("open_org", { username }),
   pickProjectDirectory: () => invoke<string | null>("pick_project_directory"),
   setOrgLinkedProjectPath: (orgId: string, path: string | null) =>

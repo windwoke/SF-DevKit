@@ -93,6 +93,7 @@
     "domainProduction": "Production (login.salesforce.com)",
     "domainSandbox": "Sandbox (test.salesforce.com)",
     "cancel": "Cancel",
+    "cancelling": "Cancelling…",
     "loginWaitingBrowser": "Waiting for browser sign-in…",
     "loginAndSetDefault": "Sign in and set as default",
     "defaultTag": "Default",

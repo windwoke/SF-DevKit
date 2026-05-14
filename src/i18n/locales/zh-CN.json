@@ -93,6 +93,7 @@
     "domainProduction": "正式环境（login.salesforce.com）",
     "domainSandbox": "测试环境（test.salesforce.com）",
     "cancel": "取消",
+    "cancelling": "正在取消…",
     "loginWaitingBrowser": "等待浏览器授权…",
     "loginAndSetDefault": "登录并设为默认",
     "defaultTag": "默认",

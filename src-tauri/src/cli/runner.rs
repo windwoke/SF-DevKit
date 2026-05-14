@@ -22,7 +22,7 @@ const COMMON_SF_PATHS: &[&str] = &[
     "/opt/homebrew/bin/sfdx",
 ];
 
-fn find_sf() -> Option<PathBuf> {
+pub fn find_sf() -> Option<PathBuf> {
     // 1. Try PATH lookup first (works in dev mode).
     if let Ok(path) = which::which("sf") {
         return Some(path);

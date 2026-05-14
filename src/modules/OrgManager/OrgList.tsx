@@ -61,6 +61,7 @@ export function OrgList() {
     variant?: "success" | "error";
   } | null>(null);
   const [loginBusy, setLoginBusy] = useState(false);
+  const [loginCancelling, setLoginCancelling] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -164,6 +165,7 @@ export function OrgList() {
       }
     } finally {
       setLoginBusy(false);
+      setLoginCancelling(false);
     }
   };
 
@@ -251,8 +253,21 @@ export function OrgList() {
             </select>
             {loginError ? <div className="org-login-error">{loginError}</div> : null}
             <div className="org-login-modal-actions">
-              <button onClick={() => setShowLoginModal(false)} disabled={loginBusy}>
-                {t("orgManager.cancel")}
+              <button
+                onClick={async () => {
+                  if (loginBusy) {
+                    setLoginCancelling(true);
+                    try {
+                      await tauriApi.cancelLogin();
+                    } catch { /* ignore */ }
+                    setLoginBusy(false);
+                    setLoginCancelling(false);
+                  }
+                  setShowLoginModal(false);
+                  setLoginError(null);
+                }}
+              >
+                {loginCancelling ? t("orgManager.cancelling") ?? "Cancelling…" : t("orgManager.cancel")}
               </button>
               <button onClick={() => void handleLoginConfirm()} disabled={loginBusy}>
                 {loginBusy ? t("orgManager.loginWaitingBrowser") : t("orgManager.loginAndSetDefault")}

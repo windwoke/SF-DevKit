@@ -25,6 +25,7 @@ pub fn run() {
             commands::org::set_default_org,
             commands::org::logout_org,
             commands::org::login_org,
+            commands::org::cancel_login,
             commands::org::open_org,
             commands::org::pick_project_directory,
             commands::org::set_org_linked_project_path,

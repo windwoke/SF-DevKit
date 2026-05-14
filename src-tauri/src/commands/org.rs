@@ -44,6 +44,11 @@ pub async fn login_org(
 }
 
 #[tauri::command]
+pub async fn cancel_login() -> Result<(), String> {
+    manager::cancel_login().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn open_org(username: String) -> Result<(), String> {
     manager::open_org(&username).await.map_err(|e| e.to_string())
 }

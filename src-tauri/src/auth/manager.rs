@@ -1,8 +1,17 @@
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 use crate::cli::runner::run_command;
 use crate::db::models::OrgAuth;
+
+static ACTIVE_LOGIN: OnceLock<Mutex<Option<u32>>> = OnceLock::new();
+
+fn active_login() -> &'static Mutex<Option<u32>> {
+    ACTIVE_LOGIN.get_or_init(|| Mutex::new(None))
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -130,7 +139,25 @@ pub async fn login_org_web(alias: Option<String>, login_domain: &str) -> anyhow:
     }
 
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    run_command(&arg_refs, false).await?;
+
+    // Run with PID tracking so login can be cancelled
+    let result = run_login_command(&arg_refs).await;
+    {
+        let mut guard = active_login().lock().map_err(|_| anyhow::anyhow!("login 状态锁不可用"))?;
+        *guard = None;
+    }
+    result
+}
+
+/// Cancel an in-progress login by killing the sf CLI process.
+pub async fn cancel_login() -> anyhow::Result<()> {
+    let pid = {
+        let mut guard = active_login().lock().map_err(|_| anyhow::anyhow!("login 状态锁不可用"))?;
+        guard.take()
+    };
+    if let Some(pid) = pid {
+        kill_process(pid).await?;
+    }
     Ok(())
 }
 
@@ -269,6 +296,79 @@ fn login_instance_url(login_domain: &str) -> &'static str {
         "sandbox" => "https://test.salesforce.com",
         _ => "https://login.salesforce.com",
     }
+}
+
+/// Like `run_command` but tracks the child PID for cancellation.
+async fn run_login_command(args: &[&str]) -> anyhow::Result<()> {
+    use std::process::Stdio;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::process::Command;
+
+    let sf_path = crate::cli::runner::find_sf()
+        .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
+
+    let mut cmd = Command::new(&sf_path);
+    cmd.args(args);
+
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
+    if !current_path.contains("/opt/homebrew") {
+        cmd.env("PATH", format!("{}:{}", extra, current_path));
+    }
+
+    cmd.stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let mut child = cmd.spawn()?;
+
+    if let Some(pid) = child.id() {
+        if let Ok(mut guard) = active_login().lock() {
+            *guard = Some(pid);
+        }
+    }
+
+    // Drain stdout/stderr so the pipe doesn't block
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    if let Some(out) = stdout {
+        let mut lines = BufReader::new(out).lines();
+        while let Ok(Some(_)) = lines.next_line().await {}
+    }
+    if let Some(err) = stderr {
+        let mut lines = BufReader::new(err).lines();
+        while let Ok(Some(_)) = lines.next_line().await {}
+    }
+
+    let status = child.wait().await?;
+    if !status.success() {
+        anyhow::bail!("登录失败或已取消");
+    }
+    Ok(())
+}
+
+async fn kill_process(pid: u32) -> anyhow::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        let status = tokio::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .status()
+            .await?;
+        if !status.success() {
+            anyhow::bail!("取消登录失败");
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let status = tokio::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .status()
+            .await?;
+        if !status.success() {
+            anyhow::bail!("取消登录失败");
+        }
+    }
+    Ok(())
 }
 
 async fn sync_default_org_from_cli(pool: &SqlitePool) -> anyhow::Result<()> {
