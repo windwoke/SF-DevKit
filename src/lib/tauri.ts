@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { OrgAuth } from "../store/org";
 
-export type LoginDomain = "production" | "sandbox";
+export type LoginDomain = "production" | "sandbox" | "alibaba";
 export type RetrieveOutputMode = "extract" | "zip";
 
 export interface MetadataTypeMeta {
@@ -84,10 +84,21 @@ export const tauriApi = {
   setDefaultOrg: (username: string) => invoke<void>("set_default_org", { username }),
   logoutOrg: (username: string) => invoke<void>("logout_org", { username }),
   /** Web OAuth only; call `syncOrgs` afterward to refresh the local list. */
-  loginOrg: (payload: { alias?: string; loginDomain: LoginDomain }) =>
+  loginOrg: (payload: {
+    alias?: string;
+    loginDomain: LoginDomain;
+    instanceUrl?: string;
+    consumerKey?: string;
+    consumerSecret?: string;
+    port?: number;
+  }) =>
     invoke<void>("login_org", {
       alias: payload.alias?.trim() || null,
       loginDomain: payload.loginDomain,
+      instanceUrl: payload.instanceUrl?.trim() || null,
+      consumerKey: payload.consumerKey?.trim() || null,
+      consumerSecret: payload.consumerSecret?.trim() || null,
+      port: payload.port ?? null,
     }),
   cancelLogin: () => invoke<void>("cancel_login"),
   openOrg: (username: string) => invoke<void>("open_org", { username }),

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { orgTypeLabel } from "../../lib/orgTypeLabel";
+import { isAlibabaInstance } from "../../lib/isAlibabaInstance";
 import { tauriApi, type LoginDomain } from "../../lib/tauri";
 import { useOrgStore } from "../../store/org";
 
@@ -63,6 +64,10 @@ export function OrgList() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginCancelling, setLoginCancelling] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginInstanceUrl, setLoginInstanceUrl] = useState("");
+  const [loginConsumerKey, setLoginConsumerKey] = useState("");
+  const [loginConsumerSecret, setLoginConsumerSecret] = useState("");
+  const [loginPort, setLoginPort] = useState("1717");
 
   useEffect(() => {
     if (!notice?.autoHide) return;
@@ -134,10 +139,21 @@ export function OrgList() {
     setLoginBusy(true);
     let browserAuthDone = false;
     try {
-      await tauriApi.loginOrg({ alias: loginAlias, loginDomain });
+      await tauriApi.loginOrg({
+        alias: loginAlias,
+        loginDomain,
+        instanceUrl: loginDomain === "alibaba" ? loginInstanceUrl : undefined,
+        consumerKey: loginDomain === "alibaba" ? loginConsumerKey : undefined,
+        consumerSecret: loginDomain === "alibaba" ? loginConsumerSecret : undefined,
+        port: loginDomain === "alibaba" && loginPort.trim() ? Number(loginPort) : undefined,
+      });
       setShowLoginModal(false);
       setLoginAlias("");
       setLoginDomain("production");
+      setLoginInstanceUrl("");
+      setLoginConsumerKey("");
+      setLoginConsumerSecret("");
+      setLoginPort("1717");
       browserAuthDone = true;
       setNotice({ text: i18n.t("orgManager.notice.browserAuthSyncing"), autoHide: false, variant: "success" });
       const orgs = await tauriApi.syncOrgs();
@@ -236,6 +252,7 @@ export function OrgList() {
         <div className="org-login-modal-backdrop" onClick={() => !loginBusy && setShowLoginModal(false)}>
           <div className="org-login-modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="org-login-title">{t("orgManager.modalTitle")}</h3>
+            <label className="org-form-label">{t("orgManager.aliasLabel")}</label>
             <input
               type="text"
               className="org-form-input"
@@ -243,6 +260,7 @@ export function OrgList() {
               onChange={(e) => setLoginAlias(e.target.value)}
               placeholder={t("orgManager.aliasPlaceholder")}
             />
+            <label className="org-form-label">{t("orgManager.domainLabel")}</label>
             <select
               className="org-form-select"
               value={loginDomain}
@@ -250,7 +268,44 @@ export function OrgList() {
             >
               <option value="production">{t("orgManager.domainProduction")}</option>
               <option value="sandbox">{t("orgManager.domainSandbox")}</option>
+              <option value="alibaba">{t("orgManager.domainAlibaba")}</option>
             </select>
+            {loginDomain === "alibaba" ? (
+              <>
+                <label className="org-form-label">{t("orgManager.instanceUrlLabel")}</label>
+                <input
+                  type="text"
+                  className="org-form-input"
+                  value={loginInstanceUrl}
+                  onChange={(e) => setLoginInstanceUrl(e.target.value)}
+                  placeholder={t("orgManager.instanceUrlPlaceholder")}
+                />
+                <label className="org-form-label">{t("orgManager.consumerKeyLabel")}</label>
+                <input
+                  type="text"
+                  className="org-form-input"
+                  value={loginConsumerKey}
+                  onChange={(e) => setLoginConsumerKey(e.target.value)}
+                  placeholder={t("orgManager.consumerKeyPlaceholder")}
+                />
+                <label className="org-form-label">{t("orgManager.consumerSecretLabel")}</label>
+                <input
+                  type="password"
+                  className="org-form-input"
+                  value={loginConsumerSecret}
+                  onChange={(e) => setLoginConsumerSecret(e.target.value)}
+                  placeholder={t("orgManager.consumerSecretPlaceholder")}
+                />
+                <label className="org-form-label">{t("orgManager.portLabel")}</label>
+                <input
+                  type="text"
+                  className="org-form-input"
+                  value={loginPort}
+                  onChange={(e) => setLoginPort(e.target.value.replace(/\D/g, ""))}
+                  placeholder={t("orgManager.portPlaceholder")}
+                />
+              </>
+            ) : null}
             {loginError ? <div className="org-login-error">{loginError}</div> : null}
             <div className="org-login-modal-actions">
               <button
@@ -265,11 +320,22 @@ export function OrgList() {
                   }
                   setShowLoginModal(false);
                   setLoginError(null);
+                  setLoginInstanceUrl("");
+                  setLoginConsumerKey("");
+                  setLoginConsumerSecret("");
+                  setLoginPort("1717");
                 }}
               >
                 {loginCancelling ? t("orgManager.cancelling") ?? "Cancelling…" : t("orgManager.cancel")}
               </button>
-              <button onClick={() => void handleLoginConfirm()} disabled={loginBusy}>
+              <button
+                onClick={() => void handleLoginConfirm()}
+                disabled={
+                  loginBusy ||
+                  (loginDomain === "alibaba" &&
+                    (!loginInstanceUrl.trim() || !loginConsumerKey.trim() || !loginConsumerSecret.trim()))
+                }
+              >
                 {loginBusy ? t("orgManager.loginWaitingBrowser") : t("orgManager.loginAndSetDefault")}
               </button>
             </div>
@@ -285,6 +351,7 @@ export function OrgList() {
                   {org.alias ?? org.id}
                   {org.is_default ? <span className="org-default-tag">{t("orgManager.defaultTag")}</span> : null}
                   <span className={`org-type org-type-${org.org_type}`}>{orgTypeLabel(org.org_type, t)}</span>
+                  {isAlibabaInstance(org.instance_url) ? <span className="org-type org-type-alibaba">{t("orgManager.alibabaTag")}</span> : null}
                 </div>
                 <div className="org-sub">{org.instance_url}</div>
               </div>

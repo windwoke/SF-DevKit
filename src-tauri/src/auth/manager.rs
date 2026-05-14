@@ -119,15 +119,38 @@ pub async fn logout_org(pool: &SqlitePool, username: &str) -> anyhow::Result<()>
 }
 
 /// Web OAuth only. Caller should run `sync_orgs` afterward to refresh the local list.
-pub async fn login_org_web(alias: Option<String>, login_domain: &str) -> anyhow::Result<()> {
+pub async fn login_org_web(
+    alias: Option<String>,
+    login_domain: &str,
+    instance_url: Option<&str>,
+    consumer_key: Option<&str>,
+    consumer_secret: Option<&str>,
+    port: Option<u16>,
+) -> anyhow::Result<()> {
+    let resolved_url = match login_domain {
+        "alibaba" => instance_url
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("阿里云版 Salesforce 必须提供 Instance URL"))?,
+        _ => login_instance_url(login_domain),
+    };
+
     let mut args: Vec<String> = vec![
         "org".to_string(),
         "login".to_string(),
         "web".to_string(),
         "--set-default".to_string(),
         "--instance-url".to_string(),
-        login_instance_url(login_domain).to_string(),
+        resolved_url.to_string(),
     ];
+
+    // Alibaba Cloud requires the connected app consumer key (-i)
+    if let Some(key) = consumer_key.map(str::trim).filter(|k| !k.is_empty()) {
+        args.push("-i".to_string());
+        args.push(key.to_string());
+    }
+
+    // Consumer secret is piped via stdin (not a CLI flag in sf CLI < 2.130)
 
     if let Some(trimmed_alias) = alias
         .as_deref()
@@ -140,8 +163,28 @@ pub async fn login_org_web(alias: Option<String>, login_domain: &str) -> anyhow:
 
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
-    // Run with PID tracking so login can be cancelled
-    let result = run_login_command(&arg_refs).await;
+    eprintln!("[login] sf {}", arg_refs.join(" "));
+
+    // Alibaba Cloud needs special env vars to bypass DNS/domain checks
+    let is_alibaba = login_domain == "alibaba";
+
+    // For Alibaba Cloud with consumer secret: use `expect` to create a PTY.
+    // Flow: CLI prompts for secret FIRST → then opens browser → callback arrives.
+    // `expect` auto-sends the secret so the CLI can proceed to start the HTTP server.
+    let use_expect = is_alibaba
+        && consumer_secret
+            .map(str::trim)
+            .is_some_and(|s| !s.is_empty());
+
+    let result = if use_expect {
+        let secret = consumer_secret
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("");
+        run_login_with_expect(&arg_refs, is_alibaba, secret, port).await
+    } else {
+        run_login_command(&arg_refs, is_alibaba).await
+    };
     {
         let mut guard = active_login().lock().map_err(|_| anyhow::anyhow!("login 状态锁不可用"))?;
         *guard = None;
@@ -299,10 +342,21 @@ fn login_instance_url(login_domain: &str) -> &'static str {
 }
 
 /// Like `run_command` but tracks the child PID for cancellation.
-async fn run_login_command(args: &[&str]) -> anyhow::Result<()> {
+/// When `alibaba_env` is true, sets SF_DISABLE_DNS_CHECK and SF_DOMAIN_RETRY env vars.
+async fn run_login_command(
+    args: &[&str],
+    alibaba_env: bool,
+) -> anyhow::Result<()> {
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
+
+    // Kill stale processes on OAuth redirect port
+    let _ = Command::new("bash")
+        .arg("-c")
+        .arg("lsof -ti:1717 | xargs kill -9 2>/dev/null || true")
+        .status()
+        .await;
 
     let sf_path = crate::cli::runner::find_sf()
         .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
@@ -316,35 +370,271 @@ async fn run_login_command(args: &[&str]) -> anyhow::Result<()> {
         cmd.env("PATH", format!("{}:{}", extra, current_path));
     }
 
-    cmd.stdout(Stdio::piped())
+    if alibaba_env {
+        cmd.env("SF_DISABLE_DNS_CHECK", "true");
+        cmd.env("SF_DOMAIN_RETRY", "0");
+    }
+
+    cmd.stdin(Stdio::inherit())
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
     let mut child = cmd.spawn()?;
 
     if let Some(pid) = child.id() {
+        eprintln!("[login] spawned pid={}", pid);
         if let Ok(mut guard) = active_login().lock() {
             *guard = Some(pid);
         }
     }
 
-    // Drain stdout/stderr so the pipe doesn't block
+    // Collect stdout and stderr in a spawned task
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
-    if let Some(out) = stdout {
-        let mut lines = BufReader::new(out).lines();
-        while let Ok(Some(_)) = lines.next_line().await {}
+    let collect_handle = tokio::spawn(async move {
+        let mut stdout_lines = stdout.map(|r| BufReader::new(r).lines());
+        let mut stderr_lines = stderr.map(|r| BufReader::new(r).lines());
+        let mut combined_output = String::new();
+
+        loop {
+            tokio::select! {
+                line = async { match &mut stdout_lines {
+                    Some(lines) => lines.next_line().await,
+                    None => Ok(None),
+                }} => {
+                    match line {
+                        Ok(Some(l)) => {
+                            eprintln!("[login:out] {}", l);
+                            combined_output.push_str(&l);
+                            combined_output.push('\n');
+                        }
+                        _ => break,
+                    }
+                }
+                line = async { match &mut stderr_lines {
+                    Some(lines) => lines.next_line().await,
+                    None => Ok(None),
+                }} => {
+                    match line {
+                        Ok(Some(l)) => {
+                            eprintln!("[login:err] {}", l);
+                            combined_output.push_str(&l);
+                            combined_output.push('\n');
+                        }
+                        _ => break,
+                    }
+                }
+            }
+        }
+
+        combined_output
+    });
+
+    // Wait for process with a 3-minute timeout
+    let status = tokio::time::timeout(
+        std::time::Duration::from_secs(180),
+        child.wait(),
+    )
+    .await;
+
+    match status {
+        Ok(Ok(s)) => {
+            let combined_output = collect_handle.await.unwrap_or_default();
+            eprintln!("[login] exit code={}", s.code().unwrap_or(-1));
+            if !s.success() {
+                let error_msg = extract_cli_error(&combined_output);
+                anyhow::bail!("登录失败：{}", error_msg);
+            }
+            Ok(())
+        }
+        Ok(Err(e)) => {
+            let _ = collect_handle.await;
+            anyhow::bail!("登录进程异常：{}", e);
+        }
+        Err(_) => {
+            // Timeout — kill the process
+            eprintln!("[login] timed out after 180s, killing");
+            let _ = kill_process(
+                active_login().lock().ok().and_then(|mut g| g.take()).unwrap_or(0),
+            )
+            .await;
+            let combined_output = collect_handle.await.unwrap_or_default();
+            let error_msg = extract_cli_error(&combined_output);
+            anyhow::bail!("登录超时（180s），CLI 输出：{}", error_msg);
+        }
     }
-    if let Some(err) = stderr {
-        let mut lines = BufReader::new(err).lines();
-        while let Ok(Some(_)) = lines.next_line().await {}
+}
+
+/// Run login via `/usr/bin/expect` to create a real PTY.
+/// The CLI prompts for consumer secret BEFORE opening the browser.
+/// `expect` auto-sends the secret, then the CLI starts the HTTP server and opens browser.
+async fn run_login_with_expect(
+    sf_args: &[&str],
+    alibaba_env: bool,
+    secret: &str,
+    port: Option<u16>,
+) -> anyhow::Result<()> {
+    use std::process::Stdio;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::process::Command;
+
+    let sf_path = crate::cli::runner::find_sf()
+        .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
+
+    // Create a temp directory with sfdx-project.json containing oauthLocalPort
+    let temp_dir = std::env::temp_dir().join("sf-devkit-login");
+    std::fs::create_dir_all(&temp_dir)?;
+    let oauth_port = port.unwrap_or(1717);
+    let project_json = format!(
+        r#"{{"packageDirectories":[{{"path":"force-app","default":true}}],"name":"sf-devkit-login","oauthLocalPort":"{}"}}"#,
+        oauth_port
+    );
+    std::fs::write(temp_dir.join("sfdx-project.json"), &project_json)?;
+    eprintln!("[login:expect] temp sfdx-project.json at {:?}, port={}", temp_dir, oauth_port);
+
+    // Kill stale process on the target port
+    let _ = Command::new("bash")
+        .arg("-c")
+        .arg(format!("lsof -ti:{} | xargs kill -9 2>/dev/null || true", oauth_port))
+        .status()
+        .await;
+
+    // Build the expect script:
+    //   1. spawn sf CLI (it will prompt for consumer secret first)
+    //   2. wait for the "OAuth client secret" prompt
+    //   3. send the secret
+    //   4. wait for process to finish
+    let escaped_secret = secret.replace('\\', "\\\\").replace('"', "\\\"");
+    let expect_script = format!(
+        "set timeout 300\nspawn {} {}\nexpect -re \"OAuth client secret\" {{ sleep 1; send \"{}\\r\" }}\nexpect eof\n",
+        sf_path.display(),
+        sf_args.join(" "),
+        escaped_secret,
+    );
+
+    eprintln!("[login:expect] sf {}", sf_args.join(" "));
+
+    let mut cmd = Command::new("/usr/bin/expect");
+    cmd.current_dir(&temp_dir)
+        .arg("-c")
+        .arg(&expect_script)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
+    if !current_path.contains("/opt/homebrew") {
+        cmd.env("PATH", format!("{}:{}", extra, current_path));
     }
 
-    let status = child.wait().await?;
-    if !status.success() {
-        anyhow::bail!("登录失败或已取消");
+    if alibaba_env {
+        cmd.env("SF_DISABLE_DNS_CHECK", "true");
+        cmd.env("SF_DOMAIN_RETRY", "0");
     }
-    Ok(())
+
+    let mut child = cmd.spawn()?;
+
+    if let Some(pid) = child.id() {
+        eprintln!("[login:expect] pid={}", pid);
+        if let Ok(mut guard) = active_login().lock() {
+            *guard = Some(pid);
+        }
+    }
+
+    // Collect output
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let collect_handle = tokio::spawn(async move {
+        let mut stdout_lines = stdout.map(|r| BufReader::new(r).lines());
+        let mut stderr_lines = stderr.map(|r| BufReader::new(r).lines());
+        let mut combined_output = String::new();
+
+        loop {
+            tokio::select! {
+                line = async { match &mut stdout_lines {
+                    Some(lines) => lines.next_line().await,
+                    None => Ok(None),
+                }} => match line {
+                    Ok(Some(l)) => {
+                        eprintln!("[login:expect:out] {}", l);
+                        combined_output.push_str(&l);
+                        combined_output.push('\n');
+                    }
+                    _ => break,
+                },
+                line = async { match &mut stderr_lines {
+                    Some(lines) => lines.next_line().await,
+                    None => Ok(None),
+                }} => match line {
+                    Ok(Some(l)) => {
+                        eprintln!("[login:expect:err] {}", l);
+                        combined_output.push_str(&l);
+                        combined_output.push('\n');
+                    }
+                    _ => break,
+                },
+            }
+        }
+        combined_output
+    });
+
+    let status = tokio::time::timeout(
+        std::time::Duration::from_secs(300),
+        child.wait(),
+    )
+    .await;
+
+    match status {
+        Ok(Ok(s)) => {
+            let combined_output = collect_handle.await.unwrap_or_default();
+            eprintln!("[login:expect] exit={}", s.code().unwrap_or(-1));
+            if !s.success() {
+                let error_msg = extract_cli_error(&combined_output);
+                anyhow::bail!("登录失败：{}", error_msg);
+            }
+            Ok(())
+        }
+        Ok(Err(e)) => {
+            let _ = collect_handle.await;
+            anyhow::bail!("登录进程异常：{}", e);
+        }
+        Err(_) => {
+            eprintln!("[login:expect] timeout 300s");
+            let _ = kill_process(
+                active_login().lock().ok().and_then(|mut g| g.take()).unwrap_or(0),
+            )
+            .await;
+            let combined_output = collect_handle.await.unwrap_or_default();
+            anyhow::bail!("登录超时，CLI 输出：{}", extract_cli_error(&combined_output));
+        }
+    }
+}
+
+/// Extract a human-readable error message from sf CLI output.
+fn extract_cli_error(output: &str) -> String {
+    // Try to parse JSON error from sf CLI
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(output) {
+        if let Some(msg) = json["message"].as_str() {
+            return msg.to_string();
+        }
+        if let Some(arr) = json["result"].as_array() {
+            if let Some(first) = arr.first() {
+                if let Some(msg) = first["message"].as_str() {
+                    return msg.to_string();
+                }
+            }
+        }
+    }
+    // Fallback: return last few non-empty lines
+    let lines: Vec<&str> = output.lines().filter(|l| !l.trim().is_empty()).collect();
+    let tail: Vec<&str> = lines.iter().rev().take(3).cloned().collect();
+    let mut tail: Vec<&str> = tail.into_iter().rev().collect();
+    if tail.is_empty() {
+        return "未知错误".to_string();
+    }
+    tail.join("\n")
 }
 
 async fn kill_process(pid: u32) -> anyhow::Result<()> {

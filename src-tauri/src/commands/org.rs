@@ -37,10 +37,21 @@ pub async fn logout_org(state: State<'_, DbState>, username: String) -> Result<(
 pub async fn login_org(
     alias: Option<String>,
     login_domain: Option<String>,
+    instance_url: Option<String>,
+    consumer_key: Option<String>,
+    consumer_secret: Option<String>,
+    port: Option<u16>,
 ) -> Result<(), String> {
-    manager::login_org_web(alias, login_domain.as_deref().unwrap_or("production"))
-        .await
-        .map_err(|e| e.to_string())
+    manager::login_org_web(
+        alias,
+        login_domain.as_deref().unwrap_or("production"),
+        instance_url.as_deref(),
+        consumer_key.as_deref(),
+        consumer_secret.as_deref(),
+        port,
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
