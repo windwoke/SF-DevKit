@@ -2,7 +2,6 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { tauriApi } from "../../lib/tauri";
 import { useWorkspaceStore } from "../../store/workspace";
-import { useOrgStore } from "../../store/org";
 import { useDeployStore } from "./store";
 
 function formatRelTime(iso: string, t: TFunction): string {
@@ -33,9 +32,8 @@ function IconReveal() {
 
 export function WorkingDirBar() {
   const { t } = useTranslation();
-  const { workingDir, setWorkingDir, targetOrgId, setTargetOrgId } = useDeployStore();
+  const { workingDir, setWorkingDir } = useDeployStore();
   const { lastRetrieveAt } = useWorkspaceStore();
-  const { orgs } = useOrgStore();
 
   const selectDir = async () => {
     const dir = await tauriApi.pickProjectDirectory();
@@ -71,20 +69,6 @@ export function WorkingDirBar() {
         </div>
       </div>
 
-      <div className="deployer-target-field">
-        <label>{t("deployer.targetOrg")}</label>
-        <select
-          value={targetOrgId ?? ""}
-          onChange={(e) => setTargetOrgId(e.target.value)}
-        >
-          <option value="">{t("deployer.selectOrg")}</option>
-          {orgs.map((org) => (
-            <option key={org.id} value={org.id}>
-              {org.alias ?? org.id}
-            </option>
-          ))}
-        </select>
-      </div>
     </div>
   );
 }

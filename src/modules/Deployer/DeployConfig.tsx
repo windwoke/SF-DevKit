@@ -1,7 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { useDeployStore, type DeployMode, type TestLevel } from "./store";
+import { useOrgStore } from "../../store/org";
 
 interface ApexClass {
   id: string;
@@ -10,6 +11,8 @@ interface ApexClass {
 
 export function DeployConfig({ onDeploy }: { onDeploy: () => void }) {
   const { t } = useTranslation();
+  const orgs = useOrgStore((s) => s.orgs);
+  const currentOrg = useOrgStore((s) => s.currentOrg);
   const {
     config,
     setConfig,
@@ -23,7 +26,12 @@ export function DeployConfig({ onDeploy }: { onDeploy: () => void }) {
   const [classInput, setClassInput] = useState("");
   const [classSearch, setClassSearch] = useState<ApexClass[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [testOnlyFilter, setTestOnlyFilter] = useState(true);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const targetOrg = orgs.find((o) => o.id === targetOrgId);
+  const isProduction = targetOrg?.org_type === "production";
+  const isNoTestOnProd = isProduction && config.testLevel === "no_test_run";
 
   const handleClassInput = (val: string) => {
     setClassInput(val);
@@ -33,11 +41,11 @@ export function DeployConfig({ onDeploy }: { onDeploy: () => void }) {
       return;
     }
     searchTimer.current = setTimeout(async () => {
-      if (!targetOrgId) return;
+      if (!currentOrg) return;
       setIsSearching(true);
       try {
         const results = await invoke<ApexClass[]>("search_apex_test_classes", {
-          orgId: targetOrgId,
+          orgId: currentOrg,
           keyword: val,
         });
         setClassSearch(results);
@@ -63,7 +71,18 @@ export function DeployConfig({ onDeploy }: { onDeploy: () => void }) {
     }
   };
 
-  const canDeploy = !!workingDir && !!targetOrgId && !isDeploying;
+  const canDeploy = !!workingDir && !!targetOrgId && !isDeploying && !isNoTestOnProd;
+
+  // Auto-scan local working directory for test classes when switching to SpecifiedTests
+  useEffect(() => {
+    if (config.testLevel !== "run_specified_tests" || !workingDir) return;
+    if (config.testClasses.length > 0) return; // Already has classes
+    invoke<ApexClass[]>("scan_local_test_classes", { workingDir })
+      .then((classes) => {
+        classes.forEach((c) => addTestClass(c.name));
+      })
+      .catch(() => {});
+  }, [config.testLevel, workingDir]);
 
   const modeOptions: [DeployMode, string][] = [
     ["deploy", t("deployer.modeDeploy")],
@@ -111,10 +130,24 @@ export function DeployConfig({ onDeploy }: { onDeploy: () => void }) {
             ))}
           </div>
 
+          {isNoTestOnProd && (
+            <div className="deployer-warning-inline">
+              {t("deployer.productionNoTestWarning")}
+            </div>
+          )}
+
           {/* Test class input (SpecifiedTests only) */}
           {config.testLevel === "run_specified_tests" && (
             <div className="deployer-test-input-wrap">
               <div className="deployer-test-input-row">
+                <label className="deployer-test-only-toggle">
+                  <input
+                    type="checkbox"
+                    checked={testOnlyFilter}
+                    onChange={(e) => setTestOnlyFilter(e.target.checked)}
+                  />
+                  <span>{t("deployer.testOnlyFilter")}</span>
+                </label>
                 <input
                   placeholder={t("deployer.testClassPlaceholder")}
                   value={classInput}
@@ -128,7 +161,9 @@ export function DeployConfig({ onDeploy }: { onDeploy: () => void }) {
 
               {classSearch.length > 0 && (
                 <div className="deployer-test-dropdown">
-                  {classSearch.map((cls) => (
+                  {classSearch
+                    .filter((cls) => !testOnlyFilter || cls.name.includes("Test"))
+                    .map((cls) => (
                     <div
                       key={cls.id}
                       className="deployer-test-dropdown-item"

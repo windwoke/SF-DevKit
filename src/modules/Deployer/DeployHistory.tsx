@@ -3,7 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { useDeployStore } from "./store";
+import { useDeployStore, type DeployResult } from "./store";
+import type { OrgAuth } from "../../store/org";
+import { ConfirmModal, type ConfirmAction } from "./ConfirmModal";
 
 interface HistoryRecord {
   id: number;
@@ -11,7 +13,7 @@ interface HistoryRecord {
   working_dir: string;
   mode: string;
   test_level: string;
-  success: boolean;
+  success: number;
   deploy_id: string | null;
   component_count: number;
   error_count: number;
@@ -26,7 +28,7 @@ interface QuickDeployRecord {
   working_dir: string;
   component_count: number;
   expires_at: string;
-  used: boolean;
+  used: number;
   created_at: string | null;
 }
 
@@ -35,16 +37,24 @@ interface StreamEvent {
   data: string;
 }
 
-export function DeployHistory({ orgId }: { orgId: string }) {
+export function DeployHistory({ orgId, targetOrgId, setTargetOrgId, orgs }: {
+  orgId: string;
+  targetOrgId: string | null;
+  setTargetOrgId: (id: string) => void;
+  orgs: OrgAuth[];
+}) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { appendLog, clearLogs, setIsDeploying } = useDeployStore();
+  const { appendLogs, clearLogs, setIsDeploying, setLastDeployResult } = useDeployStore();
   const [quickDeployingId, setQuickDeployingId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
   const { data: history = [] } = useQuery({
     queryKey: ["deploy-history", orgId],
     queryFn: () => invoke<HistoryRecord[]>("list_deploy_history", { orgId, limit: 20 }),
     enabled: !!orgId,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const { data: quickDeploys = [] } = useQuery({
@@ -52,35 +62,86 @@ export function DeployHistory({ orgId }: { orgId: string }) {
     queryFn: () => invoke<QuickDeployRecord[]>("list_quick_deploys", { orgId }),
     enabled: !!orgId,
     refetchInterval: 60_000,
+    staleTime: 0,
   });
 
-  const handleQuickDeploy = async (record: QuickDeployRecord) => {
+  const doQuickDeploy = async (record: QuickDeployRecord) => {
     setQuickDeployingId(record.deploy_id);
     clearLogs();
     setIsDeploying(true);
 
     const eventId = `quick-deploy-${Date.now()}`;
-    const unlisten = await listen<StreamEvent>(eventId, ({ payload }) =>
-      appendLog(payload.data),
-    );
+    let batchBuffer: string[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const flush = () => {
+      if (batchBuffer.length > 0) {
+        appendLogs(batchBuffer);
+        batchBuffer = [];
+      }
+    };
+    const unlisten = await listen<StreamEvent>(eventId, ({ payload }) => {
+      const lines = payload.data.split("\n");
+      for (const line of lines) batchBuffer.push(line);
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = setTimeout(flush, 100);
+    });
 
     try {
-      await invoke("quick_deploy", {
+      const result = await invoke<DeployResult>("quick_deploy", {
         orgId,
         deployId: record.deploy_id,
         eventId,
       });
-      qc.invalidateQueries({ queryKey: ["deploy-history", orgId] });
-      qc.invalidateQueries({ queryKey: ["quick-deploys", orgId] });
+      setLastDeployResult({ ...result, mode: "quick_deploy" });
+      void qc.refetchQueries({ queryKey: ["deploy-history", orgId] });
+      void qc.refetchQueries({ queryKey: ["quick-deploys", orgId] });
     } finally {
+      if (flushTimer) clearTimeout(flushTimer);
+      flush();
       unlisten();
       setIsDeploying(false);
       setQuickDeployingId(null);
     }
   };
 
+  const handleQuickDeploy = (record: QuickDeployRecord) => {
+    const targetOrg = orgs.find((o) => o.id === targetOrgId);
+    setConfirmAction({
+      title: t("deployer.confirmTitle"),
+      items: [
+        { label: t("deployer.targetOrg"), value: targetOrg?.alias ?? targetOrgId! },
+        { label: t("deployer.mode"), value: t("deployer.modeQuickDeploy") },
+        { label: t("deployer.components"), value: String(record.component_count) },
+      ],
+      onConfirm: () => void doQuickDeploy(record),
+    });
+  };
+
+  const selectedOrg = orgs.find((o) => o.id === targetOrgId);
+
   return (
     <div className="deployer-history-panel">
+      <div className="deployer-target-org-bar">
+        <label>{t("deployer.targetOrg")}</label>
+        <select
+          value={targetOrgId ?? ""}
+          onChange={(e) => setTargetOrgId(e.target.value)}
+        >
+          <option value="">{t("deployer.selectOrg")}</option>
+          {orgs.map((org) => (
+            <option key={org.id} value={org.id}>
+              {org.alias ?? org.id}
+            </option>
+          ))}
+        </select>
+        {selectedOrg && (
+          <div className="deployer-target-org-info">
+            {selectedOrg.alias && <span className="deployer-target-org-alias">{selectedOrg.alias}</span>}
+            <span className="deployer-target-org-id">{selectedOrg.id}</span>
+          </div>
+        )}
+      </div>
+
       <div className="deployer-history-title">{t("deployer.deployHistory")}</div>
 
       {quickDeploys.length > 0 && (
@@ -123,6 +184,9 @@ export function DeployHistory({ orgId }: { orgId: string }) {
           <div className="deployer-history-empty">{t("deployer.noHistory")}</div>
         )}
       </div>
+      {confirmAction && (
+        <ConfirmModal action={confirmAction} onClose={() => setConfirmAction(null)} />
+      )}
     </div>
   );
 }
@@ -139,10 +203,15 @@ function HistoryRow({ record }: { record: HistoryRecord }) {
   }> = JSON.parse(record.errors_json || "[]");
 
   const time = record.executed_at
-    ? new Date(record.executed_at).toLocaleTimeString(i18n.language === "zh-CN" ? "zh-CN" : "en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+    ? (() => {
+        // Handle both old format (no TZ, stored as UTC) and new ISO 8601 format
+        const s = record.executed_at!;
+        const date = s.includes("T") ? new Date(s) : new Date(s.replace(" ", "T") + "Z");
+        return date.toLocaleTimeString(i18n.language === "zh-CN" ? "zh-CN" : "en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      })()
     : "";
 
   return (

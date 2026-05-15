@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 anyhow = "1"
 chrono = "0.4.44"
+regex = "1"
 rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
 strip-ansi-escapes = "0.2"

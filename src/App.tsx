@@ -18,6 +18,16 @@ export default function App() {
     { id: "soql", label: t("modules.soql"), render: SoqlEditor },
     { id: "metadata", label: t("modules.metadata"), render: MetadataBrowser },
     {
+      id: "deployer",
+      label: t("modules.deployer"),
+      render: Deployer,
+    },
+    {
+      id: "logs",
+      label: t("modules.logs"),
+      render: LogViewer,
+    },
+    {
       id: "apex",
       label: t("modules.apex"),
       render: () => (
@@ -27,16 +37,6 @@ export default function App() {
           bullets={t("comingSoon.apex.bullets", { returnObjects: true }) as string[]}
         />
       ),
-    },
-    {
-      id: "deployer",
-      label: t("modules.deployer"),
-      render: Deployer,
-    },
-    {
-      id: "logs",
-      label: t("modules.logs"),
-      render: LogViewer,
     },
   ];
   // Keyboard shortcuts: Cmd/Ctrl + 1..6 to switch modules
@@ -59,7 +59,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <TopBar />
+      <TopBar moduleName={active.label} />
       <div className="app-body">
         <Sidebar modules={moduleRegistry} active={activeModule} onSelect={setActiveModule} />
         <main className="main-panel">

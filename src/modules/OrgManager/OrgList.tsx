@@ -173,7 +173,10 @@ export function OrgList() {
           : { text: i18n.t("orgManager.notice.syncDoneNoDefault"), autoHide: true, variant: "success" },
       );
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      const raw = e instanceof Error ? e.message : String(e);
+      const message = raw === "LOGIN_NOT_COMPLETED"
+        ? i18n.t("orgManager.notice.loginNotCompleted")
+        : raw;
       if (browserAuthDone) {
         setNotice({ text: i18n.t("orgManager.notice.syncFailed", { message }), autoHide: true, variant: "error" });
       } else {

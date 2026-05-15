@@ -85,10 +85,18 @@ pub async fn open_diff_tool(command: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn search_apex_test_classes(
+    state: State<'_, DbState>,
     org_id: String,
     keyword: String,
 ) -> Result<Vec<crate::deployer::models::ApexClassMeta>, String> {
-    test_search::search_apex_test_classes(&org_id, &keyword)
+    test_search::search_apex_test_classes(&state.0, &org_id, &keyword)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn scan_local_test_classes(
+    working_dir: String,
+) -> Result<Vec<crate::deployer::models::ApexClassMeta>, String> {
+    Ok(test_search::scan_local_test_classes(&working_dir))
 }

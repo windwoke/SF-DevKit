@@ -9,6 +9,26 @@ interface DeployConfig {
   testClasses: string[];
 }
 
+export interface DeployError {
+  fileName: string;
+  fullName: string;
+  componentType: string;
+  lineNumber: number | null;
+  columnNumber: number | null;
+  message: string;
+  errorType: string;
+}
+
+export interface DeployResult {
+  success: boolean;
+  deployId: string | null;
+  errorCount: number;
+  componentCount: number;
+  durationMs: number;
+  errors: DeployError[];
+  mode?: string;
+}
+
 interface DeployStore {
   workingDir: string | null;
   referenceDir: string | null;
@@ -19,6 +39,8 @@ interface DeployStore {
   isDeploying: boolean;
   isDiffRetrieving: boolean;
   logs: string[];
+  lastDeployResult: DeployResult | null;
+  logView: "formatted" | "raw";
 
   setWorkingDir: (dir: string | null) => void;
   setReferenceDir: (dir: string | null) => void;
@@ -29,7 +51,10 @@ interface DeployStore {
   setIsDeploying: (v: boolean) => void;
   setIsDiffRetrieving: (v: boolean) => void;
   appendLog: (line: string) => void;
+  appendLogs: (lines: string[]) => void;
   clearLogs: () => void;
+  setLastDeployResult: (r: DeployResult | null) => void;
+  setLogView: (v: "formatted" | "raw") => void;
 }
 
 export const useDeployStore = create<DeployStore>((set) => ({
@@ -44,6 +69,8 @@ export const useDeployStore = create<DeployStore>((set) => ({
   isDeploying: false,
   isDiffRetrieving: false,
   logs: [],
+  lastDeployResult: null,
+  logView: "formatted",
 
   setWorkingDir: (dir) => set({ workingDir: dir }),
   setReferenceDir: (dir) => set({ referenceDir: dir }),
@@ -75,5 +102,14 @@ export const useDeployStore = create<DeployStore>((set) => ({
 
   appendLog: (line) =>
     set((s) => ({ logs: [...s.logs.slice(-2000), line] })),
-  clearLogs: () => set({ logs: [] }),
+  appendLogs: (lines) =>
+    set((s) => {
+      if (lines.length === 0) return { logs: s.logs };
+      const next = [...s.logs, ...lines];
+      return { logs: next.length > 2000 ? next.slice(-2000) : next };
+    }),
+  clearLogs: () => set({ logs: [], lastDeployResult: null, logView: "formatted" }),
+
+  setLastDeployResult: (r) => set({ lastDeployResult: r }),
+  setLogView: (v) => set({ logView: v }),
 }));

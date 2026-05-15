@@ -7,7 +7,7 @@
   "modules": {
     "orgs": "Org 管理",
     "soql": "SOQL",
-    "metadata": "Metadata",
+    "metadata": "元数据浏览器",
     "apex": "Apex Runner",
     "deployer": "Deployer",
     "logs": "Log Viewer"
@@ -141,7 +141,8 @@
       "linkedSaved": "已保存本地项目路径。",
       "linkFailed": "关联路径失败：{{message}}",
       "linkCleared": "已清除本地项目关联。",
-      "clearFailed": "清除失败：{{message}}"
+      "clearFailed": "清除失败：{{message}}",
+      "loginNotCompleted": "登录未完成：浏览器可能未完成授权，请重试。"
     }
   },
   "soqlEditor": {
@@ -409,7 +410,7 @@
     "modeValidateDeploy": "验证 + 部署",
     "modeValidateOnly": "仅验证",
     "testLevel": "测试",
-    "testClassPlaceholder": "输入测试类名，Enter 添加，或搜索 Org 中的类…",
+    "testClassPlaceholder": "搜索 Apex 类（Enter 添加）…",
     "searching": "搜索中…",
     "startValidate": "开始验证",
     "startDeploy": "开始部署",
@@ -417,6 +418,7 @@
     "running": "运行中…",
     "logTitle": "部署日志",
     "logEmpty": "部署日志将显示在这里。",
+    "logTrimHint": "(显示最近 300 行 / 共 {{total}} 行)",
     "deployHistory": "部署历史",
     "noHistory": "暂无部署记录",
     "quickDeployAvailable": "可 Quick Deploy",
@@ -434,7 +436,20 @@
     "errorCount": "{{count}} 个错误",
     "testNoRun": "不运行",
     "testLocal": "本地测试",
-    "testSpecified": "指定类"
+    "testSpecified": "指定类",
+    "viewFormatted": "格式化",
+    "viewRaw": "原始日志",
+    "deploySucceeded": "部署成功 — {{count}} 个组件 ({{time}})",
+    "deployFailed": "部署失败 — {{errors}} 个错误，{{count}} 个组件 ({{time}})",
+    "validateSucceeded": "验证通过 — {{count}} 个组件 ({{time}})",
+    "validateFailed": "验证失败 — {{errors}} 个错误 ({{time}})",
+    "productionNoTestWarning": "生产环境不允许「不运行测试」，请选择其他测试级别。",
+    "confirmTitle": "确认部署",
+    "confirmDeploy": "确定要部署吗？",
+    "confirmValidate": "确定要验证吗？",
+    "confirmQuickDeploy": "确定要快速部署吗？",
+    "confirmOk": "确认",
+    "testOnlyFilter": "仅 @isTest 测试类"
   },
   "settings": {
     "diffTool": "Diff 工具",

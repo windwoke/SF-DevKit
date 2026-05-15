@@ -84,10 +84,7 @@ export function LogViewer() {
 
   return (
     <section className="module log-viewer-module">
-      <div className="module-header log-viewer-header">
-        <h2>{t("modules.logs")}</h2>
-        {!currentOrg ? <span className="soql-hint">{t("logViewer.noOrgHint")}</span> : null}
-      </div>
+      {!currentOrg ? <div className="soql-hint" style={{ padding: "0 0 8px" }}>{t("logViewer.noOrgHint")}</div> : null}
 
       <TraceBar
         orgId={currentOrg}

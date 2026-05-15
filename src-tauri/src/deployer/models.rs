@@ -18,6 +18,7 @@ pub enum TestLevel {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeployOptions {
     pub org_id: String,
     pub working_dir: String,
@@ -28,6 +29,7 @@ pub struct DeployOptions {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeployResult {
     pub success: bool,
     pub deploy_id: Option<String>,
@@ -38,8 +40,11 @@ pub struct DeployResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeployError {
     pub file_name: String,
+    pub full_name: String,
+    pub component_type: String,
     pub line_number: Option<u32>,
     pub column_number: Option<u32>,
     pub message: String,
@@ -59,7 +64,7 @@ pub struct DeployHistoryRecord {
     pub working_dir: String,
     pub mode: String,
     pub test_level: String,
-    pub success: bool,
+    pub success: i64,
     pub deploy_id: Option<String>,
     pub component_count: i64,
     pub error_count: i64,
@@ -75,11 +80,11 @@ pub struct QuickDeployRecord {
     pub working_dir: String,
     pub component_count: i64,
     pub expires_at: String,
-    pub used: bool,
+    pub used: i64,
     pub created_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ApexClassMeta {
     pub id: String,
     pub name: String,

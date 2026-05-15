@@ -294,6 +294,21 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
         .execute(&pool)
         .await?;
 
+        // Apex class cache for test class search (10-min TTL, same pattern as metadata_components)
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS apex_class_cache (
+              org_id TEXT NOT NULL,
+              name TEXT NOT NULL,
+              id TEXT NOT NULL,
+              last_synced TEXT NOT NULL,
+              PRIMARY KEY (org_id, name)
+            );
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
         for ddl in [
             "ALTER TABLE metadata_types ADD COLUMN directory_name TEXT",
             "ALTER TABLE metadata_types ADD COLUMN suffix TEXT",

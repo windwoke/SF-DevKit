@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 type SelectionMap = Record<string, string[]>;
 
@@ -25,17 +26,19 @@ interface MetadataState {
   toSelectionList: () => Array<{ metadata_type: string; members: string[] }>;
 }
 
-export const useMetadataStore = create<MetadataState>((set, get) => ({
-  selection: {},
-  expandedTypes: [],
-  searchQuery: "",
-  outputDir: "",
-  outputMode: "extract",
-  apiVersion: "60.0",
-  setSearchQuery: (q) => set({ searchQuery: q }),
-  setOutputDir: (dir) => set({ outputDir: dir }),
-  setOutputMode: (mode) => set({ outputMode: mode }),
-  setApiVersion: (v) => set({ apiVersion: v }),
+export const useMetadataStore = create<MetadataState>()(
+  persist(
+    (set, get) => ({
+      selection: {},
+      expandedTypes: [],
+      searchQuery: "",
+      outputDir: "",
+      outputMode: "extract",
+      apiVersion: "60.0",
+      setSearchQuery: (q) => set({ searchQuery: q }),
+      setOutputDir: (dir) => set({ outputDir: dir }),
+      setOutputMode: (mode) => set({ outputMode: mode }),
+      setApiVersion: (v) => set({ apiVersion: v }),
   toggleExpand: (metadataType) =>
     set((state) => {
       const setBuf = new Set(state.expandedTypes);
@@ -93,4 +96,14 @@ export const useMetadataStore = create<MetadataState>((set, get) => ({
       }))
       .sort((a, b) => a.metadata_type.localeCompare(b.metadata_type));
   },
-}));
+    }),
+    {
+      name: "metadata-store",
+      partialize: (state) => ({
+        outputDir: state.outputDir,
+        outputMode: state.outputMode,
+        apiVersion: state.apiVersion,
+      }),
+    },
+  ),
+);

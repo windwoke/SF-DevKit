@@ -446,6 +446,9 @@ async fn run_login_command(
                 let error_msg = extract_cli_error(&combined_output);
                 anyhow::bail!("登录失败：{}", error_msg);
             }
+            if !verify_login_success(&combined_output) {
+                anyhow::bail!("LOGIN_NOT_COMPLETED");
+            }
             Ok(())
         }
         Ok(Err(e)) => {
@@ -594,6 +597,9 @@ async fn run_login_with_expect(
                 let error_msg = extract_cli_error(&combined_output);
                 anyhow::bail!("登录失败：{}", error_msg);
             }
+            if !verify_login_success(&combined_output) {
+                anyhow::bail!("LOGIN_NOT_COMPLETED");
+            }
             Ok(())
         }
         Ok(Err(e)) => {
@@ -610,6 +616,19 @@ async fn run_login_with_expect(
             anyhow::bail!("登录超时，CLI 输出：{}", extract_cli_error(&combined_output));
         }
     }
+}
+
+/// Verify that the sf CLI output indicates a real successful login.
+/// The CLI may exit with code 0 even when the browser OAuth was never completed.
+fn verify_login_success(output: &str) -> bool {
+    let lower = output.to_lowercase();
+    // sf CLI "org login web" success messages across versions:
+    //   "Successfully authorized <username> with org ID <id>"
+    //   "Successfully logged in as <username>"
+    lower.contains("successfully authorized")
+        || lower.contains("successfully logged in")
+        || lower.contains("successfully authenticated")
+        || lower.contains("with org id")
 }
 
 /// Extract a human-readable error message from sf CLI output.

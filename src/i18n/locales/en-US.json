@@ -7,7 +7,7 @@
   "modules": {
     "orgs": "Org Manager",
     "soql": "SOQL",
-    "metadata": "Metadata",
+    "metadata": "Metadata Browser",
     "apex": "Apex Runner",
     "deployer": "Deployer",
     "logs": "Log Viewer"
@@ -141,7 +141,8 @@
       "linkedSaved": "Local project path saved.",
       "linkFailed": "Failed to link path: {{message}}",
       "linkCleared": "Local project link cleared.",
-      "clearFailed": "Clear failed: {{message}}"
+      "clearFailed": "Clear failed: {{message}}",
+      "loginNotCompleted": "Login incomplete: browser authorization may not have finished. Please try again."
     }
   },
   "soqlEditor": {
@@ -409,7 +410,7 @@
     "modeValidateDeploy": "Validate + Deploy",
     "modeValidateOnly": "Validate Only",
     "testLevel": "Tests",
-    "testClassPlaceholder": "Type test class name (Enter to add), or search org…",
+    "testClassPlaceholder": "Search Apex classes (Enter to add)…",
     "searching": "Searching…",
     "startValidate": "Start Validation",
     "startDeploy": "Start Deploy",
@@ -417,6 +418,7 @@
     "running": "Running…",
     "logTitle": "Deploy Log",
     "logEmpty": "Deploy log will appear here.",
+    "logTrimHint": "(showing last 300 of {{total}} lines)",
     "deployHistory": "Deploy History",
     "noHistory": "No deployment records yet",
     "quickDeployAvailable": "Quick Deploy Available",
@@ -434,7 +436,20 @@
     "errorCount": "{{count}} error(s)",
     "testNoRun": "No Run",
     "testLocal": "Local Tests",
-    "testSpecified": "Specified"
+    "testSpecified": "Specified",
+    "viewFormatted": "Formatted",
+    "viewRaw": "Raw",
+    "deploySucceeded": "Deploy succeeded — {{count}} components ({{time}})",
+    "deployFailed": "Deploy failed — {{errors}} error(s), {{count}} components ({{time}})",
+    "validateSucceeded": "Validation passed — {{count}} components ({{time}})",
+    "validateFailed": "Validation failed — {{errors}} error(s) ({{time}})",
+    "productionNoTestWarning": "Production orgs do not allow 'No Test Run'. Please select a different test level.",
+    "confirmTitle": "Confirm Deployment",
+    "confirmDeploy": "Are you sure you want to deploy?",
+    "confirmValidate": "Are you sure you want to validate?",
+    "confirmQuickDeploy": "Are you sure you want to quick deploy?",
+    "confirmOk": "Confirm",
+    "testOnlyFilter": "Only @isTest classes"
   },
   "settings": {
     "diffTool": "Diff Tool",

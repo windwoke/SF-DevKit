@@ -4,7 +4,7 @@ import { useOrgStore } from "../../store/org";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-export function TopBar() {
+export function TopBar({ moduleName }: { moduleName: string }) {
   const { t } = useTranslation();
   const { currentOrg, orgs } = useOrgStore();
   const org = orgs.find((o) => o.id === currentOrg);
@@ -13,7 +13,10 @@ export function TopBar() {
   });
 
   return (
-    <header className="topbar topbar--right-only">
+    <header className="topbar">
+      <div className="topbar-left">
+        <span className="topbar-module-name">{moduleName}</span>
+      </div>
       <div className="topbar-right">
         <div className="topbar-org-info">
           {org ? (

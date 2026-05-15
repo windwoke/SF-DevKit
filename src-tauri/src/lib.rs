@@ -64,6 +64,7 @@ pub fn run() {
             commands::deployer::retrieve_for_diff,
             commands::deployer::open_diff_tool,
             commands::deployer::search_apex_test_classes,
+            commands::deployer::scan_local_test_classes,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start SF DevKit");
