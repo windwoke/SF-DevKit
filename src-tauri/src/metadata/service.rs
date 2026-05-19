@@ -281,6 +281,33 @@ impl MetadataService {
             }
         }
 
+        // 检查该类型是否为 folder-based 类型（EmailTemplate, Report, Dashboard, Document 等）
+        let in_folder: bool = sqlx::query_scalar::<_, i64>(
+            "SELECT in_folder FROM metadata_types WHERE org_id = ?1 AND xml_name = ?2",
+        )
+        .bind(org_id)
+        .bind(metadata_type)
+        .fetch_one(&self.pool)
+        .await
+        .map(|v| v != 0)
+        .unwrap_or(false);
+
+        if in_folder {
+            // folder-based 类型：先列出所有文件夹，再按文件夹逐个拉组件
+            return self
+                .get_folder_based_components(org_id, metadata_type)
+                .await;
+        }
+
+        self.get_flat_components(org_id, metadata_type).await
+    }
+
+    /// 普通类型：直接 sf org list metadata
+    async fn get_flat_components(
+        &self,
+        org_id: &str,
+        metadata_type: &str,
+    ) -> anyhow::Result<Vec<ComponentMeta>> {
         let output = run_command(
             &[
                 "org",
@@ -295,9 +322,8 @@ impl MetadataService {
         )
         .await?;
         eprintln!(
-            "[metadata.service] get_components cli stdout_len={} stderr_len={} exit={} org_id={} type={}",
+            "[metadata.service] get_flat_components stdout_len={} exit={} org_id={} type={}",
             output.stdout.len(),
-            output.stderr.len(),
             output.exit_code,
             org_id,
             metadata_type
@@ -308,6 +334,117 @@ impl MetadataService {
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("解析 metadata components 失败"))?;
 
+        self.persist_components(org_id, metadata_type, list).await
+    }
+
+    /// folder-based 类型：先通过 {Type}Folder 拿文件夹列表，再逐个文件夹拉组件
+    async fn get_folder_based_components(
+        &self,
+        org_id: &str,
+        metadata_type: &str,
+    ) -> anyhow::Result<Vec<ComponentMeta>> {
+        // folder-based 类型对应的文件夹元数据类型：EmailTemplate → EmailFolder, Report → ReportFolder 等
+        let folder_type = format!("{}Folder", metadata_type);
+
+        // 第一步：列出所有文件夹
+        let folder_output = run_command(
+            &[
+                "org",
+                "list",
+                "metadata",
+                "--target-org",
+                org_id,
+                "--metadata-type",
+                folder_type.as_str(),
+            ],
+            true,
+        )
+        .await?;
+        eprintln!(
+            "[metadata.service] get_folder_based_components folder list stdout_len={} exit={} org_id={} folder_type={}",
+            folder_output.stdout.len(),
+            folder_output.exit_code,
+            org_id,
+            folder_type
+        );
+
+        let parsed = parse_cli_json(&folder_output.stdout)?;
+        let folder_list = parsed["result"].as_array();
+
+        // 收集文件夹名，始终包含 unfiled$public 作为兜底
+        let mut folder_names: Vec<String> = vec!["unfiled$public".to_string()];
+        if let Some(folders) = folder_list {
+            for folder in folders {
+                if let Some(name) = folder["fullName"].as_str() {
+                    if !name.is_empty() && name != "unfiled$public" {
+                        folder_names.push(name.to_string());
+                    }
+                }
+            }
+        }
+
+        // 第二步：逐个文件夹拉组件
+        let mut all_components = Vec::new();
+        for folder_name in &folder_names {
+            eprintln!(
+                "[metadata.service] get_folder_based_components fetching folder={} org_id={} type={}",
+                folder_name, org_id, metadata_type
+            );
+
+            let comp_output = run_command(
+                &[
+                    "org",
+                    "list",
+                    "metadata",
+                    "--target-org",
+                    org_id,
+                    "--metadata-type",
+                    metadata_type,
+                    "--folder",
+                    folder_name,
+                ],
+                true,
+            )
+            .await?;
+
+            let comp_parsed = match parse_cli_json(&comp_output.stdout) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!(
+                        "[metadata.service] get_folder_based_components parse error folder={} err={}",
+                        folder_name, e
+                    );
+                    continue;
+                }
+            };
+
+            let items = match comp_parsed["result"].as_array() {
+                Some(arr) => arr,
+                None => continue,
+            };
+
+            let components = self
+                .persist_components(org_id, metadata_type, items)
+                .await?;
+            all_components.extend(components);
+        }
+
+        eprintln!(
+            "[metadata.service] get_folder_based_components total={} org_id={} type={}",
+            all_components.len(),
+            org_id,
+            metadata_type
+        );
+        Ok(all_components)
+    }
+
+    /// 解析 CLI JSON 结果并持久化到 SQLite，返回组件列表
+    async fn persist_components(
+        &self,
+        org_id: &str,
+        metadata_type: &str,
+        list: &[serde_json::Value],
+    ) -> anyhow::Result<Vec<ComponentMeta>> {
         let mut out = Vec::with_capacity(list.len());
         let mut seen = HashSet::new();
         for item in list {
@@ -353,7 +490,7 @@ impl MetadataService {
         }
 
         eprintln!(
-            "[metadata.service] get_components fetched rows={} org_id={} type={}",
+            "[metadata.service] persist_components rows={} org_id={} type={}",
             out.len(), org_id, metadata_type
         );
         Ok(out)
