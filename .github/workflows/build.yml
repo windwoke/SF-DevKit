@@ -12,8 +12,6 @@ jobs:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
 
     runs-on: ${{ matrix.os }}
 
@@ -34,22 +32,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
-      - name: Install Linux system dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libsoup-3.0-dev \
-            libjavascriptcoregtk-4.1-dev
 
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
@@ -84,9 +66,7 @@ jobs:
           body: |
             Automated build from ${{ github.ref_name }}.
 
-            将 `.dmg` 安装到 Applications 文件夹，或运行 `.AppImage`。
+            Drag the `.dmg` to your Applications folder to install.
           files: |
             sf-devkit-*/**/*.dmg
-            sf-devkit-*/**/*.AppImage
-            sf-devkit-*/**/*.deb
           generate_release_notes: true
