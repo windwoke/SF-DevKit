@@ -284,6 +284,7 @@ export function ApexRunner() {
                     })}
                   </button>
                 ) : null}
+                {result.logs && <pre className="apex-log-output">{result.logs}</pre>}
               </div>
             ) : null}
 
@@ -296,6 +297,7 @@ export function ApexRunner() {
                 {result.exception_stack_trace && (
                   <pre className="apex-stack-trace">{result.exception_stack_trace}</pre>
                 )}
+                {result.logs && <pre className="apex-log-output">{result.logs}</pre>}
               </div>
             ) : null}
 
@@ -303,6 +305,13 @@ export function ApexRunner() {
               <div className="apex-error-card">
                 <h3 className="apex-result-title">{t("apexRunner.executionFailed")}</h3>
                 <pre className="apex-error-raw">{error}</pre>
+              </div>
+            ) : null}
+
+            {result && !result.success && result.compiled && !result.exception_message && !result.logs ? (
+              <div className="apex-error-card">
+                <h3 className="apex-result-title">{t("apexRunner.executionFailed")}</h3>
+                <pre className="apex-error-raw">{result.raw_stdout}</pre>
               </div>
             ) : null}
 
