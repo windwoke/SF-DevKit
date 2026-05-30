@@ -379,14 +379,28 @@
       "lastModified": "Last modified: {{date}}"
     }
   },
-  "comingSoon": {
-    "apex": {
-      "summary": "Run Anonymous Apex quickly with structured execution output.",
-      "bullets": [
-        "Code editing and quick execution",
-        "Execution logs and error pinpointing",
-        "Reusable run history"
-      ]
+  "apexRunner": {
+    "historyLabel": "History",
+    "historyOptionEmpty": "No history yet",
+    "historyOptionPick": "Pick a saved run\u2026",
+    "clearHistory": "Clear history",
+    "run": "Execute",
+    "running": "Executing\u2026",
+    "resultPlaceholder": "Write Anonymous Apex and press Cmd+Enter to execute.",
+    "executionSuccess": "Execution Successful",
+    "compileError": "Compile Error",
+    "runtimeException": "Runtime Exception",
+    "executionFailed": "Execution Failed",
+    "jumpToLine": "Jump to line {{line}}, column {{column}}",
+    "execLogTitle": "Execution Log",
+    "clearLog": "Clear log",
+    "logPanelEmpty": "No log yet. Execute Apex code to see details.",
+    "monacoRunAction": "Run Apex",
+    "openInEditor": "Open in Editor",
+    "log": {
+      "runStart": "Running Apex, org={{org}}",
+      "runSuccess": "Completed in {{ms}}ms",
+      "runFail": "Failed: {{message}}"
     }
   },
   "deployer": {

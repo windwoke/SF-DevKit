@@ -20,6 +20,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::export::save_export_file,
+            commands::export::open_in_editor,
             commands::org::sync_orgs,
             commands::org::list_orgs,
             commands::org::set_default_org,
@@ -55,6 +56,7 @@ pub fn run() {
             commands::log_viewer::renew_trace,
             commands::log_viewer::disable_trace,
             commands::log_viewer::pick_log_output_directory,
+            commands::apex::run_apex,
             commands::deployer::deploy_metadata,
             commands::deployer::check_package_xml,
             commands::deployer::cancel_deploy,

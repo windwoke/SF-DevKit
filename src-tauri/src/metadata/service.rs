@@ -9,6 +9,9 @@ use crate::metadata::models::{ComponentMeta, MetadataTypeMeta};
 /// 标记该 org 的 types 列表已按 childXmlNames 展开逻辑重建，避免长期命中无子类型的旧缓存。
 const META_KEY_TYPES_CHILDREN_V2: &str = "metadata_types_children_v2";
 
+/// Salesforce 中 folder-based 类型（EmailTemplate, Report 等）的未归档公共文件夹
+const UNFILED_PUBLIC_FOLDER: &str = "unfiled$public";
+
 /// 正常 `sf org list metadata-types` 下，这些父类型在解析 `childXmlNames` 后一定会出现对应子类型行。
 /// 若 SQLite 里只有父、没有子，且所有行的 `parent_xml_name` 都为空，则多为「打了 v2 标记却从未写入子行」的损坏缓存，不能信任 marker。
 const EXPECTED_PARENT_CHILD_PAIRS: &[(&str, &str)] = &[
@@ -281,7 +284,6 @@ impl MetadataService {
             }
         }
 
-        // 检查该类型是否为 folder-based 类型（EmailTemplate, Report, Dashboard, Document 等）
         let in_folder: bool = sqlx::query_scalar::<_, i64>(
             "SELECT in_folder FROM metadata_types WHERE org_id = ?1 AND xml_name = ?2",
         )
@@ -293,7 +295,6 @@ impl MetadataService {
         .unwrap_or(false);
 
         if in_folder {
-            // folder-based 类型：先列出所有文件夹，再按文件夹逐个拉组件
             return self
                 .get_folder_based_components(org_id, metadata_type)
                 .await;
@@ -343,10 +344,8 @@ impl MetadataService {
         org_id: &str,
         metadata_type: &str,
     ) -> anyhow::Result<Vec<ComponentMeta>> {
-        // folder-based 类型对应的文件夹元数据类型：EmailTemplate → EmailFolder, Report → ReportFolder 等
         let folder_type = format!("{}Folder", metadata_type);
 
-        // 第一步：列出所有文件夹
         let folder_output = run_command(
             &[
                 "org",
@@ -371,20 +370,18 @@ impl MetadataService {
         let parsed = parse_cli_json(&folder_output.stdout)?;
         let folder_list = parsed["result"].as_array();
 
-        // 收集文件夹名，始终包含 unfiled$public 作为兜底
-        let mut folder_names: Vec<String> = vec!["unfiled$public".to_string()];
+        let mut folder_names: Vec<String> = vec![UNFILED_PUBLIC_FOLDER.to_string()];
         if let Some(folders) = folder_list {
             for folder in folders {
                 if let Some(name) = folder["fullName"].as_str() {
-                    if !name.is_empty() && name != "unfiled$public" {
+                    if !name.is_empty() && name != UNFILED_PUBLIC_FOLDER {
                         folder_names.push(name.to_string());
                     }
                 }
             }
         }
 
-        // 第二步：逐个文件夹拉组件
-        let mut all_components = Vec::new();
+        let mut all_items: Vec<serde_json::Value> = Vec::new();
         for folder_name in &folder_names {
             eprintln!(
                 "[metadata.service] get_folder_based_components fetching folder={} org_id={} type={}",
@@ -418,24 +415,18 @@ impl MetadataService {
                 }
             };
 
-            let items = match comp_parsed["result"].as_array() {
-                Some(arr) => arr,
-                None => continue,
-            };
-
-            let components = self
-                .persist_components(org_id, metadata_type, items)
-                .await?;
-            all_components.extend(components);
+            if let Some(items) = comp_parsed["result"].as_array() {
+                all_items.extend(items.iter().cloned());
+            }
         }
 
         eprintln!(
-            "[metadata.service] get_folder_based_components total={} org_id={} type={}",
-            all_components.len(),
+            "[metadata.service] get_folder_based_components total_items={} org_id={} type={}",
+            all_items.len(),
             org_id,
             metadata_type
         );
-        Ok(all_components)
+        self.persist_components(org_id, metadata_type, &all_items).await
     }
 
     /// 解析 CLI JSON 结果并持久化到 SQLite，返回组件列表
@@ -445,6 +436,7 @@ impl MetadataService {
         metadata_type: &str,
         list: &[serde_json::Value],
     ) -> anyhow::Result<Vec<ComponentMeta>> {
+        let mut tx = self.pool.begin().await?;
         let mut out = Vec::with_capacity(list.len());
         let mut seen = HashSet::new();
         for item in list {
@@ -478,7 +470,7 @@ impl MetadataService {
             .bind(&file_name)
             .bind(&last_modified)
             .bind(&created_by_name)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
             out.push(ComponentMeta {
@@ -488,6 +480,7 @@ impl MetadataService {
                 created_by_name,
             });
         }
+        tx.commit().await?;
 
         eprintln!(
             "[metadata.service] persist_components rows={} org_id={} type={}",

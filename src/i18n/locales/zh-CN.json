@@ -379,14 +379,28 @@
       "lastModified": "最后修改: {{date}}"
     }
   },
-  "comingSoon": {
-    "apex": {
-      "summary": "用于快速执行 Anonymous Apex，并展示结构化执行结果。",
-      "bullets": [
-        "代码编辑与快捷执行",
-        "执行日志与错误定位",
-        "结果历史与复用"
-      ]
+  "apexRunner": {
+    "historyLabel": "历史记录",
+    "historyOptionEmpty": "暂无历史记录",
+    "historyOptionPick": "选择历史执行\u2026",
+    "clearHistory": "清空历史",
+    "run": "执行",
+    "running": "执行中\u2026",
+    "resultPlaceholder": "编写 Anonymous Apex 并按 Cmd+Enter 执行。",
+    "executionSuccess": "执行成功",
+    "compileError": "编译错误",
+    "runtimeException": "运行时异常",
+    "executionFailed": "执行失败",
+    "jumpToLine": "跳转到第 {{line}} 行，第 {{column}} 列",
+    "execLogTitle": "执行日志",
+    "clearLog": "清空日志",
+    "logPanelEmpty": "暂无日志。执行 Apex 代码以查看详情。",
+    "monacoRunAction": "运行 Apex",
+    "openInEditor": "在编辑器中打开",
+    "log": {
+      "runStart": "执行 Apex，org={{org}}",
+      "runSuccess": "完成，耗时 {{ms}}ms",
+      "runFail": "失败：{{message}}"
     }
   },
   "deployer": {

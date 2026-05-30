@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Sidebar } from "./components/Layout/Sidebar";
 import { TopBar } from "./components/Layout/TopBar";
-import { ComingSoon } from "./modules/ComingSoon";
+import { ApexRunner } from "./modules/ApexRunner";
 import { Deployer } from "./modules/Deployer";
 import { LogViewer } from "./modules/LogViewer";
 import { MetadataBrowser } from "./modules/MetadataBrowser";
@@ -27,17 +27,7 @@ export default function App() {
       label: t("modules.logs"),
       render: LogViewer,
     },
-    {
-      id: "apex",
-      label: t("modules.apex"),
-      render: () => (
-        <ComingSoon
-          title={t("modules.apex")}
-          summary={t("comingSoon.apex.summary")}
-          bullets={t("comingSoon.apex.bullets", { returnObjects: true }) as string[]}
-        />
-      ),
-    },
+    { id: "apex", label: t("modules.apex"), render: ApexRunner },
   ];
   // Keyboard shortcuts: Cmd/Ctrl + 1..6 to switch modules
   useEffect(() => {
@@ -55,7 +45,6 @@ export default function App() {
   });
 
   const active = moduleRegistry.find((m) => m.id === activeModule) ?? moduleRegistry[0];
-  const ActiveComponent = active.render;
 
   return (
     <div className="app-shell">
@@ -63,7 +52,14 @@ export default function App() {
       <div className="app-body">
         <Sidebar modules={moduleRegistry} active={activeModule} onSelect={setActiveModule} />
         <main className="main-panel">
-          <ActiveComponent />
+          {moduleRegistry.map((m) => {
+            const Component = m.render;
+            return (
+              <div key={m.id} style={{ display: m.id === activeModule ? undefined : "none", height: "100%" }}>
+                <Component />
+              </div>
+            );
+          })}
         </main>
       </div>
     </div>

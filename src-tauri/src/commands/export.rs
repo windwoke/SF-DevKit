@@ -8,3 +8,25 @@ pub fn save_export_file(default_name: String, content: String) -> Result<(), Str
     std::fs::write(path, content).map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn open_in_editor(content: String, default_name: String) -> Result<String, String> {
+    let mut path = std::env::temp_dir();
+    path.push(&default_name);
+    std::fs::write(&path, &content).map_err(|e| e.to_string())?;
+
+    let file_path = path.to_string_lossy().to_string();
+    // macOS: open with default text editor
+    let status = tokio::process::Command::new("open")
+        .arg("-t")
+        .arg(&file_path)
+        .status()
+        .await
+        .map_err(|e| format!("Failed to spawn open: {}", e))?;
+
+    if status.success() {
+        Ok(file_path)
+    } else {
+        Err(format!("Failed to open: exit code {}", status.code().unwrap_or(-1)))
+    }
+}

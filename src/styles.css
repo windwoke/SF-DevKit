@@ -1651,6 +1651,276 @@ button.soql-results-btn--err {
   color: #9cb2d4;
 }
 
+/* ---- Apex Runner ---- */
+
+.apex-module .apex-hint {
+  font-size: 12px;
+  color: #7b8aab;
+  margin-left: 10px;
+}
+
+.apex-layout {
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+
+.apex-layout-left {
+  flex: 1 1 50%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.apex-layout-right {
+  flex: 1 1 50%;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.apex-editor-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.apex-history-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.apex-history-label {
+  font-size: 12px;
+  color: #7b8aab;
+  flex-shrink: 0;
+}
+
+.apex-history-select {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 8px;
+  font-size: 12px;
+  background: var(--bg-input);
+  color: #f5f7ff;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+}
+
+.apex-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 0;
+}
+
+.apex-run-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.apex-run-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.apex-run-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.apex-run-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.apex-run-btn--busy {
+  background: #1e3a8a;
+  pointer-events: none;
+}
+
+.apex-shortcut-hint {
+  font-size: 11px;
+  color: #556078;
+}
+
+.apex-results {
+  overflow-y: auto;
+}
+
+.apex-results-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.apex-save-btn {
+  font-size: 12px;
+  padding: 3px 10px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: #7b8aab;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.apex-save-btn:hover {
+  background: #1e2a38;
+}
+
+.apex-log-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.apex-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.apex-log-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.apex-log-header button {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: #7b8aab;
+  cursor: pointer;
+}
+
+.apex-log-list {
+  overflow-y: auto;
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.apex-log-item {
+  padding: 2px 0;
+  color: #aebad4;
+}
+
+.apex-log-item.error {
+  color: #f87171;
+}
+
+.apex-log-time {
+  color: #556078;
+  margin-right: 4px;
+}
+
+.apex-result-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.apex-success-card {
+  border: 1px solid #166534;
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(22, 101, 52, 0.12);
+  margin-bottom: 10px;
+}
+
+.apex-success-card .apex-result-title {
+  color: #4ade80;
+}
+
+.apex-error-card {
+  border: 1px solid #7f1d1d;
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(127, 29, 29, 0.12);
+  margin-bottom: 10px;
+}
+
+.apex-error-card .apex-result-title {
+  color: #f87171;
+}
+
+.apex-error-message {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #fca5a5;
+  white-space: pre-wrap;
+  margin-bottom: 8px;
+}
+
+.apex-stack-trace {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #aebad4;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #0f1115;
+  padding: 8px;
+  border-radius: 4px;
+  margin: 0;
+}
+
+.apex-error-raw {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #aebad4;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+.apex-log-output {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #aebad4;
+  white-space: pre-wrap;
+  max-height: 400px;
+  overflow-y: auto;
+  background: #0f1115;
+  padding: 8px;
+  border-radius: 4px;
+  margin: 0;
+}
+
+.apex-jump-link {
+  display: inline-block;
+  font-size: 12px;
+  color: #60a5fa;
+  background: none;
+  border: 1px solid #1e3a5f;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: background 0.15s;
+}
+
+.apex-jump-link:hover {
+  background: #1e3a5f;
+}
+
 .log-viewer-module {
   display: flex;
   flex-direction: column;
