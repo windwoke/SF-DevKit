@@ -57,8 +57,13 @@ jobs:
 
       - name: Setup notarization API key
         run: |
-          echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
-          echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > "$KEY_PATH"
+          echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+          # multi-line p8 content via heredoc
+          echo 'APPLE_API_KEY<<P8EOF' >> "$GITHUB_ENV"
+          cat "$KEY_PATH" >> "$GITHUB_ENV"
+          echo 'P8EOF' >> "$GITHUB_ENV"
 
       - name: Build Tauri app
         run: npm run tauri build
