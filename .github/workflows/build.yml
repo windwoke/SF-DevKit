@@ -17,7 +17,6 @@ jobs:
 
     env:
       APPLE_SIGNING_IDENTITY: "Developer ID Application: zhonghui li (JSRAB4F28W)"
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
       APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
@@ -45,6 +44,8 @@ jobs:
         uses: swatinem/rust-cache@v2
 
       - name: Import Apple certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
         run: |
           CERT_PATH=$RUNNER_TEMP/apple_cert.p12
           echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
