@@ -18,7 +18,6 @@ jobs:
     env:
       APPLE_SIGNING_IDENTITY: "Developer ID Application: zhonghui li (JSRAB4F28W)"
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
       APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
 
@@ -57,10 +56,8 @@ jobs:
           rm "$CERT_PATH"
 
       - name: Setup notarization API key
-        env:
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
         run: |
-          echo "$APPLE_API_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
           echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
 
       - name: Build Tauri app
