@@ -18,8 +18,6 @@ jobs:
     env:
       APPLE_SIGNING_IDENTITY: "Developer ID Application: zhonghui li (JSRAB4F28W)"
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
 
     steps:
       - name: Checkout
@@ -57,16 +55,24 @@ jobs:
 
       - name: Setup notarization API key
         run: |
-          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
-          echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > "$KEY_PATH"
-          echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
-          # multi-line p8 content via heredoc
-          echo 'APPLE_API_KEY<<P8EOF' >> "$GITHUB_ENV"
-          cat "$KEY_PATH" >> "$GITHUB_ENV"
-          echo 'P8EOF' >> "$GITHUB_ENV"
+          echo "${{ secrets.APPLE_API_KEY }}" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
 
       - name: Build Tauri app
         run: npm run tauri build
+
+      - name: Notarize DMG
+        run: |
+          xcrun notarytool submit \
+            "src-tauri/target/release/bundle/dmg/SF DevKit_0.1.0_aarch64.dmg" \
+            --key "$RUNNER_TEMP/AuthKey.p8" \
+            --key-id "${{ secrets.APPLE_KEY_ID }}" \
+            --issuer "${{ secrets.APPLE_API_ISSUER }}" \
+            --wait
+
+      - name: Staple notarization ticket
+        run: |
+          xcrun stapler staple \
+            "src-tauri/target/release/bundle/dmg/SF DevKit_0.1.0_aarch64.dmg"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
