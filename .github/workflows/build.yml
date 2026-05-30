@@ -15,6 +15,14 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    env:
+      APPLE_SIGNING_IDENTITY: "Developer ID Application: zhonghui li (JSRAB4F28W)"
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,6 +43,17 @@ jobs:
 
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
+
+      - name: Import Apple certificate
+        run: |
+          CERT_PATH=$RUNNER_TEMP/apple_cert.p12
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import "$CERT_PATH" -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          rm "$CERT_PATH"
 
       - name: Build Tauri app
         run: npm run tauri build
