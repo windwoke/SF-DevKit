@@ -258,76 +258,70 @@ pub async fn open_org_linked_project_in_ide(pool: &SqlitePool, org_id: &str) -> 
 
 async fn open_path_in_ide(path: &str) -> anyhow::Result<()> {
     use std::path::Path;
-    use tokio::process::Command;
 
     let p = Path::new(path);
     if !p.exists() {
         anyhow::bail!("路径不存在：{}", path);
     }
 
+    // Inject PATH for bundled macOS apps so child processes can find tools
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let extra_path = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
+    let path_env = if !current_path.contains("/opt/homebrew") {
+        format!("{}:{}", extra_path, current_path)
+    } else {
+        current_path
+    };
+
     #[cfg(target_os = "macos")]
-    {
-        for bin in ["cursor", "code"] {
-            if which::which(bin).is_ok() {
-                if Command::new(bin)
-                    .arg(path)
-                    .status()
-                    .await
-                    .is_ok_and(|s| s.success())
-                {
-                    return Ok(());
-                }
+    let editor_bins: &[&str] = &["cursor", "code"];
+    #[cfg(target_os = "windows")]
+    let editor_bins: &[&str] = &["cursor", "code", "code.cmd"];
+    #[cfg(target_os = "linux")]
+    let editor_bins: &[&str] = &["cursor", "code", "codium", "code-oss"];
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    let editor_bins: &[&str] = &[];
+
+    for bin in editor_bins {
+        let bin_path = crate::cli::runner::find_editor(bin);
+        if let Some(editor_path) = bin_path {
+            if tokio::process::Command::new(&editor_path)
+                .arg(path)
+                .env("PATH", &path_env)
+                .status()
+                .await
+                .is_ok_and(|s| s.success())
+            {
+                return Ok(());
             }
         }
-        let status = Command::new("open").arg(path).status().await?;
+    }
+
+    // Fallback to system file opener
+    #[cfg(target_os = "macos")]
+    {
+        let status = tokio::process::Command::new("open").arg(path).status().await?;
         if status.success() {
             return Ok(());
         }
         anyhow::bail!("无法在 Finder 中打开该路径");
     }
-
     #[cfg(target_os = "windows")]
     {
-        for bin in ["cursor", "code", "code.cmd"] {
-            if which::which(bin).is_ok() {
-                if Command::new(bin)
-                    .arg(path)
-                    .status()
-                    .await
-                    .is_ok_and(|s| s.success())
-                {
-                    return Ok(());
-                }
-            }
-        }
-        let status = Command::new("explorer").arg(path).status().await?;
+        let status = tokio::process::Command::new("explorer").arg(path).status().await?;
         if status.success() {
             return Ok(());
         }
         anyhow::bail!("无法打开该路径");
     }
-
     #[cfg(target_os = "linux")]
     {
-        for bin in ["cursor", "code", "codium", "code-oss"] {
-            if which::which(bin).is_ok() {
-                if Command::new(bin)
-                    .arg(path)
-                    .status()
-                    .await
-                    .is_ok_and(|s| s.success())
-                {
-                    return Ok(());
-                }
-            }
-        }
-        let status = Command::new("xdg-open").arg(path).status().await?;
+        let status = tokio::process::Command::new("xdg-open").arg(path).status().await?;
         if status.success() {
             return Ok(());
         }
         anyhow::bail!("xdg-open 失败");
     }
-
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         anyhow::bail!("当前平台不支持从应用内打开 IDE");

@@ -40,6 +40,51 @@ pub fn find_sf() -> Option<PathBuf> {
     None
 }
 
+/// Resolve a CLI binary with PATH lookup + macOS hardcoded fallbacks.
+/// Useful for bundled macOS apps where user shell PATH is not inherited.
+pub fn find_binary(name: &str, macos_fallbacks: &[&str]) -> Option<PathBuf> {
+    if let Ok(path) = which::which(name) {
+        return Some(path);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        for &p in macos_fallbacks {
+            let candidate = PathBuf::from(p);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+/// Common macOS fallback paths for VSCode / Cursor editor CLIs.
+#[cfg(target_os = "macos")]
+const EDITOR_FALLBACKS: &[(&str, &[&str])] = &[
+    ("code", &[
+        "/usr/local/bin/code",
+        "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+    ]),
+    ("cursor", &[
+        "/usr/local/bin/cursor",
+        "/Applications/Cursor.app/Contents/Resources/app/bin/cursor",
+        "/Applications/Cursor.app/Contents/MacOS/Cursor",
+    ]),
+];
+
+/// Resolve an editor binary (`code`, `cursor`, etc.) with macOS fallbacks.
+pub fn find_editor(name: &str) -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        for (editor, fallbacks) in EDITOR_FALLBACKS {
+            if name == *editor {
+                return find_binary(name, fallbacks);
+            }
+        }
+    }
+    find_binary(name, &[])
+}
+
 pub async fn run_command(args: &[&str], force_json: bool) -> anyhow::Result<CliOutput> {
     let sf_path = find_sf()
         .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;

@@ -9,7 +9,7 @@ use sqlx::FromRow;
 use sqlx::SqlitePool;
 use tokio::process::Command;
 
-use crate::cli::runner::run_command;
+use crate::cli::runner::{find_editor, run_command};
 
 use super::models::{ActiveTrace, ApexClassItem, ApexLog, SfUser};
 
@@ -151,11 +151,21 @@ pub async fn download_latest_self_log(
 }
 
 pub async fn open_in_vscode(file_path: &str) -> anyhow::Result<()> {
-    let code_cmd = which::which("code").context(
+    let code_cmd = find_editor("code").context(
         "未找到 VSCode CLI（code 命令）。请在 VSCode 中执行：Shell Command: Install 'code' command in PATH",
     )?;
 
-    let status = Command::new(code_cmd).arg(file_path).status().await?;
+    let mut cmd = Command::new(&code_cmd);
+    cmd.arg(file_path);
+
+    // Inject PATH for bundled macOS apps so child processes can find related tools
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
+    if !current_path.contains("/opt/homebrew") {
+        cmd.env("PATH", format!("{}:{}", extra, current_path));
+    }
+
+    let status = cmd.status().await?;
     if !status.success() {
         anyhow::bail!("VSCode 启动失败");
     }

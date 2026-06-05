@@ -91,6 +91,7 @@ export function DeployConfig({ onDeploy }: { onDeploy: () => void }) {
   ];
 
   const testOptions: [TestLevel, string][] = [
+    ["default", t("deployer.testDefault")],
     ["no_test_run", t("deployer.testNoRun")],
     ["run_local_tests", t("deployer.testLocal")],
     ["run_specified_tests", t("deployer.testSpecified")],

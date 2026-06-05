@@ -448,6 +448,7 @@
     "modeQuickDeploy": "Quick Deploy",
     "modeDeployShort": "部署",
     "errorCount": "{{count}} 个错误",
+    "testDefault": "默认",
     "testNoRun": "不运行",
     "testLocal": "本地测试",
     "testSpecified": "指定类",

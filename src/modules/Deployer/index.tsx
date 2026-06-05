@@ -137,7 +137,7 @@ export function Deployer() {
       items: [
         { label: t("deployer.targetOrg"), value: targetOrg?.alias ?? targetOrgId! },
         { label: t("deployer.mode"), value: modeLabel },
-        { label: t("deployer.testLevel"), value: t(`deployer.test${config.testLevel === "no_test_run" ? "NoRun" : config.testLevel === "run_local_tests" ? "Local" : "Specified"}`) },
+        { label: t("deployer.testLevel"), value: t(`deployer.test${config.testLevel === "default" ? "Default" : config.testLevel === "no_test_run" ? "NoRun" : config.testLevel === "run_local_tests" ? "Local" : "Specified"}`) },
         { label: t("deployer.workingDir"), value: workingDir! },
       ],
       onConfirm: doDeploy,

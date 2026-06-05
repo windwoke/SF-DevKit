@@ -43,9 +43,8 @@ pub async fn retrieve_for_diff(
 
     let workspace = prepare_temp_workspace(event_id).await?;
 
-    let sf_path = which::which("sf")
-        .or_else(|_| which::which("sfdx"))
-        .map_err(|_| anyhow::anyhow!("未找到 sf CLI"))?;
+    let sf_path = crate::cli::runner::find_sf()
+        .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI"))?;
 
     let mut cmd = Command::new(&sf_path);
     cmd.args([

@@ -51,9 +51,8 @@ impl RetrieveRunner {
         let package_xml = generate_package_xml(&selections, api_version);
         tokio::fs::write(&pkg_path, package_xml.as_bytes()).await?;
 
-        let sf_path = which::which("sf")
-            .or_else(|_| which::which("sfdx"))
-            .map_err(|_| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
+        let sf_path = crate::cli::runner::find_sf()
+            .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
         let workspace = prepare_temp_sfdx_workspace(event_id).await?;
         let internal_output_dir = workspace.join(".sfdevkit-output");
         let internal_output_arg = ".sfdevkit-output";
@@ -88,6 +87,13 @@ impl RetrieveRunner {
         cmd.stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+
+        // Inject PATH for bundled macOS apps
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
+        if !current_path.contains("/opt/homebrew") {
+            cmd.env("PATH", format!("{}:{}", extra, current_path));
+        }
 
         let mut child = cmd.spawn()?;
         if let Some(pid) = child.id() {

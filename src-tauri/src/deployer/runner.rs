@@ -70,11 +70,16 @@ impl DeployRunner {
         // Deploy mode: no special flags, just deploy directly
 
         let test_level_str = match options.test_level {
+            TestLevel::Default => "Default",
             TestLevel::NoTestRun => "NoTestRun",
             TestLevel::RunLocalTests => "RunLocalTests",
             TestLevel::RunSpecifiedTests => "RunSpecifiedTests",
         };
-        args.extend(["--test-level".into(), test_level_str.into()]);
+
+        // When Default, let sf CLI decide based on org type (no --test-level flag)
+        if !matches!(options.test_level, TestLevel::Default) {
+            args.extend(["--test-level".into(), test_level_str.into()]);
+        }
 
         if matches!(options.test_level, TestLevel::RunSpecifiedTests)
             && !options.test_classes.is_empty()
@@ -84,9 +89,8 @@ impl DeployRunner {
             }
         }
 
-        let sf_path = which::which("sf")
-            .or_else(|_| which::which("sfdx"))
-            .map_err(|_| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
+        let sf_path = crate::cli::runner::find_sf()
+            .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
 
         let mut cmd = Command::new(&sf_path);
         cmd.args(&args);
@@ -286,9 +290,8 @@ impl DeployRunner {
     ) -> anyhow::Result<DeployResult> {
         let started_at = Instant::now();
 
-        let sf_path = which::which("sf")
-            .or_else(|_| which::which("sfdx"))
-            .map_err(|_| anyhow::anyhow!("未找到 sf CLI"))?;
+        let sf_path = crate::cli::runner::find_sf()
+            .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI"))?;
 
         let mut cmd = Command::new(&sf_path);
         cmd.args([

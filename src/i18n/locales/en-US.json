@@ -448,6 +448,7 @@
     "modeQuickDeploy": "Quick Deploy",
     "modeDeployShort": "Deploy",
     "errorCount": "{{count}} error(s)",
+    "testDefault": "Default",
     "testNoRun": "No Run",
     "testLocal": "Local Tests",
     "testSpecified": "Specified",

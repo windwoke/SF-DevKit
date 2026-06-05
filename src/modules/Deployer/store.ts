@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 export type DeployMode = "deploy" | "validate_and_deploy" | "validate_only";
-export type TestLevel = "no_test_run" | "run_local_tests" | "run_specified_tests";
+export type TestLevel = "default" | "no_test_run" | "run_local_tests" | "run_specified_tests";
 
 interface DeployConfig {
   mode: DeployMode;
@@ -63,7 +63,7 @@ export const useDeployStore = create<DeployStore>((set) => ({
   targetOrgId: null,
   config: {
     mode: "deploy",
-    testLevel: "no_test_run",
+    testLevel: "default",
     testClasses: [],
   },
   isDeploying: false,
