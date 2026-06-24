@@ -20,6 +20,8 @@ The AI feature should preserve this boundary. The model should not directly acce
 - Keep all Salesforce operations inside existing Rust/Tauri and `sf` CLI flows.
 - Make AI actions inspectable and confirmable before executing side-effecting operations.
 - Allow OpenAI-compatible providers through configurable base URL, API key, and model.
+- Report progress while the AI orchestrator is searching schema, calling tools, or validating output.
+- Localize AI-facing UI text and model-generated explanations according to the current app locale.
 
 ## Non-Goals
 
@@ -28,6 +30,8 @@ The AI feature should preserve this boundary. The model should not directly acce
 - Do not automatically run generated SOQL, retrieve metadata, deploy metadata, or open external tools without user confirmation.
 - Do not introduce a heavy agent framework before the app has concrete AI workflows.
 - Do not replace existing Monaco completion, metadata browser, retrieve, deploy, or diff flows.
+- Do not support persistent multi-turn conversation memory in V1. Each request is single-turn, although the frontend may pass the current editor text or current metadata selection as explicit context.
+- Do not send local file contents to the model for "find my changes" workflows. V1 sends paths, git statuses, and inferred metadata identity only.
 
 ## Recommended Product Shape
 
@@ -96,7 +100,8 @@ src-tauri/src/ai/
 Responsibilities:
 
 - Load AI provider settings.
-- Store base URL, API key, model, timeout, and enablement.
+- Store base URL, model, timeout, token budget, and enablement.
+- Store API keys in OS-backed secure storage, not Zustand persistence or browser local storage.
 - Avoid logging secrets.
 
 Suggested settings:
@@ -105,21 +110,35 @@ Suggested settings:
 interface AiSettings {
   enabled: boolean;
   provider: "openai-compatible";
+  apiMode: "chat_completions";
   baseUrl: string;
-  apiKey: string;
+  hasApiKey: boolean;
   model: string;
   temperature: number;
+  timeoutMs: number;
+  maxToolIterations: number;
+  maxOutputTokens: number;
 }
 ```
+
+API key storage is a Phase 1 decision:
+
+- Use OS-backed secure storage through Rust, such as the `keyring` crate or an equivalent Tauri secure-storage plugin.
+- Store only non-secret provider metadata in the existing settings store.
+- `save_ai_settings` may accept a new key, but `get_ai_settings` only returns `hasApiKey`.
+- If secure storage is unavailable on a platform, AI setup should fail closed with an actionable error instead of falling back to plaintext local storage.
 
 ### `client.rs`
 
 Responsibilities:
 
-- Send requests to an OpenAI-compatible Responses or Chat Completions endpoint.
-- Support tool/function calling.
+- Define an `AiClient` trait so provider details do not leak into the orchestrator.
+- Send requests to an OpenAI-compatible Chat Completions endpoint in V1.
+- Support tool calling through the provider's OpenAI-compatible tool/function schema.
 - Parse model tool calls and final responses.
 - Normalize provider errors into user-friendly messages.
+
+V1 should default to Chat Completions because it has broad compatibility across OpenAI-compatible providers. The client boundary should keep request/response mapping isolated so a future Responses API implementation can be added without changing tool router or UI code.
 
 ### `orchestrator.rs`
 
@@ -129,7 +148,8 @@ Responsibilities:
 - Build system prompt and context.
 - Register available tools based on the requested workflow.
 - Run the model/tool loop.
-- Enforce max iterations.
+- Enforce max iterations. Default: 5 tool-call rounds per `ai_assist` request.
+- Emit progress events for each major step.
 - Return a structured `AiAssistResponse`.
 
 The orchestrator is intentionally thin. It should not contain Salesforce business logic. It delegates business operations to the tool router.
@@ -169,6 +189,9 @@ Add these commands:
 pub async fn ai_assist(request: AiAssistRequest) -> Result<AiAssistResponse, String>;
 
 #[tauri::command]
+pub async fn ai_assist_with_progress(request: AiAssistRequest, event_id: String) -> Result<AiAssistResponse, String>;
+
+#[tauri::command]
 pub async fn get_ai_settings() -> Result<AiSettingsPublic, String>;
 
 #[tauri::command]
@@ -178,7 +201,20 @@ pub async fn save_ai_settings(settings: AiSettingsInput) -> Result<(), String>;
 pub async fn test_ai_connection() -> Result<(), String>;
 ```
 
-`AiSettingsPublic` must not return the raw API key. It can return whether a key is configured.
+`AiSettingsPublic` must not return the raw API key. It returns whether a key is configured and whether AI is currently usable.
+
+```ts
+interface AiSettingsPublic {
+  enabled: boolean;
+  provider: "openai-compatible";
+  apiMode: "chat_completions";
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  available: boolean;
+  unavailableReason?: "disabled" | "missing_api_key" | "invalid_settings" | "secure_storage_unavailable";
+}
+```
 
 ## Frontend Module Layout
 
@@ -188,6 +224,7 @@ Add shared AI frontend code:
 src/modules/AiAssistant/
   AiPromptInput.tsx
   AiResultPreview.tsx
+  AiProgressLog.tsx
   intentTypes.ts
   useAiAssist.ts
 ```
@@ -210,11 +247,13 @@ src/modules/MetadataBrowser/AiMetadataPrompt.tsx
 
 ```ts
 type AiWorkflow = "soql" | "metadata_selection" | "local_changes" | "deploy_help";
+type AiLocale = "zh-CN" | "en-US";
 
 interface AiAssistRequest {
   workflow: AiWorkflow;
   orgId: string | null;
   text: string;
+  locale: AiLocale;
   context?: Record<string, unknown>;
 }
 
@@ -229,6 +268,7 @@ interface AiSoqlResponse {
   query: string;
   explanation: string;
   warnings: string[];
+  usage?: AiUsage;
 }
 
 interface AiMetadataSelectionResponse {
@@ -237,20 +277,33 @@ interface AiMetadataSelectionResponse {
   explanation: string;
   warnings: string[];
   packageXmlPreview?: string;
+  usage?: AiUsage;
 }
 
 interface AiClarificationResponse {
   kind: "clarification";
   question: string;
   suggestions: string[];
+  usage?: AiUsage;
 }
 
 interface AiErrorResponse {
   kind: "error";
   message: string;
   recoverable: boolean;
+  usage?: AiUsage;
+}
+
+interface AiUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  toolCalls: number;
+  elapsedMs: number;
 }
 ```
+
+V1 is single-turn. The frontend may pass explicit context, such as the current SOQL editor content, selected metadata items, or linked project path. The backend does not maintain conversation history and does not infer prior turns unless they are included in `context`.
 
 ## Tool Calling Model
 
@@ -260,10 +313,60 @@ The app must enforce these rules:
 
 - Unknown tools are rejected.
 - Invalid arguments are rejected.
-- Tool calls have a max iteration count.
+- Tool calls have a max iteration count. Default: 5 rounds.
 - Side-effecting tools are not available during draft generation.
 - Tool output is compact and does not include secrets.
 - Final output must match one of the supported response schemas.
+- Each request has a timeout. Default: 30 seconds.
+- Each request has an output budget. Default: 2,000 output tokens.
+- Tool outputs should be capped before they are appended to model context.
+
+## Streaming And Progress
+
+V1 should stream progress events rather than token-by-token model output. This matches the app's existing Tauri event pattern used by retrieve and deploy runners, and it works across more OpenAI-compatible providers.
+
+`ai_assist_with_progress` emits events to the provided `event_id`:
+
+```ts
+interface AiProgressEvent {
+  event_type: "start" | "tool_start" | "tool_result" | "model_step" | "warning" | "done" | "error";
+  message: string;
+  toolName?: string;
+  elapsedMs?: number;
+}
+```
+
+Example UI messages:
+
+- "正在理解你的请求..."
+- "正在检索对象和字段..."
+- "正在校验 SOQL..."
+- "正在扫描本地修改..."
+- "正在生成 package.xml 预览..."
+
+Token streaming can be added later for long explanatory answers, but it is not required for the first SOQL and metadata workflows.
+
+## Token Budget And Cost Controls
+
+Default limits:
+
+- `timeoutMs`: 30,000.
+- `maxToolIterations`: 5.
+- `maxOutputTokens`: 2,000.
+- Object search results: 10.
+- Field details: 200 fields per object.
+- Metadata type search results: 20.
+- Metadata component search results: 100.
+
+The orchestrator records usage returned by the provider when available:
+
+- prompt tokens
+- completion tokens
+- total tokens
+- number of tool calls
+- elapsed time
+
+The frontend can show usage in an expandable debug area. It should not block normal users with token details by default.
 
 ## Initial Tool Set
 
@@ -322,6 +425,12 @@ Performs lightweight local validation:
 
 This is not a replacement for Salesforce query validation.
 
+Implementation note:
+
+- Avoid maintaining a second complex SOQL parser that drifts from `src/modules/SoqlEditor/contextParser.ts` and `soqlCompletion.ts`.
+- V1 validation should stay deliberately shallow: detect `SELECT`, `FROM`, top-level object, and simple selected field names.
+- If deeper parsing is needed later, extract a shared TypeScript parser for the editor and AI workflow, or add a dedicated Rust parser with tests and a clearly documented feature boundary.
+
 ### `search_metadata_types`
 
 Read-only.
@@ -362,6 +471,14 @@ Arguments:
 ```
 
 Runs local git inspection for modified, added, deleted, and renamed files in the linked project path.
+
+Safety rules:
+
+- `projectPath` must match the org's configured linked project path or a child directory inside it.
+- The tool must not accept arbitrary model-supplied paths outside the linked project.
+- The tool returns paths, git statuses, inferred metadata type, inferred member name, and confidence.
+- The tool must not read or return file contents.
+- The tool should include untracked files by default because new metadata components are common during development.
 
 The result should include:
 
@@ -476,11 +593,12 @@ Use separate system prompts per workflow.
 - Do not ask the user to run shell commands.
 - Do not claim that an action was executed unless the tool result confirms it.
 - Return only the required structured response.
+- Return user-facing text in the request locale.
 
 ### SOQL Rules
 
 - Generate readable SOQL.
-- Include a conservative `LIMIT` unless the user explicitly requests all rows.
+- Include `LIMIT 200` unless the user explicitly requests all rows or an export workflow.
 - Prefer fields that exist in schema context.
 - Use Salesforce date literals when appropriate.
 - For ambiguous labels, choose the most likely object and include a warning.
@@ -515,12 +633,24 @@ For metadata:
 - Component search returns at most 100 components.
 - Git scan can return all changed paths, but summaries should be compact.
 
+## i18n And Output Language
+
+The app already uses `react-i18next` with `zh-CN` and `en-US`. AI features should follow the same rule:
+
+- All static UI labels, button text, error labels, progress messages, and settings copy live in locale JSON files.
+- `AiAssistRequest.locale` is set from the current i18n language.
+- The system prompt requires model-generated `explanation`, `warnings`, clarification questions, and suggestions to use that locale.
+- Tool names, metadata API names, object API names, field API names, and SOQL keywords remain unchanged.
+- Backend-generated fallback errors should return stable error codes where possible so the frontend can localize them.
+
 ## Security And Safety
 
-- API keys are stored in app settings and never logged.
+- API keys are stored in OS-backed secure storage and never logged.
+- Zustand/localStorage must not store API keys.
 - AI requests should redact access tokens, org auth internals, and local secret files.
 - The model cannot execute shell commands.
 - The model cannot directly run Tauri commands.
+- Model-supplied filesystem paths are constrained to the org's linked project path.
 - Side-effecting operations require explicit user confirmation.
 - Generated SOQL is inserted into the editor instead of automatically executed.
 - Generated metadata selections are previewed before retrieve or deploy.
@@ -542,6 +672,8 @@ The UI should handle:
 - Git repository unavailable.
 
 When the model cannot complete the request safely, return `AiClarificationResponse` or `AiErrorResponse`.
+
+When provider settings are invalid or AI is unavailable, the frontend should disable AI inputs and show localized setup guidance instead of letting every click fail. `get_ai_settings` should provide enough availability state for this.
 
 ## Testing Strategy
 
@@ -566,6 +698,12 @@ When the model cannot complete the request safely, return `AiClarificationRespon
 - Orchestrator executes local tools in order.
 - Final response is parsed and returned to frontend.
 
+### Provider Compatibility Tests
+
+- Keep normal CI on mocked client tests.
+- Add an optional manual integration test that calls a real OpenAI-compatible provider when credentials are present.
+- Consider cassette-style recording later to detect request/response schema drift, but do not make external provider calls mandatory in CI.
+
 ### Manual Verification
 
 - Configure AI provider.
@@ -580,11 +718,16 @@ When the model cannot complete the request safely, return `AiClarificationRespon
 ### Phase 1: Framework Skeleton
 
 - Add settings for AI provider.
+- Store API keys in OS-backed secure storage.
 - Add Rust AI module.
 - Add `ai_assist` command.
+- Add progress events for tool-loop steps.
 - Add OpenAI-compatible client.
+- Add `AiClient` trait with Chat Completions implementation.
 - Add tool router with read-only tool support.
 - Add mockable AI client for tests.
+- Add locale to request and localized AI output rules.
+- Add usage reporting.
 
 ### Phase 2: SOQL Generation
 
@@ -609,13 +752,10 @@ When the model cannot complete the request safely, return `AiClarificationRespon
 
 ## Open Questions
 
-- Should API keys be stored in persisted Zustand settings, Tauri secure storage, or a local encrypted file?
 - Should the app support multiple provider profiles or only one active provider?
-- Should local git change detection include untracked files by default?
 - Should "modified by me" use Salesforce metadata `created_by_name` / `last_modified`, local git author, or current org username?
-- Should generated SOQL default to `LIMIT 200`, `LIMIT 500`, or no limit when the user asks for exports?
+- Should deploy-help workflows remain single-turn, or should that phase introduce short-lived conversation state?
 
 ## Recommendation
 
 Build a thin AI Orchestrator inside the Rust backend and expose module-specific AI entry points in the frontend. Start with two workflows: natural language to SOQL and natural language to metadata selection. Keep all actions preview-first and user-confirmed. Avoid a heavy agent framework until the app needs cross-module autonomous workflows.
-
