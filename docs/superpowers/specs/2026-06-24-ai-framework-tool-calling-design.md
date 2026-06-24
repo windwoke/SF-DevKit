@@ -654,7 +654,42 @@ The app already uses `react-i18next` with `zh-CN` and `en-US`. AI features shoul
 - Side-effecting operations require explicit user confirmation.
 - Generated SOQL is inserted into the editor instead of automatically executed.
 - Generated metadata selections are previewed before retrieve or deploy.
-- Tool calls should be audited in logs for debugging, excluding secrets.
+- Tool calls should be audited in SQLite for debugging and abuse investigation, excluding secrets and raw user/model content.
+
+## AI Audit Logging
+
+Persist AI audit records to SQLite in an `ai_audit_log` table. The audit log is for operational debugging, timing, and safety review. It must not become a hidden transcript store.
+
+Suggested schema:
+
+```sql
+CREATE TABLE IF NOT EXISTS ai_audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp TEXT NOT NULL,
+  org_id TEXT,
+  workflow TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  tool_name TEXT,
+  args_hash TEXT,
+  result_hash TEXT,
+  duration_ms INTEGER,
+  status TEXT NOT NULL,
+  error_code TEXT,
+  prompt_tokens INTEGER,
+  completion_tokens INTEGER,
+  tool_call_count INTEGER
+);
+```
+
+Rules:
+
+- Do not store raw prompts, raw user input, raw tool arguments, raw tool results, raw model responses, generated SOQL, or generated package XML.
+- Store hashes or short stable error codes for correlation.
+- Hashes should be computed after canonical JSON serialization and redaction.
+- Store tool duration and status so slow or failing tools can be diagnosed without exposing data.
+- Default retention should be 30 days, with a settings option to clear AI audit logs.
+- Logs should be local-only and never sent to the AI provider.
+- If the user disables AI, existing audit logs remain local until retention cleanup or manual clear.
 
 ## Error Handling
 
