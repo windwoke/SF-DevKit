@@ -9,7 +9,7 @@ use sqlx::FromRow;
 use sqlx::SqlitePool;
 use tokio::process::Command;
 
-use crate::cli::runner::{find_editor, run_command};
+use crate::cli::runner::{find_editor, run_command, SuppressConsole};
 
 use super::models::{ActiveTrace, ApexClassItem, ApexLog, SfUser};
 
@@ -156,6 +156,7 @@ pub async fn open_in_vscode(file_path: &str) -> anyhow::Result<()> {
     )?;
 
     let mut cmd = Command::new(&code_cmd);
+    cmd.suppress_console();
     cmd.arg(file_path);
 
     // Inject PATH for bundled macOS apps so child processes can find related tools
@@ -175,7 +176,7 @@ pub async fn open_in_vscode(file_path: &str) -> anyhow::Result<()> {
 pub async fn reveal_log_file(file_path: &str) -> anyhow::Result<()> {
     #[cfg(target_os = "macos")]
     {
-        let status = Command::new("open").args(["-R", file_path]).status().await?;
+        let status = Command::new("open").suppress_console().args(["-R", file_path]).status().await?;
         if !status.success() {
             anyhow::bail!("无法在 Finder 中显示文件");
         }
@@ -184,6 +185,7 @@ pub async fn reveal_log_file(file_path: &str) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
         let status = Command::new("explorer")
+            .suppress_console()
             .args(["/select,", file_path])
             .status()
             .await?;
@@ -195,7 +197,7 @@ pub async fn reveal_log_file(file_path: &str) -> anyhow::Result<()> {
     #[cfg(target_os = "linux")]
     {
         let parent = Path::new(file_path).parent().unwrap_or_else(|| Path::new("/"));
-        let status = Command::new("xdg-open").arg(parent).status().await?;
+        let status = Command::new("xdg-open").suppress_console().arg(parent).status().await?;
         if !status.success() {
             anyhow::bail!("无法打开文件目录");
         }

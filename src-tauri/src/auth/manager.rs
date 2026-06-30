@@ -4,7 +4,7 @@ use std::sync::{Mutex, OnceLock};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
-use crate::cli::runner::run_command;
+use crate::cli::runner::{run_command, SuppressConsole};
 use crate::db::models::OrgAuth;
 
 static ACTIVE_LOGIN: OnceLock<Mutex<Option<u32>>> = OnceLock::new();
@@ -286,6 +286,7 @@ async fn open_path_in_ide(path: &str) -> anyhow::Result<()> {
         let bin_path = crate::cli::runner::find_editor(bin);
         if let Some(editor_path) = bin_path {
             if tokio::process::Command::new(&editor_path)
+                .suppress_console()
                 .arg(path)
                 .env("PATH", &path_env)
                 .status()
@@ -300,7 +301,7 @@ async fn open_path_in_ide(path: &str) -> anyhow::Result<()> {
     // Fallback to system file opener
     #[cfg(target_os = "macos")]
     {
-        let status = tokio::process::Command::new("open").arg(path).status().await?;
+        let status = tokio::process::Command::new("open").suppress_console().arg(path).status().await?;
         if status.success() {
             return Ok(());
         }
@@ -308,7 +309,7 @@ async fn open_path_in_ide(path: &str) -> anyhow::Result<()> {
     }
     #[cfg(target_os = "windows")]
     {
-        let status = tokio::process::Command::new("explorer").arg(path).status().await?;
+        let status = tokio::process::Command::new("explorer").suppress_console().arg(path).status().await?;
         if status.success() {
             return Ok(());
         }
@@ -316,7 +317,7 @@ async fn open_path_in_ide(path: &str) -> anyhow::Result<()> {
     }
     #[cfg(target_os = "linux")]
     {
-        let status = tokio::process::Command::new("xdg-open").arg(path).status().await?;
+        let status = tokio::process::Command::new("xdg-open").suppress_console().arg(path).status().await?;
         if status.success() {
             return Ok(());
         }
@@ -347,6 +348,7 @@ async fn run_login_command(
 
     // Kill stale processes on OAuth redirect port
     let _ = Command::new("bash")
+        .suppress_console()
         .arg("-c")
         .arg("lsof -ti:1717 | xargs kill -9 2>/dev/null || true")
         .status()
@@ -356,6 +358,7 @@ async fn run_login_command(
         .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
 
     let mut cmd = Command::new(&sf_path);
+    cmd.suppress_console();
     cmd.args(args);
 
     let current_path = std::env::var("PATH").unwrap_or_default();
@@ -492,6 +495,7 @@ async fn run_login_with_expect(
 
     // Kill stale process on the target port
     let _ = Command::new("bash")
+        .suppress_console()
         .arg("-c")
         .arg(format!("lsof -ti:{} | xargs kill -9 2>/dev/null || true", oauth_port))
         .status()
@@ -513,6 +517,7 @@ async fn run_login_with_expect(
     eprintln!("[login:expect] sf {}", sf_args.join(" "));
 
     let mut cmd = Command::new("/usr/bin/expect");
+    cmd.suppress_console();
     cmd.current_dir(&temp_dir)
         .arg("-c")
         .arg(&expect_script)
@@ -654,6 +659,7 @@ async fn kill_process(pid: u32) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
         let status = tokio::process::Command::new("taskkill")
+            .suppress_console()
             .args(["/PID", &pid.to_string(), "/F"])
             .status()
             .await?;
@@ -664,6 +670,7 @@ async fn kill_process(pid: u32) -> anyhow::Result<()> {
     #[cfg(not(target_os = "windows"))]
     {
         let status = tokio::process::Command::new("kill")
+            .suppress_console()
             .args(["-TERM", &pid.to_string()])
             .status()
             .await?;

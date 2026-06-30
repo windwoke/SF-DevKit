@@ -13,6 +13,43 @@ pub struct CliOutput {
     pub success: bool,
 }
 
+/// Windows process creation flag that prevents the child from inheriting
+/// (or flashing) a console window. Without it, GUI apps that shell out to
+/// `sf` CLI pop a black `cmd.exe` window on every spawn — e.g. the LogViewer
+/// polls `sf apex list log` every 10s, which would flash a window each time.
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Extension trait that suppresses child console windows on Windows.
+/// On non-Windows platforms it is a no-op, so call sites stay portable.
+pub trait SuppressConsole {
+    fn suppress_console(&mut self) -> &mut Self;
+}
+
+impl SuppressConsole for tokio::process::Command {
+    #[inline]
+    fn suppress_console(&mut self) -> &mut Self {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            self.creation_flags(CREATE_NO_WINDOW);
+        }
+        self
+    }
+}
+
+impl SuppressConsole for std::process::Command {
+    #[inline]
+    fn suppress_console(&mut self) -> &mut Self {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            self.creation_flags(CREATE_NO_WINDOW);
+        }
+        self
+    }
+}
+
 /// Common install paths for the `sf` CLI on macOS (Homebrew, npm, sf installer).
 const COMMON_SF_PATHS: &[&str] = &[
     "/opt/homebrew/bin/sf",
@@ -90,6 +127,7 @@ pub async fn run_command(args: &[&str], force_json: bool) -> anyhow::Result<CliO
         .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
 
     let mut cmd = Command::new(&sf_path);
+    cmd.suppress_console();
     cmd.args(args);
     if force_json {
         cmd.arg("--json");

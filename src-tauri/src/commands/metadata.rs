@@ -96,9 +96,11 @@ pub async fn cancel_retrieve(event_id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn reveal_in_finder(path: String) -> Result<(), String> {
     use tokio::process::Command;
+    use crate::cli::runner::SuppressConsole;
 
     #[cfg(target_os = "macos")]
     let status = Command::new("open")
+        .suppress_console()
         .args(["-R", &path])
         .status()
         .await
@@ -106,6 +108,7 @@ pub async fn reveal_in_finder(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     let status = Command::new("explorer")
+        .suppress_console()
         .arg(&path)
         .status()
         .await
@@ -113,6 +116,7 @@ pub async fn reveal_in_finder(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "linux")]
     let status = Command::new("xdg-open")
+        .suppress_console()
         .arg(&path)
         .status()
         .await

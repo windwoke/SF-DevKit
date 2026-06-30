@@ -1,5 +1,7 @@
 use rfd::FileDialog;
 
+use crate::cli::runner::SuppressConsole;
+
 #[tauri::command]
 pub fn save_export_file(default_name: String, content: String) -> Result<(), String> {
     let Some(path) = FileDialog::new().set_file_name(&default_name).save_file() else {
@@ -18,6 +20,7 @@ pub async fn open_in_editor(content: String, default_name: String) -> Result<Str
     let file_path = path.to_string_lossy().to_string();
     // macOS: open with default text editor
     let status = tokio::process::Command::new("open")
+        .suppress_console()
         .arg("-t")
         .arg(&file_path)
         .status()

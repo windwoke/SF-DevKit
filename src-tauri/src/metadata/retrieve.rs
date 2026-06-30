@@ -10,6 +10,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
+use crate::cli::runner::SuppressConsole;
 use crate::metadata::models::{RetrieveEvent, RetrieveResult, SelectionItem};
 
 fn strip_ansi(text: &str) -> String {
@@ -67,6 +68,7 @@ impl RetrieveRunner {
         let target_zip_file = PathBuf::from(output_dir).join(format!("{}-{}.zip", prefix, output_token));
 
         let mut cmd = Command::new(&sf_path);
+        cmd.suppress_console();
         cmd.args([
             "project",
             "retrieve",
@@ -305,6 +307,7 @@ async fn kill_process(pid: u32) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
         let status = Command::new("taskkill")
+            .suppress_console()
             .args(["/PID", &pid.to_string(), "/F"])
             .status()
             .await?;
@@ -314,7 +317,7 @@ async fn kill_process(pid: u32) -> anyhow::Result<()> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let status = Command::new("kill").args(["-TERM", &pid.to_string()]).status().await?;
+        let status = Command::new("kill").suppress_console().args(["-TERM", &pid.to_string()]).status().await?;
         if !status.success() {
             anyhow::bail!("取消 retrieve 失败");
         }

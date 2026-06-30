@@ -9,6 +9,8 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
+use crate::cli::runner::SuppressConsole;
+
 use super::models::{
     DeployError, DeployHistoryRecord, DeployMode, DeployOptions, DeployResult, QuickDeployRecord,
     RetrieveEvent, TestLevel,
@@ -93,6 +95,7 @@ impl DeployRunner {
             .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
 
         let mut cmd = Command::new(&sf_path);
+        cmd.suppress_console();
         cmd.args(&args);
         cmd.current_dir(&options.working_dir);
         cmd.stdout(Stdio::piped())
@@ -294,6 +297,7 @@ impl DeployRunner {
             .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI"))?;
 
         let mut cmd = Command::new(&sf_path);
+        cmd.suppress_console();
         cmd.args([
             "project",
             "deploy",
@@ -536,6 +540,7 @@ async fn fetch_deploy_report(
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(30),
         Command::new(sf_path)
+            .suppress_console()
             .args([
                 "project", "deploy", "report",
                 "--job-id", deploy_id,
@@ -671,6 +676,7 @@ async fn kill_process(pid: u32) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
         let status = Command::new("taskkill")
+            .suppress_console()
             .args(["/PID", &pid.to_string(), "/F"])
             .status()
             .await?;
@@ -681,6 +687,7 @@ async fn kill_process(pid: u32) -> anyhow::Result<()> {
     #[cfg(not(target_os = "windows"))]
     {
         let status = Command::new("kill")
+            .suppress_console()
             .args(["-TERM", &pid.to_string()])
             .status()
             .await?;

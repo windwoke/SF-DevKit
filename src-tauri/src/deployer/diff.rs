@@ -6,6 +6,8 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
+use crate::cli::runner::SuppressConsole;
+
 use super::models::RetrieveEvent;
 
 fn strip_ansi(text: &str) -> String {
@@ -47,6 +49,7 @@ pub async fn retrieve_for_diff(
         .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI"))?;
 
     let mut cmd = Command::new(&sf_path);
+    cmd.suppress_console();
     cmd.args([
         "project",
         "retrieve",
@@ -184,6 +187,7 @@ pub async fn open_diff_tool(command: &str) -> anyhow::Result<()> {
 
         // Try running directly
         let result = std::process::Command::new(binary)
+            .suppress_console()
             .args(args)
             .env("PATH", &full_path)
             .stdin(std::process::Stdio::null())
@@ -200,6 +204,7 @@ pub async fn open_diff_tool(command: &str) -> anyhow::Result<()> {
                     let fallback_binary = find_fallback_binary(binary);
                     if let Some(fb) = fallback_binary {
                         match std::process::Command::new(&fb)
+                            .suppress_console()
                             .args(args)
                             .env("PATH", &full_path)
                             .stdin(std::process::Stdio::null())
