@@ -93,17 +93,31 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout (to read tag annotation)
+        uses: actions/checkout@v4
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
+
+      - name: Compose release notes from tag annotation
+        run: |
+          {
+            git tag -l --format='%(contents)' "${{ github.ref_name }}"
+            echo ""
+            echo "---"
+            echo ""
+            echo "## 安装"
+            echo ""
+            echo "将 \`.dmg\` 拖入 Applications 文件夹即可安装。"
+          } > release_notes.md
+          echo "----- release_notes.md -----"
+          cat release_notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: SF DevKit ${{ github.ref_name }}
-          body: |
-            Automated build from ${{ github.ref_name }}.
-
-            Drag the `.dmg` to your Applications folder to install.
+          body_path: release_notes.md
           files: |
             sf-devkit-*/**/*.dmg
           generate_release_notes: true
