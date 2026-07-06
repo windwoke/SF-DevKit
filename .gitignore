@@ -9,6 +9,9 @@ src-tauri/gen
 src-tauri/build
 *.db
 
+# Claude Code worktrees and local agent state — never commit
+.claude/
+
 # 设计文档
 *-Design.md
 SF-DevKit-Design.md
