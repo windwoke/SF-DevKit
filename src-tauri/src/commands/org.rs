@@ -1,14 +1,19 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::auth::manager;
 use crate::db::DbState;
 use crate::db::models::OrgAuth;
 
 #[tauri::command]
-pub async fn sync_orgs(state: State<'_, DbState>) -> Result<Vec<OrgAuth>, String> {
-    manager::sync_orgs(&state.0)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn sync_orgs(state: State<'_, DbState>, app: AppHandle) -> Result<Vec<OrgAuth>, String> {
+    let result = manager::sync_orgs(&state.0).await.map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(e) = crate::tray::rebuild_menu(&app).await {
+            eprintln!("[tray] rebuild_menu failed: {e}");
+        }
+    }
+    Ok(result)
 }
 
 #[tauri::command]
@@ -19,17 +24,39 @@ pub async fn list_orgs(state: State<'_, DbState>) -> Result<Vec<OrgAuth>, String
 }
 
 #[tauri::command]
-pub async fn set_default_org(state: State<'_, DbState>, username: String) -> Result<(), String> {
+pub async fn set_default_org(
+    state: State<'_, DbState>,
+    app: AppHandle,
+    username: String,
+) -> Result<(), String> {
     manager::set_default_org(&state.0, &username)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(e) = crate::tray::rebuild_menu(&app).await {
+            eprintln!("[tray] rebuild_menu failed: {e}");
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn logout_org(state: State<'_, DbState>, username: String) -> Result<(), String> {
+pub async fn logout_org(
+    state: State<'_, DbState>,
+    app: AppHandle,
+    username: String,
+) -> Result<(), String> {
     manager::logout_org(&state.0, &username)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(e) = crate::tray::rebuild_menu(&app).await {
+            eprintln!("[tray] rebuild_menu failed: {e}");
+        }
+    }
+    Ok(())
 }
 
 /// Browser OAuth only; returns immediately after CLI finishes. Call `sync_orgs` next to refresh DB.

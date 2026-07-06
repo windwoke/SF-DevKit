@@ -6,6 +6,8 @@ mod deployer;
 mod log_viewer;
 mod metadata;
 mod schema;
+#[cfg(target_os = "macos")]
+mod tray;
 
 use db::DbState;
 use tauri::Manager;
@@ -16,7 +18,19 @@ pub fn run() {
         .setup(|app| {
             let pool = db::init::init_db(app.handle())?;
             app.manage(DbState(pool));
+            #[cfg(target_os = "macos")]
+            tray::build_tray(app.handle())?;
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            #[cfg(target_os = "macos")]
+            {
+                tray::on_menu_event(app, event);
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = (app, event);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::export::save_export_file,
