@@ -292,17 +292,6 @@ async fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> anyhow::Result<()> 
     Ok(())
 }
 
-async fn dir_has_entries(path: &PathBuf) -> anyhow::Result<bool> {
-    let Ok(meta) = tokio::fs::metadata(path).await else {
-        return Ok(false);
-    };
-    if !meta.is_dir() {
-        return Ok(false);
-    }
-    let mut entries = tokio::fs::read_dir(path).await?;
-    Ok(entries.next_entry().await?.is_some())
-}
-
 async fn kill_process(pid: u32) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {

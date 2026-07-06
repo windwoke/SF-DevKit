@@ -9,6 +9,8 @@ import { OrgManager } from "./modules/OrgManager";
 import { SoqlEditor } from "./modules/SoqlEditor";
 import { useUiStore, type ModuleId } from "./store/ui";
 import { useTranslation } from "react-i18next";
+import i18n from "./i18n";
+import { tauriApi, type TrayLabels } from "./lib/tauri";
 
 export default function App() {
   const { t } = useTranslation();
@@ -43,6 +45,32 @@ export default function App() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   });
+
+  // Push localized tray strings to the Rust side on mount and whenever the
+  // i18n locale changes. macOS-only on the backend; no-op elsewhere.
+  useEffect(() => {
+    const pushTrayLabels = () => {
+      const labels: TrayLabels = {
+        openOrgsLabel: t("tray.openOrgsLabel"),
+        defaultLabelTemplate: t("tray.defaultLabelTemplate"),
+        noDefault: t("tray.noDefault"),
+        noOrgs: t("tray.noOrgs"),
+        showMain: t("tray.showMain"),
+        refresh: t("tray.refresh"),
+        quit: t("tray.quit"),
+        tooltip: t("tray.tooltip"),
+      };
+      void tauriApi.updateTrayLabels(labels).catch((err) => {
+        console.warn("[tray] update_tray_labels failed", err);
+      });
+    };
+    pushTrayLabels();
+    const handler = () => pushTrayLabels();
+    i18n.on("languageChanged", handler);
+    return () => {
+      i18n.off("languageChanged", handler);
+    };
+  }, [t]);
 
   const active = moduleRegistry.find((m) => m.id === activeModule) ?? moduleRegistry[0];
 

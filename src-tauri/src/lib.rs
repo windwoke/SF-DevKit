@@ -45,6 +45,7 @@ pub fn run() {
             commands::org::pick_project_directory,
             commands::org::set_org_linked_project_path,
             commands::org::open_org_linked_project_in_ide,
+            commands::org::update_tray_labels,
             commands::schema::get_objects,
             commands::schema::get_fields,
             commands::schema::get_child_relationships,

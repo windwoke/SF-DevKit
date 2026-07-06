@@ -472,5 +472,15 @@
     "custom": "Custom",
     "command": "Command",
     "commandHint": "Variables: {working} = working dir, {reference} = reference dir"
+  },
+  "tray": {
+    "openOrgsLabel": "Open Org",
+    "defaultLabelTemplate": "Default: {name}",
+    "noDefault": "No default org set",
+    "noOrgs": "No orgs yet — sign in from the main window",
+    "showMain": "Show Main Window",
+    "refresh": "Refresh Org List",
+    "quit": "Quit SF DevKit",
+    "tooltip": "SF DevKit"
   }
 }

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -648,7 +647,7 @@ fn extract_cli_error(output: &str) -> String {
     // Fallback: return last few non-empty lines
     let lines: Vec<&str> = output.lines().filter(|l| !l.trim().is_empty()).collect();
     let tail: Vec<&str> = lines.iter().rev().take(3).cloned().collect();
-    let mut tail: Vec<&str> = tail.into_iter().rev().collect();
+    let tail: Vec<&str> = tail.into_iter().rev().collect();
     if tail.is_empty() {
         return "未知错误".to_string();
     }

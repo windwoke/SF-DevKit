@@ -59,6 +59,18 @@ pub async fn logout_org(
     Ok(())
 }
 
+/// Frontend pushes localized tray strings whenever the i18n locale loads
+/// or changes. The Rust side then rebuilds the macOS menu bar menu.
+#[tauri::command]
+pub async fn update_tray_labels(
+    app: AppHandle,
+    labels: crate::tray::TrayLabels,
+) -> Result<(), String> {
+    crate::tray::update_labels(&app, labels)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Browser OAuth only; returns immediately after CLI finishes. Call `sync_orgs` next to refresh DB.
 #[tauri::command]
 pub async fn login_org(

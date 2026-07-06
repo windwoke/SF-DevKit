@@ -78,6 +78,19 @@ export interface ApexClassMeta {
   name: string;
 }
 
+/** Localized macOS menu bar strings — pushed to Rust so the tray follows
+ *  the same i18n locale as the React UI. */
+export interface TrayLabels {
+  openOrgsLabel: string;
+  defaultLabelTemplate: string;
+  noDefault: string;
+  noOrgs: string;
+  showMain: string;
+  refresh: string;
+  quit: string;
+  tooltip: string;
+}
+
 export const tauriApi = {
   syncOrgs: () => invoke<OrgAuth[]>("sync_orgs"),
   listOrgs: () => invoke<OrgAuth[]>("list_orgs"),
@@ -107,6 +120,8 @@ export const tauriApi = {
     invoke<void>("set_org_linked_project_path", { orgId, path }),
   openOrgLinkedProjectInIde: (orgId: string) =>
     invoke<void>("open_org_linked_project_in_ide", { orgId }),
+  updateTrayLabels: (labels: TrayLabels) =>
+    invoke<void>("update_tray_labels", { labels }),
   listMetadataTypes: (payload: { orgId: string; forceRefresh?: boolean }) =>
     invoke<MetadataTypeMeta[]>("list_metadata_types", {
       orgId: payload.orgId,
