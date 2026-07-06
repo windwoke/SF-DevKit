@@ -77,13 +77,19 @@ impl RetrieveRunner {
             org_id,
             "--manifest",
             &pkg_path.to_string_lossy(),
-            "--output-dir",
-            internal_output_arg,
             "--api-version",
             api_version,
         ]);
+        // sf CLI v2.138+ requires --target-metadata-dir when using --zip-file-name,
+        // and that mdapi-mode flag is mutually exclusive with --output-dir.
+        // So we branch on output_mode:
+        //   - zip    → mdapi zip at .sfdevkit-output/retrieve.zip (CLI's native zip)
+        //   - extract → source-format files under .sfdevkit-output/
         if output_mode == "zip" {
-            cmd.arg("--zip-file-name").arg("retrieve.zip");
+            cmd.args(["--target-metadata-dir", internal_output_arg])
+                .args(["--zip-file-name", "retrieve.zip"]);
+        } else {
+            cmd.args(["--output-dir", internal_output_arg]);
         }
         cmd.current_dir(&workspace);
         cmd.stdout(Stdio::piped())
@@ -202,13 +208,7 @@ impl RetrieveRunner {
 
         let output_path = if success {
             if output_mode == "zip" {
-                let internal_zip_primary = internal_output_dir.join("retrieve.zip");
-                let internal_zip_fallback = workspace.join("retrieve.zip");
-                let internal_zip = if internal_zip_primary.exists() {
-                    internal_zip_primary
-                } else {
-                    internal_zip_fallback
-                };
+                let internal_zip = internal_output_dir.join("retrieve.zip");
                 tokio::fs::create_dir_all(output_dir).await?;
                 tokio::fs::copy(&internal_zip, &target_zip_file).await?;
                 target_zip_file.to_string_lossy().into_owned()
