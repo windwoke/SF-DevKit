@@ -62,8 +62,9 @@ jobs:
 
       - name: Notarize DMG
         run: |
-          xcrun notarytool submit \
-            "src-tauri/target/release/bundle/dmg/SF DevKit_0.1.0_aarch64.dmg" \
+          DMG=$(ls "src-tauri/target/release/bundle/dmg/"*.dmg | head -1)
+          echo "Notarizing: $DMG"
+          xcrun notarytool submit "$DMG" \
             --key "$RUNNER_TEMP/AuthKey.p8" \
             --key-id "${{ secrets.APPLE_KEY_ID }}" \
             --issuer "${{ secrets.APPLE_API_ISSUER }}" \
@@ -71,8 +72,9 @@ jobs:
 
       - name: Staple notarization ticket
         run: |
-          xcrun stapler staple \
-            "src-tauri/target/release/bundle/dmg/SF DevKit_0.1.0_aarch64.dmg"
+          DMG=$(ls "src-tauri/target/release/bundle/dmg/"*.dmg | head -1)
+          echo "Stapling: $DMG"
+          xcrun stapler staple "$DMG"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
