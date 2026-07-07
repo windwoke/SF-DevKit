@@ -344,7 +344,16 @@ impl MetadataService {
         org_id: &str,
         metadata_type: &str,
     ) -> anyhow::Result<Vec<ComponentMeta>> {
-        let folder_type = format!("{}Folder", metadata_type);
+        // Most folder-based types follow the `{Type}Folder` convention
+        // (Dashboard → DashboardFolder, Report → ReportFolder, Document →
+        // DocumentFolder). EmailTemplate is the lone exception — its folder
+        // type is `EmailFolder`, not `EmailTemplateFolder`. Without this
+        // special case, the folder listing silently returns nothing and we
+        // only ever see items under `unfiled$public`.
+        let folder_type = match metadata_type {
+            "EmailTemplate" => "EmailFolder".to_string(),
+            other => format!("{}Folder", other),
+        };
 
         let folder_output = run_command(
             &[
