@@ -195,6 +195,8 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
       logType,
       debugLevelId,
       durationMinutes: downloadConfig.durationMinutes,
+      label: target.label,
+      kind: target.kind,
     });
     addTarget(target);
     updateTarget(target.id, {

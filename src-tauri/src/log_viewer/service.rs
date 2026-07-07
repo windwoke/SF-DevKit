@@ -370,28 +370,35 @@ pub async fn enable_trace(
     log_type: &str,
     debug_level_id: &str,
     duration_minutes: u32,
+    label: &str,
+    kind: &str,
 ) -> anyhow::Result<ActiveTrace> {
     delete_entity_trace_flags(org_id, entity_id).await?;
 
-    let expires = (Utc::now() + Duration::minutes(duration_minutes as i64)).to_rfc3339();
+    let now = Utc::now();
+    // StartDate set to 1 minute in the past — Salesforce rounds to the minute boundary and
+    // without an explicit StartDate the trace may not activate for 1-2 minutes after creation.
+    let start = (now - Duration::minutes(1)).to_rfc3339();
+    let expires = (now + Duration::minutes(duration_minutes as i64)).to_rfc3339();
     let body = serde_json::json!({
         "TracedEntityId": entity_id,
         "DebugLevelId": debug_level_id,
         "LogType": log_type,
+        "StartDate": start,
         "ExpirationDate": expires,
     });
     let resp = post_tooling_sobject(org_id, "TraceFlag", &body).await?;
-    let trace_flag_id = resp
-        .get("id")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("创建 TraceFlag 失败"))?
+    let trace_flag_id = get_string(&resp, &["id", "Id"])
+        .ok_or_else(|| anyhow::anyhow!("创建 TraceFlag 失败: {}", resp))?
         .to_string();
 
     let _ = sqlx::query(
         r#"
         INSERT INTO trace_targets (id, org_id, kind, label, entity_id, trace_flag_id, debug_level_id, expires_at, is_active)
-        VALUES (?1, ?2, 'UNKNOWN', ?3, ?4, ?5, ?6, ?7, 1)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1)
         ON CONFLICT(id) DO UPDATE SET
+          kind = excluded.kind,
+          label = excluded.label,
           trace_flag_id = excluded.trace_flag_id,
           debug_level_id = excluded.debug_level_id,
           expires_at = excluded.expires_at,
@@ -400,7 +407,8 @@ pub async fn enable_trace(
     )
     .bind(entity_id)
     .bind(org_id)
-    .bind(entity_id)
+    .bind(kind)
+    .bind(label)
     .bind(entity_id)
     .bind(&trace_flag_id)
     .bind(debug_level_id)
@@ -666,8 +674,19 @@ async fn delete_tooling_sobject(org_id: &str, sobject: &str, id: &str) -> anyhow
         session.instance_url, sobject, id
     );
     let resp = client.delete(url).bearer_auth(&session.access_token).send().await?;
-    if !resp.status().is_success() {
-        anyhow::bail!("删除 {} 失败", sobject);
+    let status = resp.status();
+    if !status.is_success() {
+        // Tolerate already-deleted flags: Salesforce often returns 404 / ENTITY_IS_DELETED
+        // for stale TraceFlags that the background cleaner has already reaped but that still
+        // appear in tooling SOQL results.
+        let body = resp.text().await.unwrap_or_default();
+        let already_gone = status.as_u16() == 404
+            || body.contains("NOT_FOUND")
+            || body.contains("ENTITY_IS_DELETED")
+            || body.contains("INVALID_CROSS_REFERENCE_KEY");
+        if !already_gone {
+            anyhow::bail!("删除 {} 失败: {}", sobject, body);
+        }
     }
     Ok(())
 }
@@ -693,23 +712,61 @@ async fn query_data(org_id: &str, soql: &str, tooling: bool) -> anyhow::Result<V
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct OrgDisplayEnvelope {
-    result: OrgDisplayResult,
+struct OrgInstanceEnvelope {
+    result: OrgInstanceResult,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct OrgInstanceResult {
+    instance_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AccessTokenEnvelope {
+    result: AccessTokenResult,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AccessTokenResult {
+    access_token: String,
+}
+
+#[derive(Debug, Clone)]
 struct OrgDisplayResult {
     access_token: String,
     instance_url: String,
 }
 
 async fn get_org_session(org_id: &str) -> anyhow::Result<OrgDisplayResult> {
-    let output = run_command(&["org", "display", "--target-org", org_id, "--verbose"], true).await?;
-    if !output.success {
-        anyhow::bail!("{}", cli_error_message(&output.stderr, &output.stdout));
+    // sf CLI v2.138+ hides accessToken from `sf org display` output. We must call the
+    // dedicated `sf org auth show-access-token` command instead. instanceUrl still comes
+    // from `sf org display` (no --verbose needed; instanceUrl is not a secret).
+    let display_output = run_command(&["org", "display", "--target-org", org_id], true).await?;
+    if !display_output.success {
+        anyhow::bail!("{}", cli_error_message(&display_output.stderr, &display_output.stdout));
     }
-    let parsed: OrgDisplayEnvelope =
-        serde_json::from_str(&output.stdout).context("解析 Org 会话信息失败")?;
-    Ok(parsed.result)
+    let display_parsed: OrgInstanceEnvelope =
+        serde_json::from_str(&display_output.stdout).context("解析 org display 失败")?;
+
+    let token_output = run_command(
+        &["org", "auth", "show-access-token", "--target-org", org_id],
+        true,
+    )
+    .await?;
+    if !token_output.success {
+        anyhow::bail!(
+            "获取 accessToken 失败: {}",
+            cli_error_message(&token_output.stderr, &token_output.stdout)
+        );
+    }
+    let token_parsed: AccessTokenEnvelope =
+        serde_json::from_str(&token_output.stdout).context("解析 access-token 失败")?;
+
+    Ok(OrgDisplayResult {
+        instance_url: display_parsed.result.instance_url,
+        access_token: token_parsed.result.access_token,
+    })
 }

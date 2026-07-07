@@ -101,6 +101,8 @@ pub async fn enable_trace(
     log_type: String,
     debug_level_id: String,
     duration_minutes: u32,
+    label: Option<String>,
+    kind: Option<String>,
 ) -> Result<ActiveTrace, String> {
     service::enable_trace(
         &state.0,
@@ -109,6 +111,8 @@ pub async fn enable_trace(
         &log_type,
         &debug_level_id,
         duration_minutes,
+        label.as_deref().unwrap_or(""),
+        kind.as_deref().unwrap_or("UNKNOWN"),
     )
     .await
     .map_err(|e| e.to_string())
