@@ -93,16 +93,30 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout (to read tag annotation)
-        uses: actions/checkout@v4
-
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
 
       - name: Compose release notes from tag annotation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Fetch tag object via GitHub API. We can't rely on
+          # `git tag -l --format='%(contents)'` here because actions/checkout
+          # does a shallow fetch and the annotated tag's message body is not
+          # present in the local clone — that would silently fall back to the
+          # pointed-to commit's message.
+          set -euo pipefail
+          REF="repos/${{ github.repository }}/git/refs/tags/${{ github.ref_name }}"
+          OBJECT_SHA=$(gh api "$REF" --jq '.object.sha')
+          OBJECT_TYPE=$(gh api "$REF" --jq '.object.type')
+          if [ "$OBJECT_TYPE" = "tag" ]; then
+            TAG_MESSAGE=$(gh api "repos/${{ github.repository }}/git/tags/${OBJECT_SHA}" --jq '.message')
+          else
+            # lightweight tag — fall back to commit message
+            TAG_MESSAGE=$(gh api "repos/${{ github.repository }}/commits/${OBJECT_SHA}" --jq '.commit.message')
+          fi
           {
-            git tag -l --format='%(contents)' "${{ github.ref_name }}"
+            printf '%s\n' "$TAG_MESSAGE"
             echo ""
             echo "---"
             echo ""
