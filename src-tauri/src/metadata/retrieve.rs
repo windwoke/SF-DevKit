@@ -221,12 +221,6 @@ impl RetrieveRunner {
                 tokio::fs::create_dir_all(&target_extract_dir).await?;
                 // Copy the entire .sfdevkit-output contents (same structure as diff retrieve)
                 copy_dir_recursive(&internal_output_dir, &target_extract_dir).await?;
-                // sf CLI, when retrieving Workflow sub-components (e.g.
-                // WorkflowFieldUpdate), writes the full Workflow content to a
-                // non-standard `*.workflow-meta.xml` filename — but Workflow is
-                // a metaFile=false type and Salesforce deploy only recognizes
-                // `*.workflow`. Rename before saving so the package deploys.
-                fix_workflow_filenames(&target_extract_dir).await;
                 tokio::fs::write(target_extract_dir.join("package.xml"), deploy_package_xml.as_bytes()).await?;
                 target_extract_dir.to_string_lossy().into_owned()
             }
@@ -301,28 +295,6 @@ async fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> anyhow::Result<()> 
         }
     }
     Ok(())
-}
-
-/// sf CLI writes Workflow files retrieved via child-type selections
-/// (WorkflowFieldUpdate / WorkflowAlert / etc.) as `*.workflow-meta.xml`
-/// instead of the standard `*.workflow` (Workflow is a metaFile=false type).
-/// Salesforce deploy silently ignores those misnamed files, so rename them
-/// before saving the retrieve output.
-async fn fix_workflow_filenames(root: &PathBuf) {
-    let workflow_dir = root.join("workflows");
-    let Ok(mut entries) = tokio::fs::read_dir(&workflow_dir).await else {
-        return;
-    };
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        if let Some(base) = name.strip_suffix(".workflow-meta.xml") {
-            let new_path = path.with_file_name(format!("{base}.workflow"));
-            let _ = tokio::fs::rename(&path, &new_path).await;
-        }
-    }
 }
 
 async fn kill_process(pid: u32) -> anyhow::Result<()> {
