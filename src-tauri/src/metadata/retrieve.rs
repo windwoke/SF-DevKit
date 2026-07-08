@@ -16,7 +16,7 @@ use crate::metadata::models::{RetrieveEvent, RetrieveResult, SelectionItem};
 fn strip_ansi(text: &str) -> String {
     String::from_utf8(strip_ansi_escapes::strip(text)).unwrap_or_else(|_| text.to_string())
 }
-use crate::metadata::package_xml::generate_package_xml;
+use crate::metadata::package_xml::{generate_deploy_package_xml, generate_package_xml};
 
 static ACTIVE_RETRIEVES: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
 
@@ -49,8 +49,13 @@ impl RetrieveRunner {
 
         let tmp_dir = std::env::temp_dir();
         let pkg_path = tmp_dir.join(format!("sfdevkit-{}-package.xml", event_id));
-        let package_xml = generate_package_xml(&selections, api_version);
-        tokio::fs::write(&pkg_path, package_xml.as_bytes()).await?;
+        // retrieve manifest 必须用 child type，sf CLI 才会只拉取选中的子组件；
+        // 但保存给用户 deploy 用的 package.xml 必须 normalize 成 parent type，
+        // 否则 Salesforce deploy 会忽略 WorkflowFieldUpdate 等子类型，导致依赖
+        // 它们的 ApprovalProcess 等报「FieldUpdate 不存在」。
+        let retrieve_package_xml = generate_package_xml(&selections, api_version);
+        let deploy_package_xml = generate_deploy_package_xml(&selections, api_version);
+        tokio::fs::write(&pkg_path, retrieve_package_xml.as_bytes()).await?;
 
         let sf_path = crate::cli::runner::find_sf()
             .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
@@ -216,7 +221,7 @@ impl RetrieveRunner {
                 tokio::fs::create_dir_all(&target_extract_dir).await?;
                 // Copy the entire .sfdevkit-output contents (same structure as diff retrieve)
                 copy_dir_recursive(&internal_output_dir, &target_extract_dir).await?;
-                tokio::fs::write(target_extract_dir.join("package.xml"), package_xml.as_bytes()).await?;
+                tokio::fs::write(target_extract_dir.join("package.xml"), deploy_package_xml.as_bytes()).await?;
                 target_extract_dir.to_string_lossy().into_owned()
             }
         } else {
