@@ -53,13 +53,36 @@ impl DeployRunner {
             )?;
         }
 
+        // Deploy-time manifest normalization: Salesforce Metadata API rejects
+        // child component types (WorkflowFieldUpdate, WorkflowTask, ...) listed
+        // as top-level <types>. Fold them into their parent (Workflow, ...) so
+        // a user-authored manifest deploys cleanly without changing the source
+        // files. Returns None when no fixup is needed — we then use the
+        // original package.xml directly.
+        let orig_xml = std::fs::read_to_string(&pkg_xml).unwrap_or_default();
+        let temp_manifest = super::manifest_fixup::normalize_manifest(&orig_xml);
+        let manifest_path: String = if let Some(ref normalized) = temp_manifest {
+            let tmp = format!("{}/.sfdevkit-deploy.xml", options.working_dir);
+            std::fs::write(&tmp, normalized.as_bytes())?;
+            let _ = app.emit(
+                &options.event_id,
+                RetrieveEvent {
+                    event_type: "stdout".to_string(),
+                    data: "已检测到子类型组件，生成修正后的部署清单 (.sfdevkit-deploy.xml)".to_string(),
+                },
+            );
+            tmp
+        } else {
+            pkg_xml.clone()
+        };
+
         // Build CLI args — no --json so the CLI streams progress text to stdout
         let mut args: Vec<String> = vec![
             "project".into(),
             "deploy".into(),
             "start".into(),
             "--manifest".into(),
-            pkg_xml.clone(),
+            manifest_path.clone(),
             "--target-org".into(),
             options.org_id.clone(),
             "--wait".into(),
@@ -279,6 +302,11 @@ impl DeployRunner {
                 .execute(&self.pool)
                 .await?;
             }
+        }
+
+        // Clean up the deploy-time normalized manifest if we wrote one.
+        if temp_manifest.is_some() {
+            let _ = std::fs::remove_file(&manifest_path);
         }
 
         Ok(result)
