@@ -13,9 +13,13 @@ const CLASS_CACHE_TTL_MINUTES: i64 = 10;
 async fn fetch_classes_from_org(org_id: &str) -> anyhow::Result<Vec<ApexClassMeta>> {
     let output = crate::cli::runner::run_command(
         &[
-            "org", "list", "metadata",
-            "--metadata-type", "ApexClass",
-            "--target-org", org_id,
+            "org",
+            "list",
+            "metadata",
+            "--metadata-type",
+            "ApexClass",
+            "--target-org",
+            org_id,
             "--json",
         ],
         true,
@@ -126,7 +130,12 @@ pub fn scan_local_test_classes(working_dir: &str) -> Vec<ApexClassMeta> {
     let mut classes: Vec<ApexClassMeta> = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
-    fn walk(dir: &Path, depth: u32, classes: &mut Vec<ApexClassMeta>, seen: &mut std::collections::HashSet<String>) {
+    fn walk(
+        dir: &Path,
+        depth: u32,
+        classes: &mut Vec<ApexClassMeta>,
+        seen: &mut std::collections::HashSet<String>,
+    ) {
         if depth > 6 {
             return;
         }

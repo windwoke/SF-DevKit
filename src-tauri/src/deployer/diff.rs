@@ -18,8 +18,7 @@ fn strip_ansi(text: &str) -> String {
 /// The retrieve output goes to a separate `.sfdevkit-output` dir inside the workspace
 /// (relative path, so sf CLI accepts it).
 async fn prepare_temp_workspace(event_id: &str) -> anyhow::Result<PathBuf> {
-    let workspace =
-        std::env::temp_dir().join(format!("sfdevkit-diff-workspace-{}", event_id));
+    let workspace = std::env::temp_dir().join(format!("sfdevkit-diff-workspace-{}", event_id));
     tokio::fs::create_dir_all(&workspace).await?;
     tokio::fs::create_dir_all(workspace.join("force-app")).await?;
     tokio::fs::create_dir_all(workspace.join(".sfdevkit-output")).await?;
@@ -45,8 +44,7 @@ pub async fn retrieve_for_diff(
 
     let workspace = prepare_temp_workspace(event_id).await?;
 
-    let sf_path = crate::cli::runner::find_sf()
-        .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI"))?;
+    let sf_path = crate::cli::runner::find_sf().ok_or_else(|| anyhow::anyhow!("未找到 sf CLI"))?;
 
     let mut cmd = Command::new(&sf_path);
     cmd.suppress_console();
@@ -239,13 +237,19 @@ fn parse_command(cmd: &str) -> Vec<String> {
             b' ' | b'\t' => i += 1,
             b'"' => {
                 let start = i + 1;
-                let end = cmd[start..].find('"').map(|p| start + p).unwrap_or(cmd.len());
+                let end = cmd[start..]
+                    .find('"')
+                    .map(|p| start + p)
+                    .unwrap_or(cmd.len());
                 parts.push(cmd[start..end].to_string());
                 i = end + 1;
             }
             b'\'' => {
                 let start = i + 1;
-                let end = cmd[start..].find('\'').map(|p| start + p).unwrap_or(cmd.len());
+                let end = cmd[start..]
+                    .find('\'')
+                    .map(|p| start + p)
+                    .unwrap_or(cmd.len());
                 parts.push(cmd[start..end].to_string());
                 i = end + 1;
             }

@@ -61,11 +61,23 @@ impl RetrieveRunner {
         let output_token = build_output_token();
         let safe_alias: String = org_alias
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
-        let prefix = if safe_alias.is_empty() { "retrieve".to_string() } else { safe_alias };
-        let target_extract_dir = PathBuf::from(output_dir).join(format!("{}-{}", prefix, output_token));
-        let target_zip_file = PathBuf::from(output_dir).join(format!("{}-{}.zip", prefix, output_token));
+        let prefix = if safe_alias.is_empty() {
+            "retrieve".to_string()
+        } else {
+            safe_alias
+        };
+        let target_extract_dir =
+            PathBuf::from(output_dir).join(format!("{}-{}", prefix, output_token));
+        let target_zip_file =
+            PathBuf::from(output_dir).join(format!("{}-{}.zip", prefix, output_token));
 
         let mut cmd = Command::new(&sf_path);
         cmd.suppress_console();
@@ -216,7 +228,11 @@ impl RetrieveRunner {
                 tokio::fs::create_dir_all(&target_extract_dir).await?;
                 // Copy the entire .sfdevkit-output contents (same structure as diff retrieve)
                 copy_dir_recursive(&internal_output_dir, &target_extract_dir).await?;
-                tokio::fs::write(target_extract_dir.join("package.xml"), package_xml.as_bytes()).await?;
+                tokio::fs::write(
+                    target_extract_dir.join("package.xml"),
+                    package_xml.as_bytes(),
+                )
+                .await?;
                 target_extract_dir.to_string_lossy().into_owned()
             }
         } else {
@@ -306,7 +322,11 @@ async fn kill_process(pid: u32) -> anyhow::Result<()> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let status = Command::new("kill").suppress_console().args(["-TERM", &pid.to_string()]).status().await?;
+        let status = Command::new("kill")
+            .suppress_console()
+            .args(["-TERM", &pid.to_string()])
+            .status()
+            .await?;
         if !status.success() {
             anyhow::bail!("取消 retrieve 失败");
         }

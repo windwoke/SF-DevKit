@@ -5,6 +5,7 @@
     "settingsAria": "打开设置"
   },
   "modules": {
+    "home": "首页",
     "orgs": "Org 管理",
     "soql": "SOQL",
     "metadata": "元数据浏览器",
@@ -22,6 +23,141 @@
   "language": {
     "zh-CN": "中文",
     "en-US": "English"
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "早上好",
+      "noon": "中午好",
+      "afternoon": "下午好",
+      "evening": "晚上好",
+      "lateNight": "夜深了",
+      "subtitle": "从最重要的一件事开始，祝你今天开发顺利。"
+    },
+    "orgStatus": {
+      "title": "当前组织",
+      "noOrg": "未选择默认 Org",
+      "goOrgs": "去 Org 管理",
+      "alias": "别名",
+      "type": "环境",
+      "localDirectory": "本地目录",
+      "notLinked": "尚未关联",
+      "switch": "切换组织",
+      "openOrg": "打开默认组织",
+      "openDirectory": "打开本地目录"
+    },
+    "recentSoql": {
+      "title": "最近 SOQL",
+      "empty": "本会话还没有查询记录"
+    },
+    "recentActivity": {
+      "title": "最近活动",
+      "empty": "暂无检索 / 部署记录",
+      "retrieve": "检索",
+      "deploy": "部署",
+      "deployDetail": "部署 · {{components}} · {{errors}}",
+      "retrieveDetail": "检索 · {{components}} → {{outputMode}}",
+      "componentCount": "{{count}} 个组件",
+      "errorCount": "{{count}} 个错误",
+      "justNow": "刚刚",
+      "outputMode": {
+        "extract": "解压到目录",
+        "zip": "ZIP 压缩包"
+      }
+    },
+    "news": {
+      "title": "开发者资讯",
+      "fetching": "加载中…",
+      "error": "加载失败，稍后再试",
+      "mute": "隐藏该卡片",
+      "sourceLink": "Salesforce Stack Exchange",
+      "sourceCount": "{{count}} 个订阅源",
+      "sourceAvailability": "{{available}}/{{total}} 个源",
+      "unavailableSources": "未返回内容：{{sources}}",
+      "filterLabel": "按订阅源筛选",
+      "allSources": "全部",
+      "sourceEmpty": "{{source}} 暂无可用内容",
+      "noSources": "暂无订阅源，点击右上「管理」添加"
+    },
+    "manage": {
+      "title": "管理首页",
+      "open": "管理",
+      "done": "完成",
+      "sections": {
+        "widgets": "显示区块",
+        "sources": "订阅源"
+      },
+      "widgets": {
+        "greeting": "每日问候",
+        "orgStatus": "当前组织",
+        "quickActions": "快捷操作",
+        "recentSoql": "最近 SOQL",
+        "recentActivity": "最近活动",
+        "news": "开发者资讯"
+      },
+      "sources": {
+        "add": "添加订阅源",
+        "cancel": "取消",
+        "save": "保存",
+        "remove": "移除",
+        "empty": "暂无订阅源",
+        "kind": "类型",
+        "kindRss": "RSS / Atom",
+        "kindSeApi": "StackExchange API",
+        "label": "名称",
+        "labelPh": "例如：我的博客",
+        "url": "链接"
+      }
+    },
+    "layout": {
+      "edit": "编辑布局",
+      "done": "完成",
+      "add": "添加卡片",
+      "addTitle": "选择要添加的卡片",
+      "hint": "拖动卡片移动，拖动右下角缩放",
+      "remove": "删除"
+    },
+    "quickActions": {
+      "title": "快捷操作",
+      "add": "新增",
+      "manage": "管理",
+      "done": "完成",
+      "remove": "删除",
+      "moveEarlier": "向前移动",
+      "moveLater": "向后移动",
+      "launchFailed": "启动失败：{{error}}",
+      "empty": "暂无快捷项，点击管理后添加",
+      "seeds": {
+        "soql": "新建 SOQL",
+        "metadata": "浏览元数据",
+        "logs": "查看 Apex 日志",
+        "help": "Salesforce 帮助",
+        "docs": "开发者文档"
+      },
+      "dialog": {
+        "title": "新增快捷操作",
+        "kind": "类型",
+        "kindModule": "跳转内部模块",
+        "kindUrl": "浏览器打开网址",
+        "kindApp": "启动本地应用",
+        "label": "名称",
+        "labelPh": "例如：新建 SOQL",
+        "icon": "图标",
+        "targetModule": "目标模块",
+        "targetUrl": "网址",
+        "targetApp": "应用路径",
+        "args": "参数",
+        "browse": "选择…",
+        "pickIcon": "选择图标",
+        "iconCat": {
+          "common": "常用",
+          "tools": "工具",
+          "dev": "开发",
+          "symbols": "符号"
+        },
+        "cancel": "取消",
+        "save": "保存"
+      }
+    }
   },
   "logViewer": {
     "noOrgHint": "未选择 Org，请先在 Org 管理中设置默认。",

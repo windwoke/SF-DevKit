@@ -72,8 +72,7 @@ fn parse_manifest(xml: &str) -> Option<(Vec<TypeBlock>, String)> {
         // tag_full so that closing tags (`</members>`) yield tag_full =
         // "/members" and self-closing tags (`<foo/>`) yield "foo/".
         let mut end = i + 1;
-        while end < bytes.len()
-            && !matches!(bytes[end], b' ' | b'>' | b'?' | b'\t' | b'\n' | b'\r')
+        while end < bytes.len() && !matches!(bytes[end], b' ' | b'>' | b'?' | b'\t' | b'\n' | b'\r')
         {
             end += 1;
         }

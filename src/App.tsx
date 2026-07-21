@@ -3,6 +3,7 @@ import { Sidebar } from "./components/Layout/Sidebar";
 import { TopBar } from "./components/Layout/TopBar";
 import { ApexRunner } from "./modules/ApexRunner";
 import { Deployer } from "./modules/Deployer";
+import { HomeDashboard } from "./modules/HomeDashboard";
 import { LogViewer } from "./modules/LogViewer";
 import { MetadataBrowser } from "./modules/MetadataBrowser";
 import { OrgManager } from "./modules/OrgManager";
@@ -16,6 +17,7 @@ export default function App() {
   const { t } = useTranslation();
   const { activeModule, setActiveModule } = useUiStore();
   const moduleRegistry: Array<{ id: ModuleId; label: string; render: () => JSX.Element }> = [
+    { id: "home", label: t("modules.home"), render: HomeDashboard },
     { id: "orgs", label: t("modules.orgs"), render: OrgManager },
     { id: "soql", label: t("modules.soql"), render: SoqlEditor },
     { id: "metadata", label: t("modules.metadata"), render: MetadataBrowser },

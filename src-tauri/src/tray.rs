@@ -118,13 +118,15 @@ async fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<tauri::menu::Menu<Wry
         .await
         .map_err(tauri::Error::Anyhow)?;
 
-    let (open_orgs_label,
+    let (
+        open_orgs_label,
         default_label_template,
         no_default_label,
         no_orgs_label,
         show_main_label,
         refresh_label,
-        quit_label) = labels()
+        quit_label,
+    ) = labels()
         .lock()
         .map(|g| {
             (
@@ -167,7 +169,8 @@ async fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<tauri::menu::Menu<Wry
         )?;
         sub_builder = sub_builder.item(&check);
     } else {
-        let placeholder = MenuItem::with_id(app, "no-default", no_default_label, false, None::<&str>)?;
+        let placeholder =
+            MenuItem::with_id(app, "no-default", no_default_label, false, None::<&str>)?;
         sub_builder = sub_builder.item(&placeholder);
     }
 
@@ -176,12 +179,9 @@ async fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<tauri::menu::Menu<Wry
     if !others.is_empty() {
         sub_builder = sub_builder.separator();
         for o in others {
-            let label = format!(
-                "{}  ·  {}",
-                o.alias.as_deref().unwrap_or(&o.id),
-                o.org_type
-            );
-            let item = MenuItem::with_id(app, format!("open::{}", o.id), label, true, None::<&str>)?;
+            let label = format!("{}  ·  {}", o.alias.as_deref().unwrap_or(&o.id), o.org_type);
+            let item =
+                MenuItem::with_id(app, format!("open::{}", o.id), label, true, None::<&str>)?;
             sub_builder = sub_builder.item(&item);
         }
     }

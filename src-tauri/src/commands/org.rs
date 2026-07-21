@@ -1,12 +1,14 @@
 use tauri::{AppHandle, State};
 
 use crate::auth::manager;
-use crate::db::DbState;
 use crate::db::models::OrgAuth;
+use crate::db::DbState;
 
 #[tauri::command]
 pub async fn sync_orgs(state: State<'_, DbState>, app: AppHandle) -> Result<Vec<OrgAuth>, String> {
-    let result = manager::sync_orgs(&state.0).await.map_err(|e| e.to_string())?;
+    let result = manager::sync_orgs(&state.0)
+        .await
+        .map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
     {
         if let Err(e) = crate::tray::rebuild_menu(&app).await {
@@ -100,7 +102,9 @@ pub async fn cancel_login() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn open_org(username: String) -> Result<(), String> {
-    manager::open_org(&username).await.map_err(|e| e.to_string())
+    manager::open_org(&username)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

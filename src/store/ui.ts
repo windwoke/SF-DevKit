@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type ModuleId = "orgs" | "soql" | "metadata" | "apex" | "deployer" | "logs";
+export type ModuleId = "home" | "orgs" | "soql" | "metadata" | "apex" | "deployer" | "logs";
 
 interface UiState {
   activeModule: ModuleId;
@@ -8,6 +8,6 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>((set) => ({
-  activeModule: "orgs",
+  activeModule: "home",
   setActiveModule: (moduleId) => set({ activeModule: moduleId }),
 }));

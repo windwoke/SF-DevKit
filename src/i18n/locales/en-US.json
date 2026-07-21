@@ -5,6 +5,7 @@
     "settingsAria": "Open settings"
   },
   "modules": {
+    "home": "Home",
     "orgs": "Org Manager",
     "soql": "SOQL",
     "metadata": "Metadata Browser",
@@ -22,6 +23,143 @@
   "language": {
     "zh-CN": "中文",
     "en-US": "English"
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "Good morning",
+      "noon": "Good afternoon",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening",
+      "lateNight": "Working late?",
+      "subtitle": "Start with the one thing that matters most. Have a smooth build."
+    },
+    "orgStatus": {
+      "title": "Current Org",
+      "noOrg": "No default org selected",
+      "goOrgs": "Open Org Manager",
+      "alias": "Alias",
+      "type": "Environment",
+      "localDirectory": "Local Directory",
+      "notLinked": "Not linked",
+      "switch": "Switch Org",
+      "openOrg": "Open Default Org",
+      "openDirectory": "Open Local Directory"
+    },
+    "recentSoql": {
+      "title": "Recent SOQL",
+      "empty": "No queries in this session yet"
+    },
+    "recentActivity": {
+      "title": "Recent Activity",
+      "empty": "No retrieves / deploys yet",
+      "retrieve": "Retrieve",
+      "deploy": "Deploy",
+      "deployDetail": "Deploy · {{components}} · {{errors}}",
+      "retrieveDetail": "Retrieve · {{components}} → {{outputMode}}",
+      "componentCount_one": "{{count}} component",
+      "componentCount_other": "{{count}} components",
+      "errorCount_one": "{{count}} error",
+      "errorCount_other": "{{count}} errors",
+      "justNow": "just now",
+      "outputMode": {
+        "extract": "Extracted folder",
+        "zip": "ZIP archive"
+      }
+    },
+    "news": {
+      "title": "Developer News",
+      "fetching": "Loading…",
+      "error": "Failed to load. Try later.",
+      "mute": "Hide this card",
+      "sourceLink": "Salesforce Stack Exchange",
+      "sourceCount": "{{count}} sources",
+      "sourceAvailability": "{{available}}/{{total}} sources",
+      "unavailableSources": "No content returned by: {{sources}}",
+      "filterLabel": "Filter by source",
+      "allSources": "All",
+      "sourceEmpty": "No content available from {{source}}",
+      "noSources": "No sources yet. Click Manage to add one."
+    },
+    "manage": {
+      "title": "Manage Home",
+      "open": "Manage",
+      "done": "Done",
+      "sections": {
+        "widgets": "Visible Widgets",
+        "sources": "News Sources"
+      },
+      "widgets": {
+        "greeting": "Daily Greeting",
+        "orgStatus": "Current Org",
+        "quickActions": "Quick Actions",
+        "recentSoql": "Recent SOQL",
+        "recentActivity": "Recent Activity",
+        "news": "Developer News"
+      },
+      "sources": {
+        "add": "Add Source",
+        "cancel": "Cancel",
+        "save": "Save",
+        "remove": "Remove",
+        "empty": "No sources yet",
+        "kind": "Type",
+        "kindRss": "RSS / Atom",
+        "kindSeApi": "StackExchange API",
+        "label": "Label",
+        "labelPh": "e.g. My Blog",
+        "url": "URL"
+      }
+    },
+    "layout": {
+      "edit": "Edit Layout",
+      "done": "Done",
+      "add": "Add Widget",
+      "addTitle": "Pick a widget to add",
+      "hint": "Drag a card to move it; drag its bottom-right corner to resize",
+      "remove": "Remove"
+    },
+    "quickActions": {
+      "title": "Quick Actions",
+      "add": "Add",
+      "manage": "Manage",
+      "done": "Done",
+      "remove": "Remove",
+      "moveEarlier": "Move earlier",
+      "moveLater": "Move later",
+      "launchFailed": "Launch failed: {{error}}",
+      "empty": "No quick actions yet. Open Manage to add one.",
+      "seeds": {
+        "soql": "New SOQL",
+        "metadata": "Browse Metadata",
+        "logs": "Apex Logs",
+        "help": "Salesforce Help",
+        "docs": "Developer Docs"
+      },
+      "dialog": {
+        "title": "Add Quick Action",
+        "kind": "Type",
+        "kindModule": "Jump to module",
+        "kindUrl": "Open URL in browser",
+        "kindApp": "Launch local app",
+        "label": "Label",
+        "labelPh": "e.g. New SOQL",
+        "icon": "Icon",
+        "targetModule": "Target module",
+        "targetUrl": "URL",
+        "targetApp": "App path",
+        "args": "Arguments",
+        "browse": "Browse…",
+        "pickIcon": "Pick icon",
+        "iconCat": {
+          "common": "Common",
+          "tools": "Tools",
+          "dev": "Dev",
+          "symbols": "Symbols"
+        },
+        "cancel": "Cancel",
+        "save": "Save"
+      }
+    }
   },
   "logViewer": {
     "noOrgHint": "No org selected. Set a default org in Org Manager first.",

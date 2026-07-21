@@ -68,7 +68,8 @@ impl DeployRunner {
                 &options.event_id,
                 RetrieveEvent {
                     event_type: "stdout".to_string(),
-                    data: "已检测到子类型组件，生成修正后的部署清单 (.sfdevkit-deploy.xml)".to_string(),
+                    data: "已检测到子类型组件，生成修正后的部署清单 (.sfdevkit-deploy.xml)"
+                        .to_string(),
                 },
             );
             tmp
@@ -175,10 +176,13 @@ impl DeployRunner {
 
         let flush_buf = |buf: &mut Vec<String>, app: &AppHandle, event_id: &str| {
             if !buf.is_empty() {
-                let _ = app.emit(event_id, RetrieveEvent {
-                    event_type: "stdout".to_string(),
-                    data: buf.join("\n"),
-                });
+                let _ = app.emit(
+                    event_id,
+                    RetrieveEvent {
+                        event_type: "stdout".to_string(),
+                        data: buf.join("\n"),
+                    },
+                );
                 buf.clear();
             }
         };
@@ -239,12 +243,12 @@ impl DeployRunner {
         let deploy_id_from_text = extract_deploy_id(&stdout_buf);
         let result = if let Some(ref did) = deploy_id_from_text {
             match fetch_deploy_report(&sf_path, did, &options.org_id, &options.working_dir).await {
-                Ok(r) => DeployResult {
-                    duration_ms,
-                    ..r
-                },
+                Ok(r) => DeployResult { duration_ms, ..r },
                 Err(e) => {
-                    eprintln!("[deploy] report fetch failed: {}, falling back to text parse", e);
+                    eprintln!(
+                        "[deploy] report fetch failed: {}, falling back to text parse",
+                        e
+                    );
                     parse_deploy_result(&stdout_buf, exit_code, duration_ms, &options.working_dir)
                 }
             }
@@ -321,8 +325,8 @@ impl DeployRunner {
     ) -> anyhow::Result<DeployResult> {
         let started_at = Instant::now();
 
-        let sf_path = crate::cli::runner::find_sf()
-            .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI"))?;
+        let sf_path =
+            crate::cli::runner::find_sf().ok_or_else(|| anyhow::anyhow!("未找到 sf CLI"))?;
 
         let mut cmd = Command::new(&sf_path);
         cmd.suppress_console();
@@ -507,7 +511,12 @@ impl DeployRunner {
     }
 }
 
-fn parse_deploy_result(stdout_buf: &str, exit_code: i32, duration_ms: u64, working_dir: &str) -> DeployResult {
+fn parse_deploy_result(
+    stdout_buf: &str,
+    exit_code: i32,
+    duration_ms: u64,
+    working_dir: &str,
+) -> DeployResult {
     // Try to parse the JSON output from sf CLI
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(stdout_buf) {
         let result_obj = json.get("result");
@@ -570,9 +579,13 @@ async fn fetch_deploy_report(
         Command::new(sf_path)
             .suppress_console()
             .args([
-                "project", "deploy", "report",
-                "--job-id", deploy_id,
-                "--target-org", org_id,
+                "project",
+                "deploy",
+                "report",
+                "--job-id",
+                deploy_id,
+                "--target-org",
+                org_id,
                 "--json",
             ])
             .current_dir(working_dir)
@@ -582,14 +595,21 @@ async fn fetch_deploy_report(
     .map_err(|_| anyhow::anyhow!("deploy report timed out after 30s"))??;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(parse_deploy_result(&stdout, output.status.code().unwrap_or(-1), 0, working_dir))
+    Ok(parse_deploy_result(
+        &stdout,
+        output.status.code().unwrap_or(-1),
+        0,
+        working_dir,
+    ))
 }
 
 fn parse_deploy_errors(
     result_obj: Option<&serde_json::Value>,
     working_dir: &str,
 ) -> Vec<DeployError> {
-    let Some(result) = result_obj else { return vec![] };
+    let Some(result) = result_obj else {
+        return vec![];
+    };
     let mut errors = Vec::new();
 
     // 1. Component failures
@@ -630,8 +650,14 @@ fn parse_deploy_errors(
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown")
                     .to_string(),
-                line_number: f.get("lineNumber").and_then(|v| v.as_u64()).map(|n| n as u32),
-                column_number: f.get("columnNumber").and_then(|v| v.as_u64()).map(|n| n as u32),
+                line_number: f
+                    .get("lineNumber")
+                    .and_then(|v| v.as_u64())
+                    .map(|n| n as u32),
+                column_number: f
+                    .get("columnNumber")
+                    .and_then(|v| v.as_u64())
+                    .map(|n| n as u32),
                 message,
                 error_type: f
                     .get("problemType")
@@ -651,18 +677,12 @@ fn parse_deploy_errors(
     {
         for f in arr {
             let name = f.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
-            let method = f
-                .get("methodName")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let method = f.get("methodName").and_then(|v| v.as_str()).unwrap_or("");
             let message = f
                 .get("message")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown test failure");
-            let stack = f
-                .get("stackTrace")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let stack = f.get("stackTrace").and_then(|v| v.as_str()).unwrap_or("");
 
             let (line, col) = parse_line_col_from_stack(stack);
 

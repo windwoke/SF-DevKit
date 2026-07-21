@@ -11,6 +11,16 @@ const stroke = {
   strokeLinejoin: "round" as const,
 };
 
+/** 首页 / Home */
+export function IconHomeNav() {
+  return (
+    <svg {...stroke} aria-hidden>
+      <path d="M3 11l9-7 9 7" />
+      <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9" />
+    </svg>
+  );
+}
+
 /** Org / 云 */
 export function IconOrgNav() {
   return (
@@ -80,6 +90,7 @@ export function IconSettingsNav() {
 }
 
 export function SidebarModuleIcon({ id }: { id: ModuleId }) {
+  if (id === "home") return <IconHomeNav />;
   if (id === "orgs") return <IconOrgNav />;
   if (id === "soql") return <IconSoqlNav />;
   if (id === "metadata") return <IconMetadataNav />;

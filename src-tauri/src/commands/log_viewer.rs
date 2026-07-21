@@ -73,14 +73,20 @@ pub async fn search_users(
 }
 
 #[tauri::command]
-pub async fn find_apex_class_id(org_id: String, class_name: String) -> Result<Option<String>, String> {
+pub async fn find_apex_class_id(
+    org_id: String,
+    class_name: String,
+) -> Result<Option<String>, String> {
     service::find_apex_class_id(&org_id, &class_name)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn search_apex_classes(org_id: String, keyword: String) -> Result<Vec<ApexClassItem>, String> {
+pub async fn search_apex_classes(
+    org_id: String,
+    keyword: String,
+) -> Result<Vec<ApexClassItem>, String> {
     service::search_apex_classes(&org_id, &keyword)
         .await
         .map_err(|e| e.to_string())

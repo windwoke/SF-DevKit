@@ -26,6 +26,24 @@ export interface MetadataSelectionItem {
   members: string[];
 }
 
+export interface RetrieveHistoryRecord {
+  id: number;
+  org_id: string;
+  selections_json: string;
+  output_dir: string;
+  api_version: string;
+  output_mode: string;
+  status: string;
+  duration_ms: number | null;
+  log_text: string | null;
+  executed_at: string | null;
+}
+
+export type OpenExternalTarget =
+  | { kind: "url"; target: string }
+  | { kind: "app"; target: string; args?: string }
+  | { kind: "path"; target: string };
+
 export interface RetrieveResult {
   success: boolean;
   output_path: string;
@@ -94,7 +112,8 @@ export interface TrayLabels {
 export const tauriApi = {
   syncOrgs: () => invoke<OrgAuth[]>("sync_orgs"),
   listOrgs: () => invoke<OrgAuth[]>("list_orgs"),
-  setDefaultOrg: (username: string) => invoke<void>("set_default_org", { username }),
+  setDefaultOrg: (username: string) =>
+    invoke<void>("set_default_org", { username }),
   logoutOrg: (username: string) => invoke<void>("logout_org", { username }),
   /** Web OAuth only; call `syncOrgs` afterward to refresh the local list. */
   loginOrg: (payload: {
@@ -127,7 +146,11 @@ export const tauriApi = {
       orgId: payload.orgId,
       forceRefresh: payload.forceRefresh ?? false,
     }),
-  listMetadataComponents: (payload: { orgId: string; metadataType: string; forceRefresh?: boolean }) =>
+  listMetadataComponents: (payload: {
+    orgId: string;
+    metadataType: string;
+    forceRefresh?: boolean;
+  }) =>
     invoke<MetadataComponentMeta[]>("list_metadata_components", {
       orgId: payload.orgId,
       metadataType: payload.metadataType,
@@ -151,9 +174,13 @@ export const tauriApi = {
       apiVersion: payload.apiVersion,
       eventId: payload.eventId,
     }),
-  cancelRetrieve: (eventId: string) => invoke<void>("cancel_retrieve", { eventId }),
+  cancelRetrieve: (eventId: string) =>
+    invoke<void>("cancel_retrieve", { eventId }),
   revealInFinder: (path: string) => invoke<void>("reveal_in_finder", { path }),
-  refreshSchemaCache: (payload: { orgId: string; objectName?: string | null }) =>
+  refreshSchemaCache: (payload: {
+    orgId: string;
+    objectName?: string | null;
+  }) =>
     invoke<void>("refresh_schema_cache", {
       orgId: payload.orgId,
       objectName: payload.objectName ?? null,
@@ -179,7 +206,11 @@ export const tauriApi = {
       },
     }),
   cancelDeploy: (eventId: string) => invoke<void>("cancel_deploy", { eventId }),
-  quickDeploy: (payload: { orgId: string; deployId: string; eventId: string }) =>
+  quickDeploy: (payload: {
+    orgId: string;
+    deployId: string;
+    eventId: string;
+  }) =>
     invoke<DeployResult>("quick_deploy", {
       orgId: payload.orgId,
       deployId: payload.deployId,
@@ -192,13 +223,18 @@ export const tauriApi = {
     }),
   listQuickDeploys: (orgId: string) =>
     invoke<QuickDeployRecord[]>("list_quick_deploys", { orgId }),
-  retrieveForDiff: (payload: { orgId: string; workingDir: string; eventId: string }) =>
+  retrieveForDiff: (payload: {
+    orgId: string;
+    workingDir: string;
+    eventId: string;
+  }) =>
     invoke<string>("retrieve_for_diff", {
       orgId: payload.orgId,
       workingDir: payload.workingDir,
       eventId: payload.eventId,
     }),
-  openDiffTool: (command: string) => invoke<void>("open_diff_tool", { command }),
+  openDiffTool: (command: string) =>
+    invoke<void>("open_diff_tool", { command }),
   searchApexTestClasses: (payload: { orgId: string; keyword: string }) =>
     invoke<ApexClassMeta[]>("search_apex_test_classes", {
       orgId: payload.orgId,
@@ -206,4 +242,15 @@ export const tauriApi = {
     }),
   checkPackageXml: (workingDir: string) =>
     invoke<boolean>("check_package_xml", { workingDir }),
+
+  // Dashboard
+  listRetrieveHistory: (payload: { orgId: string; limit?: number }) =>
+    invoke<RetrieveHistoryRecord[]>("list_retrieve_history", {
+      orgId: payload.orgId,
+      limit: payload.limit ?? 10,
+    }),
+  openExternal: (target: OpenExternalTarget) =>
+    invoke<void>("open_external", { target }),
+  fetchFeed: (url: string) => invoke<string>("fetch_feed", { url }),
+  pickAppPath: () => invoke<string | null>("pick_app_path"),
 };
