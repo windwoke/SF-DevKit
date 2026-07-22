@@ -2,7 +2,8 @@
   "sidebar": {
     "mainNav": "Main Navigation",
     "settings": "Settings",
-    "settingsAria": "Open settings"
+    "settingsAria": "Open settings",
+    "navItemTooltip": "{{label}} ({{shortcut}})"
   },
   "modules": {
     "home": "Home",

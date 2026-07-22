@@ -5,6 +5,13 @@ import { useSettingsStore, type DiffTool } from "../../store/settings";
 import type { ModuleId } from "../../store/ui";
 import { IconSettingsNav, SidebarModuleIcon } from "./SidebarIcons";
 
+// Show ⌘ on macOS, Ctrl+ elsewhere — matches the modifier the keydown
+// handler in App.tsx accepts.
+const MOD_KEY_LABEL =
+  typeof navigator !== "undefined" && /Mac/i.test(navigator.platform)
+    ? "⌘"
+    : "Ctrl+";
+
 interface ModuleItem {
   id: ModuleId;
   label: string;
@@ -56,19 +63,26 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
   return (
     <aside className="sidebar">
       <nav className="sidebar-nav" aria-label={t("sidebar.mainNav")}>
-        {modules.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            className={m.id === active ? "nav-item active" : "nav-item"}
-            aria-label={m.label}
-            title={m.label}
-            aria-current={m.id === active ? "page" : undefined}
-            onClick={() => onSelect(m.id)}
-          >
-            <SidebarModuleIcon id={m.id} />
-          </button>
-        ))}
+        {modules.map((m, idx) => {
+          const modKey = MOD_KEY_LABEL;
+          const tooltip = t("sidebar.navItemTooltip", {
+            label: m.label,
+            shortcut: `${modKey}${idx + 1}`,
+          });
+          return (
+            <button
+              key={m.id}
+              type="button"
+              className={m.id === active ? "nav-item active" : "nav-item"}
+              aria-label={m.label}
+              title={tooltip}
+              aria-current={m.id === active ? "page" : undefined}
+              onClick={() => onSelect(m.id)}
+            >
+              <SidebarModuleIcon id={m.id} />
+            </button>
+          );
+        })}
       </nav>
       <div className="sidebar-settings-wrap" ref={settingsWrapRef}>
         <button

@@ -2,7 +2,8 @@
   "sidebar": {
     "mainNav": "主功能",
     "settings": "设置",
-    "settingsAria": "打开设置"
+    "settingsAria": "打开设置",
+    "navItemTooltip": "{{label}} ({{shortcut}})"
   },
   "modules": {
     "home": "首页",
