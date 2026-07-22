@@ -6,14 +6,7 @@ on:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            target: aarch64-apple-darwin
-
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
 
     env:
       APPLE_SIGNING_IDENTITY: "Developer ID Application: zhonghui li (JSRAB4F28W)"
@@ -35,7 +28,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: aarch64-apple-darwin
 
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
@@ -79,7 +72,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sf-devkit-${{ matrix.target }}
+          name: sf-devkit-macos-aarch64
           path: |
             src-tauri/target/release/bundle/
           if-no-files-found: warn
@@ -133,5 +126,5 @@ jobs:
           name: SF DevKit ${{ github.ref_name }}
           body_path: release_notes.md
           files: |
-            sf-devkit-*/**/*.dmg
+            sf-devkit-macos-aarch64/**/*.dmg
           generate_release_notes: true
