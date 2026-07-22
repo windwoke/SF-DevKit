@@ -41,20 +41,21 @@ impl MetadataService {
         org_id: &str,
         force_refresh: bool,
     ) -> anyhow::Result<Vec<MetadataTypeMeta>> {
-        eprintln!("[metadata.service] get_types enter org_id={} force_refresh={}", org_id, force_refresh);
+        eprintln!(
+            "[metadata.service] get_types enter org_id={} force_refresh={}",
+            org_id, force_refresh
+        );
 
         if force_refresh {
             sqlx::query("DELETE FROM metadata_types WHERE org_id = ?1")
                 .bind(org_id)
                 .execute(&self.pool)
                 .await?;
-            sqlx::query(
-                "DELETE FROM metadata_cache_meta WHERE org_id = ?1 AND cache_key = ?2",
-            )
-            .bind(org_id)
-            .bind(META_KEY_TYPES_CHILDREN_V2)
-            .execute(&self.pool)
-            .await?;
+            sqlx::query("DELETE FROM metadata_cache_meta WHERE org_id = ?1 AND cache_key = ?2")
+                .bind(org_id)
+                .bind(META_KEY_TYPES_CHILDREN_V2)
+                .execute(&self.pool)
+                .await?;
         }
 
         if !force_refresh {
@@ -107,17 +108,19 @@ impl MetadataService {
                     .bind(org_id)
                     .execute(&self.pool)
                     .await?;
-                sqlx::query(
-                    "DELETE FROM metadata_cache_meta WHERE org_id = ?1 AND cache_key = ?2",
-                )
-                .bind(org_id)
-                .bind(META_KEY_TYPES_CHILDREN_V2)
-                .execute(&self.pool)
-                .await?;
+                sqlx::query("DELETE FROM metadata_cache_meta WHERE org_id = ?1 AND cache_key = ?2")
+                    .bind(org_id)
+                    .bind(META_KEY_TYPES_CHILDREN_V2)
+                    .execute(&self.pool)
+                    .await?;
             }
         }
 
-        let output = run_command(&["org", "list", "metadata-types", "--target-org", org_id], true).await?;
+        let output = run_command(
+            &["org", "list", "metadata-types", "--target-org", org_id],
+            true,
+        )
+        .await?;
         eprintln!(
             "[metadata.service] get_types cli stdout_len={} stderr_len={} exit={}",
             output.stdout.len(),
@@ -277,7 +280,9 @@ impl MetadataService {
             .await?;
             eprintln!(
                 "[metadata.service] get_components cache rows={} org_id={} type={}",
-                cached.len(), org_id, metadata_type
+                cached.len(),
+                org_id,
+                metadata_type
             );
             if !cached.is_empty() {
                 return Ok(cached);
@@ -435,7 +440,8 @@ impl MetadataService {
             org_id,
             metadata_type
         );
-        self.persist_components(org_id, metadata_type, &all_items).await
+        self.persist_components(org_id, metadata_type, &all_items)
+            .await
     }
 
     /// 解析 CLI JSON 结果并持久化到 SQLite，返回组件列表
@@ -493,7 +499,9 @@ impl MetadataService {
 
         eprintln!(
             "[metadata.service] persist_components rows={} org_id={} type={}",
-            out.len(), org_id, metadata_type
+            out.len(),
+            org_id,
+            metadata_type
         );
         Ok(out)
     }

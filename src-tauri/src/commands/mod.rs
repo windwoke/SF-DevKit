@@ -1,4 +1,5 @@
 pub mod apex;
+pub mod dashboard;
 pub mod deployer;
 pub mod export;
 pub mod log_viewer;

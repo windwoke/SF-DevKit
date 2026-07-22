@@ -55,9 +55,6 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand" title="SF DevKit">
-        <span className="sidebar-brand-text">SF</span>
-      </div>
       <nav className="sidebar-nav" aria-label={t("sidebar.mainNav")}>
         {modules.map((m) => (
           <button
@@ -86,8 +83,14 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
           <IconSettingsNav />
         </button>
         {settingsOpen ? (
-          <div className="sidebar-settings-panel" role="dialog" aria-label={t("sidebar.settings")}>
-            <div className="sidebar-settings-panel-title">{t("sidebar.settings")}</div>
+          <div
+            className="sidebar-settings-panel"
+            role="dialog"
+            aria-label={t("sidebar.settings")}
+          >
+            <div className="sidebar-settings-panel-title">
+              {t("sidebar.settings")}
+            </div>
 
             {/* Language */}
             <label className="sidebar-settings-lang">
@@ -106,7 +109,9 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
 
             {/* Diff Tool */}
             <div className="sidebar-settings-divider" />
-            <div className="sidebar-settings-section-title">{t("settings.diffTool")}</div>
+            <div className="sidebar-settings-section-title">
+              {t("settings.diffTool")}
+            </div>
             <div className="sidebar-settings-diff-options">
               {diffToolOptions.map((opt) => (
                 <label key={opt.value} className="sidebar-settings-radio">

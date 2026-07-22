@@ -35,7 +35,8 @@ pub async fn list_apex_logs(
     if let Some(filter) = user_filter.filter(|s| !s.trim().is_empty()) {
         let needle = filter.trim().to_lowercase();
         logs.retain(|l| {
-            l.log_user_name.to_lowercase().contains(&needle) || l.operation.to_lowercase().contains(&needle)
+            l.log_user_name.to_lowercase().contains(&needle)
+                || l.operation.to_lowercase().contains(&needle)
         });
     }
     logs.sort_by(|a, b| b.start_time.cmp(&a.start_time));
@@ -57,7 +58,15 @@ pub async fn download_apex_log(
         .with_context(|| format!("创建目录失败：{}", output_dir))?;
 
     let output = run_command(
-        &["apex", "log", "get", "--target-org", org_id, "--log-id", log_id],
+        &[
+            "apex",
+            "log",
+            "get",
+            "--target-org",
+            org_id,
+            "--log-id",
+            log_id,
+        ],
         false,
     )
     .await?;
@@ -71,7 +80,10 @@ pub async fn download_apex_log(
         .await
         .with_context(|| format!("写入日志文件失败：{}", file_path.display()))?;
 
-    let meta_size = tokio::fs::metadata(&file_path).await.ok().map(|m| m.len() as i64);
+    let meta_size = tokio::fs::metadata(&file_path)
+        .await
+        .ok()
+        .map(|m| m.len() as i64);
     let _ = sqlx::query(
         r#"
         INSERT INTO log_downloads (org_id, log_id, file_path, file_size)
@@ -176,7 +188,11 @@ pub async fn open_in_vscode(file_path: &str) -> anyhow::Result<()> {
 pub async fn reveal_log_file(file_path: &str) -> anyhow::Result<()> {
     #[cfg(target_os = "macos")]
     {
-        let status = Command::new("open").suppress_console().args(["-R", file_path]).status().await?;
+        let status = Command::new("open")
+            .suppress_console()
+            .args(["-R", file_path])
+            .status()
+            .await?;
         if !status.success() {
             anyhow::bail!("无法在 Finder 中显示文件");
         }
@@ -196,8 +212,14 @@ pub async fn reveal_log_file(file_path: &str) -> anyhow::Result<()> {
 
     #[cfg(target_os = "linux")]
     {
-        let parent = Path::new(file_path).parent().unwrap_or_else(|| Path::new("/"));
-        let status = Command::new("xdg-open").suppress_console().arg(parent).status().await?;
+        let parent = Path::new(file_path)
+            .parent()
+            .unwrap_or_else(|| Path::new("/"));
+        let status = Command::new("xdg-open")
+            .suppress_console()
+            .arg(parent)
+            .status()
+            .await?;
         if !status.success() {
             anyhow::bail!("无法打开文件目录");
         }
@@ -215,7 +237,11 @@ pub async fn get_current_user(org_id: &str) -> anyhow::Result<SfUser> {
     parse_first_user(&resp).ok_or_else(|| anyhow::anyhow!("未找到当前用户信息"))
 }
 
-pub async fn search_users(pool: &SqlitePool, org_id: &str, keyword: &str) -> anyhow::Result<Vec<SfUser>> {
+pub async fn search_users(
+    pool: &SqlitePool,
+    org_id: &str,
+    keyword: &str,
+) -> anyhow::Result<Vec<SfUser>> {
     let k = keyword.trim();
     let cached = if k.is_empty() {
         search_users_cache(pool, org_id, None).await?
@@ -279,7 +305,10 @@ pub async fn find_apex_class_id(org_id: &str, class_name: &str) -> anyhow::Resul
         .and_then(|row| get_string(row, &["Id", "id"])))
 }
 
-pub async fn search_apex_classes(org_id: &str, keyword: &str) -> anyhow::Result<Vec<ApexClassItem>> {
+pub async fn search_apex_classes(
+    org_id: &str,
+    keyword: &str,
+) -> anyhow::Result<Vec<ApexClassItem>> {
     let k = keyword.trim();
     let query = if k.is_empty() {
         "SELECT Id, Name, LastModifiedDate, LastModifiedBy.Name FROM ApexClass ORDER BY LastModifiedDate DESC LIMIT 20"
@@ -304,7 +333,11 @@ pub async fn search_apex_classes(org_id: &str, keyword: &str) -> anyhow::Result<
                 last_modified_date: get_string(row, &["LastModifiedDate", "lastModifiedDate"]),
                 last_modified_by_name: get_string(
                     row,
-                    &["LastModifiedBy.Name", "LastModifiedByName", "lastModifiedByName"],
+                    &[
+                        "LastModifiedBy.Name",
+                        "LastModifiedByName",
+                        "lastModifiedByName",
+                    ],
                 ),
             })
         })
@@ -447,23 +480,33 @@ pub async fn renew_trace(
         anyhow::bail!("续期 TraceFlag 失败");
     }
 
-    let _ = sqlx::query("UPDATE trace_targets SET expires_at = ?1, is_active = 1 WHERE trace_flag_id = ?2")
-        .bind(&new_expires)
-        .bind(trace_flag_id)
-        .execute(pool)
-        .await;
+    let _ = sqlx::query(
+        "UPDATE trace_targets SET expires_at = ?1, is_active = 1 WHERE trace_flag_id = ?2",
+    )
+    .bind(&new_expires)
+    .bind(trace_flag_id)
+    .execute(pool)
+    .await;
 
     Ok(new_expires)
 }
 
-pub async fn disable_trace(pool: &SqlitePool, org_id: &str, trace_flag_id: &str) -> anyhow::Result<()> {
+pub async fn disable_trace(
+    pool: &SqlitePool,
+    org_id: &str,
+    trace_flag_id: &str,
+) -> anyhow::Result<()> {
     let session = get_org_session(org_id).await?;
     let client = Client::new();
     let url = format!(
         "{}/services/data/v60.0/tooling/sobjects/TraceFlag/{}",
         session.instance_url, trace_flag_id
     );
-    let resp = client.delete(url).bearer_auth(&session.access_token).send().await?;
+    let resp = client
+        .delete(url)
+        .bearer_auth(&session.access_token)
+        .send()
+        .await?;
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
@@ -501,7 +544,8 @@ fn parse_apex_log(value: &Value) -> ApexLog {
     ApexLog {
         id: get_string(value, &["Id", "id"]).unwrap_or_default(),
         application: get_string(value, &["Application", "application"]).unwrap_or_default(),
-        duration_millis: get_i64(value, &["DurationMilliseconds", "durationMilliseconds"]).unwrap_or(0),
+        duration_millis: get_i64(value, &["DurationMilliseconds", "durationMilliseconds"])
+            .unwrap_or(0),
         location: get_string(value, &["Location", "location"]).unwrap_or_default(),
         log_user_name: get_string(value, &["LogUser.Name", "LogUserName", "logUserName"])
             .unwrap_or_else(|| "unknown".to_string()),
@@ -528,7 +572,8 @@ fn get_string(value: &Value, keys: &[&str]) -> Option<String> {
 }
 
 fn get_i64(value: &Value, keys: &[&str]) -> Option<i64> {
-    keys.iter().find_map(|k| value.get(k).and_then(|v| v.as_i64()))
+    keys.iter()
+        .find_map(|k| value.get(k).and_then(|v| v.as_i64()))
 }
 
 fn cli_error_message(stderr: &str, stdout: &str) -> String {
@@ -673,7 +718,11 @@ async fn delete_tooling_sobject(org_id: &str, sobject: &str, id: &str) -> anyhow
         "{}/services/data/v60.0/tooling/sobjects/{}/{}",
         session.instance_url, sobject, id
     );
-    let resp = client.delete(url).bearer_auth(&session.access_token).send().await?;
+    let resp = client
+        .delete(url)
+        .bearer_auth(&session.access_token)
+        .send()
+        .await?;
     let status = resp.status();
     if !status.is_success() {
         // Tolerate already-deleted flags: Salesforce often returns 404 / ENTITY_IS_DELETED
@@ -701,7 +750,11 @@ async fn query_data(org_id: &str, soql: &str, tooling: bool) -> anyhow::Result<V
         endpoint,
         urlencoding::encode(soql)
     );
-    let resp = client.get(url).bearer_auth(&session.access_token).send().await?;
+    let resp = client
+        .get(url)
+        .bearer_auth(&session.access_token)
+        .send()
+        .await?;
     let status = resp.status();
     let json: Value = resp.json().await.unwrap_or(Value::Null);
     if !status.is_success() {
@@ -746,7 +799,10 @@ async fn get_org_session(org_id: &str) -> anyhow::Result<OrgDisplayResult> {
     // from `sf org display` (no --verbose needed; instanceUrl is not a secret).
     let display_output = run_command(&["org", "display", "--target-org", org_id], true).await?;
     if !display_output.success {
-        anyhow::bail!("{}", cli_error_message(&display_output.stderr, &display_output.stdout));
+        anyhow::bail!(
+            "{}",
+            cli_error_message(&display_output.stderr, &display_output.stdout)
+        );
     }
     let display_parsed: OrgInstanceEnvelope =
         serde_json::from_str(&display_output.stdout).context("解析 org display 失败")?;

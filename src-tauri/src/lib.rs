@@ -56,6 +56,7 @@ pub fn run() {
             commands::metadata::list_metadata_components,
             commands::metadata::retrieve_metadata,
             commands::metadata::cancel_retrieve,
+            commands::metadata::list_retrieve_history,
             commands::metadata::reveal_in_finder,
             commands::log_viewer::list_apex_logs,
             commands::log_viewer::download_apex_log,
@@ -82,6 +83,9 @@ pub fn run() {
             commands::deployer::open_diff_tool,
             commands::deployer::search_apex_test_classes,
             commands::deployer::scan_local_test_classes,
+            commands::dashboard::open_external,
+            commands::dashboard::fetch_feed,
+            commands::dashboard::pick_app_path,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start SF DevKit");

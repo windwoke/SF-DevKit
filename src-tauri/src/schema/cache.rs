@@ -36,7 +36,10 @@ pub async fn get_objects(pool: &SqlitePool, org_id: &str) -> anyhow::Result<Vec<
     fetch_and_cache_objects(pool, org_id).await
 }
 
-async fn fetch_and_cache_objects(pool: &SqlitePool, org_id: &str) -> anyhow::Result<Vec<ObjectMeta>> {
+async fn fetch_and_cache_objects(
+    pool: &SqlitePool,
+    org_id: &str,
+) -> anyhow::Result<Vec<ObjectMeta>> {
     let output = run_command(
         &[
             "sobject",
@@ -89,7 +92,11 @@ async fn fetch_and_cache_objects(pool: &SqlitePool, org_id: &str) -> anyhow::Res
     Ok(result)
 }
 
-pub async fn get_fields(pool: &SqlitePool, org_id: &str, object_name: &str) -> anyhow::Result<Vec<FieldMeta>> {
+pub async fn get_fields(
+    pool: &SqlitePool,
+    org_id: &str,
+    object_name: &str,
+) -> anyhow::Result<Vec<FieldMeta>> {
     let rows = sqlx::query_as::<_, FieldMeta>(
         r#"
         SELECT api_name, label, field_type, reference_to, relationship_name, is_nillable
@@ -168,10 +175,7 @@ async fn fetch_and_cache_fields(
     for field in fields {
         let api_name = field["name"].as_str().unwrap_or_default().to_string();
         let label = field["label"].as_str().unwrap_or_default().to_string();
-        let field_type = field["type"]
-            .as_str()
-            .unwrap_or("string")
-            .to_uppercase();
+        let field_type = field["type"].as_str().unwrap_or("string").to_uppercase();
         let reference_to = field["referenceTo"]
             .as_array()
             .map(|arr| {
@@ -458,16 +462,13 @@ pub async fn refresh_schema_cache(
 }
 
 pub async fn run_soql_query(org_id: &str, query: &str) -> anyhow::Result<Value> {
-    eprintln!("[soql] run query org={} sql={}", org_id, query.replace('\n', " "));
+    eprintln!(
+        "[soql] run query org={} sql={}",
+        org_id,
+        query.replace('\n', " ")
+    );
     let output = run_command(
-        &[
-            "data",
-            "query",
-            "-q",
-            query,
-            "--target-org",
-            org_id,
-        ],
+        &["data", "query", "-q", query, "--target-org", org_id],
         true,
     )
     .await?;

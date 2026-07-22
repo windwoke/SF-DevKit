@@ -59,7 +59,9 @@ fn parse_apex_output(stdout: &str, exit_code: i32) -> Result<ApexRunResult, Stri
     };
 
     let exception_message = result["exceptionMessage"].as_str().map(|s| s.to_string());
-    let exception_stack_trace = result["exceptionStackTrace"].as_str().map(|s| s.to_string());
+    let exception_stack_trace = result["exceptionStackTrace"]
+        .as_str()
+        .map(|s| s.to_string());
     let logs = result["logs"].as_str().map(|s| s.to_string());
 
     Ok(ApexRunResult {
@@ -89,14 +91,7 @@ pub async fn run_apex(org_id: String, code: String) -> Result<ApexRunResult, Str
     let file_path = temp.path().to_string_lossy().to_string();
 
     let output = run_command(
-        &[
-            "apex",
-            "run",
-            "--target-org",
-            &org_id,
-            "--file",
-            &file_path,
-        ],
+        &["apex", "run", "--target-org", &org_id, "--file", &file_path],
         true,
     )
     .await

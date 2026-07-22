@@ -2,7 +2,9 @@ use tauri::State;
 
 use crate::db::DbState;
 use crate::deployer::diff;
-use crate::deployer::models::{DeployHistoryRecord, DeployOptions, DeployResult, QuickDeployRecord};
+use crate::deployer::models::{
+    DeployHistoryRecord, DeployOptions, DeployResult, QuickDeployRecord,
+};
 use crate::deployer::runner::DeployRunner;
 use crate::deployer::test_search;
 
@@ -19,12 +21,17 @@ pub async fn deploy_metadata(
     options: DeployOptions,
 ) -> Result<DeployResult, String> {
     let runner = DeployRunner::new(state.0.clone());
-    runner.execute(app, &options).await.map_err(|e| e.to_string())
+    runner
+        .execute(app, &options)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn cancel_deploy(event_id: String) -> Result<(), String> {
-    DeployRunner::cancel(&event_id).await.map_err(|e| e.to_string())
+    DeployRunner::cancel(&event_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

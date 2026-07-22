@@ -42,9 +42,11 @@ pub async fn sync_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
         }
     }
 
-    let default_username = all_orgs
-        .iter()
-        .find_map(|org| org.is_default_username.filter(|flag| *flag).map(|_| org.username.clone()));
+    let default_username = all_orgs.iter().find_map(|org| {
+        org.is_default_username
+            .filter(|flag| *flag)
+            .map(|_| org.username.clone())
+    });
 
     let mut tx = pool.begin().await?;
     for org in all_orgs {
@@ -109,7 +111,11 @@ pub async fn set_default_org(pool: &SqlitePool, username: &str) -> anyhow::Resul
 }
 
 pub async fn logout_org(pool: &SqlitePool, username: &str) -> anyhow::Result<()> {
-    run_command(&["org", "logout", "--target-org", username, "--no-prompt"], false).await?;
+    run_command(
+        &["org", "logout", "--target-org", username, "--no-prompt"],
+        false,
+    )
+    .await?;
     sqlx::query("DELETE FROM org_auth WHERE id = ?1")
         .bind(username)
         .execute(pool)
@@ -185,7 +191,9 @@ pub async fn login_org_web(
         run_login_command(&arg_refs, is_alibaba).await
     };
     {
-        let mut guard = active_login().lock().map_err(|_| anyhow::anyhow!("login 状态锁不可用"))?;
+        let mut guard = active_login()
+            .lock()
+            .map_err(|_| anyhow::anyhow!("login 状态锁不可用"))?;
         *guard = None;
     }
     result
@@ -194,7 +202,9 @@ pub async fn login_org_web(
 /// Cancel an in-progress login by killing the sf CLI process.
 pub async fn cancel_login() -> anyhow::Result<()> {
     let pid = {
-        let mut guard = active_login().lock().map_err(|_| anyhow::anyhow!("login 状态锁不可用"))?;
+        let mut guard = active_login()
+            .lock()
+            .map_err(|_| anyhow::anyhow!("login 状态锁不可用"))?;
         guard.take()
     };
     if let Some(pid) = pid {
@@ -219,9 +229,7 @@ pub async fn set_org_linked_project_path(
     org_id: &str,
     path: Option<String>,
 ) -> anyhow::Result<()> {
-    let normalized = path
-        .map(|p| p.trim().to_string())
-        .filter(|p| !p.is_empty());
+    let normalized = path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
     let res = sqlx::query(
         r#"
         UPDATE org_auth
@@ -300,7 +308,11 @@ async fn open_path_in_ide(path: &str) -> anyhow::Result<()> {
     // Fallback to system file opener
     #[cfg(target_os = "macos")]
     {
-        let status = tokio::process::Command::new("open").suppress_console().arg(path).status().await?;
+        let status = tokio::process::Command::new("open")
+            .suppress_console()
+            .arg(path)
+            .status()
+            .await?;
         if status.success() {
             return Ok(());
         }
@@ -308,7 +320,11 @@ async fn open_path_in_ide(path: &str) -> anyhow::Result<()> {
     }
     #[cfg(target_os = "windows")]
     {
-        let status = tokio::process::Command::new("explorer").suppress_console().arg(path).status().await?;
+        let status = tokio::process::Command::new("explorer")
+            .suppress_console()
+            .arg(path)
+            .status()
+            .await?;
         if status.success() {
             return Ok(());
         }
@@ -316,7 +332,11 @@ async fn open_path_in_ide(path: &str) -> anyhow::Result<()> {
     }
     #[cfg(target_os = "linux")]
     {
-        let status = tokio::process::Command::new("xdg-open").suppress_console().arg(path).status().await?;
+        let status = tokio::process::Command::new("xdg-open")
+            .suppress_console()
+            .arg(path)
+            .status()
+            .await?;
         if status.success() {
             return Ok(());
         }
@@ -337,10 +357,7 @@ fn login_instance_url(login_domain: &str) -> &'static str {
 
 /// Like `run_command` but tracks the child PID for cancellation.
 /// When `alibaba_env` is true, sets SF_DISABLE_DNS_CHECK and SF_DOMAIN_RETRY env vars.
-async fn run_login_command(
-    args: &[&str],
-    alibaba_env: bool,
-) -> anyhow::Result<()> {
+async fn run_login_command(args: &[&str], alibaba_env: bool) -> anyhow::Result<()> {
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
@@ -428,11 +445,7 @@ async fn run_login_command(
     });
 
     // Wait for process with a 3-minute timeout
-    let status = tokio::time::timeout(
-        std::time::Duration::from_secs(180),
-        child.wait(),
-    )
-    .await;
+    let status = tokio::time::timeout(std::time::Duration::from_secs(180), child.wait()).await;
 
     match status {
         Ok(Ok(s)) => {
@@ -455,7 +468,11 @@ async fn run_login_command(
             // Timeout — kill the process
             eprintln!("[login] timed out after 180s, killing");
             let _ = kill_process(
-                active_login().lock().ok().and_then(|mut g| g.take()).unwrap_or(0),
+                active_login()
+                    .lock()
+                    .ok()
+                    .and_then(|mut g| g.take())
+                    .unwrap_or(0),
             )
             .await;
             let combined_output = collect_handle.await.unwrap_or_default();
@@ -490,13 +507,19 @@ async fn run_login_with_expect(
         oauth_port
     );
     std::fs::write(temp_dir.join("sfdx-project.json"), &project_json)?;
-    eprintln!("[login:expect] temp sfdx-project.json at {:?}, port={}", temp_dir, oauth_port);
+    eprintln!(
+        "[login:expect] temp sfdx-project.json at {:?}, port={}",
+        temp_dir, oauth_port
+    );
 
     // Kill stale process on the target port
     let _ = Command::new("bash")
         .suppress_console()
         .arg("-c")
-        .arg(format!("lsof -ti:{} | xargs kill -9 2>/dev/null || true", oauth_port))
+        .arg(format!(
+            "lsof -ti:{} | xargs kill -9 2>/dev/null || true",
+            oauth_port
+        ))
         .status()
         .await;
 
@@ -581,11 +604,7 @@ async fn run_login_with_expect(
         combined_output
     });
 
-    let status = tokio::time::timeout(
-        std::time::Duration::from_secs(300),
-        child.wait(),
-    )
-    .await;
+    let status = tokio::time::timeout(std::time::Duration::from_secs(300), child.wait()).await;
 
     match status {
         Ok(Ok(s)) => {
@@ -607,11 +626,18 @@ async fn run_login_with_expect(
         Err(_) => {
             eprintln!("[login:expect] timeout 300s");
             let _ = kill_process(
-                active_login().lock().ok().and_then(|mut g| g.take()).unwrap_or(0),
+                active_login()
+                    .lock()
+                    .ok()
+                    .and_then(|mut g| g.take())
+                    .unwrap_or(0),
             )
             .await;
             let combined_output = collect_handle.await.unwrap_or_default();
-            anyhow::bail!("登录超时，CLI 输出：{}", extract_cli_error(&combined_output));
+            anyhow::bail!(
+                "登录超时，CLI 输出：{}",
+                extract_cli_error(&combined_output)
+            );
         }
     }
 }

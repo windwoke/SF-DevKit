@@ -15,6 +15,20 @@ pub struct OrgAuth {
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
+pub struct RetrieveHistoryRecord {
+    pub id: i64,
+    pub org_id: String,
+    pub selections_json: String,
+    pub output_dir: String,
+    pub api_version: String,
+    pub output_mode: String,
+    pub status: String,
+    pub duration_ms: Option<i64>,
+    pub log_text: Option<String>,
+    pub executed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
 pub struct ObjectMeta {
     pub api_name: String,
     pub label: String,

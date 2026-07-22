@@ -30,6 +30,9 @@ pub async fn open_in_editor(content: String, default_name: String) -> Result<Str
     if status.success() {
         Ok(file_path)
     } else {
-        Err(format!("Failed to open: exit code {}", status.code().unwrap_or(-1)))
+        Err(format!(
+            "Failed to open: exit code {}",
+            status.code().unwrap_or(-1)
+        ))
     }
 }

@@ -5,7 +5,10 @@ use crate::db::DbState;
 use crate::schema::cache::{self, PicklistValue};
 
 #[tauri::command]
-pub async fn get_objects(state: State<'_, DbState>, org_id: String) -> Result<Vec<ObjectMeta>, String> {
+pub async fn get_objects(
+    state: State<'_, DbState>,
+    org_id: String,
+) -> Result<Vec<ObjectMeta>, String> {
     cache::get_objects(&state.0, &org_id)
         .await
         .map_err(|e| e.to_string())
