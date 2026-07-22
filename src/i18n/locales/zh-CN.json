@@ -624,6 +624,11 @@
     "testOnlyFilter": "仅 @isTest 测试类"
   },
   "settings": {
+    "appearance": "外观",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "themeSystem": "跟随系统",
+    "themeSampleHint": "切换应用的主题外观，刷新或重启后保持选择。",
     "diffTool": "Diff 工具",
     "path": "路径",
     "custom": "自定义",

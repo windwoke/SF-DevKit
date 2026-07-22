@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGUAGES } from "../../i18n";
-import { useSettingsStore, type DiffTool } from "../../store/settings";
+import { useSettingsStore, type DiffTool, type ThemeMode } from "../../store/settings";
 import type { ModuleId } from "../../store/ui";
 import { IconSettingsNav, SidebarModuleIcon } from "./SidebarIcons";
 
@@ -28,9 +28,11 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsWrapRef = useRef<HTMLDivElement>(null);
   const {
+    themeMode,
     diffTool,
     diffToolPath,
     diffCustomCommand,
+    setThemeMode,
     setDiffTool,
     setDiffToolPath,
     setDiffCustomCommand,
@@ -58,6 +60,12 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
     { value: "vscode", label: "VSCode" },
     { value: "beyond_compare", label: "Beyond Compare" },
     { value: "custom", label: t("settings.custom") },
+  ];
+
+  const themeOptions: { value: ThemeMode; label: string }[] = [
+    { value: "light", label: t("settings.themeLight") },
+    { value: "dark", label: t("settings.themeDark") },
+    { value: "system", label: t("settings.themeSystem") },
   ];
 
   return (
@@ -106,7 +114,28 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
               {t("sidebar.settings")}
             </div>
 
+            <div className="sidebar-settings-section-title">
+              {t("settings.appearance")}
+            </div>
+            <div className="sidebar-settings-theme" role="group" aria-label={t("settings.appearance")}>
+              {themeOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={themeMode === option.value ? "active" : ""}
+                  aria-pressed={themeMode === option.value}
+                  onClick={() => setThemeMode(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <div className="sidebar-settings-hint sidebar-settings-theme-hint">
+              {t("settings.themeSampleHint")}
+            </div>
+
             {/* Language */}
+            <div className="sidebar-settings-divider" />
             <label className="sidebar-settings-lang">
               <span>{t("topbar.language")}</span>
               <select

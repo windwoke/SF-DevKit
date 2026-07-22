@@ -4,6 +4,7 @@ import type { editor } from "monaco-editor";
 import * as monaco from "monaco-editor";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOrgStore } from "../../store/org";
+import { useEffectiveTheme } from "../../store/settings";
 import { registerSoqlCompletion, type CompletionLoadingFn, type CompletionLogFn } from "./soqlCompletion";
 import { registerSoqlLanguage, registerSoqlLanguageConfiguration, registerSoqlTokenizer } from "./tokenizer";
 
@@ -23,6 +24,7 @@ interface SoqlMonacoEditorProps {
 
 export function SoqlMonacoEditor({ value, onChange, onLog, onLoading, onRun, runDisabled, runActionLabel }: SoqlMonacoEditorProps) {
   const { currentOrg } = useOrgStore();
+  const effectiveTheme = useEffectiveTheme();
   const orgRef = useRef(currentOrg);
   const onLogRef = useRef(onLog);
   const onLoadingRef = useRef(onLoading);
@@ -52,6 +54,23 @@ export function SoqlMonacoEditor({ value, onChange, onLog, onLoading, onRun, run
     registerSoqlLanguage();
     registerSoqlTokenizer();
     registerSoqlLanguageConfiguration();
+    monaco.editor.defineTheme("sfdevkit-light", {
+      base: "vs",
+      inherit: true,
+      rules: [],
+      colors: {
+        "editor.background": "#FBFCFE",
+        "editor.foreground": "#172033",
+        "editorLineNumber.foreground": "#68758C",
+        "editorLineNumber.activeForeground": "#3B465A",
+        "editorCursor.foreground": "#2563EB",
+        "editor.selectionBackground": "#CFE0FF",
+        "editor.inactiveSelectionBackground": "#E4ECFA",
+        "editor.lineHighlightBackground": "#F3F6FA",
+        "editorIndentGuide.background1": "#E2E7EF",
+        "editorIndentGuide.activeBackground1": "#B9C2D0",
+      },
+    });
   }, []);
 
   useEffect(() => {
@@ -83,7 +102,7 @@ export function SoqlMonacoEditor({ value, onChange, onLog, onLoading, onRun, run
     <Editor
       height="280px"
       defaultLanguage="soql"
-      theme="vs-dark"
+      theme={effectiveTheme === "light" ? "sfdevkit-light" : "vs-dark"}
       value={value}
       onChange={(v) => onChange(v ?? "")}
       options={options}

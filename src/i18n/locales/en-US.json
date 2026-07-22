@@ -627,6 +627,11 @@
     "testOnlyFilter": "Only @isTest classes"
   },
   "settings": {
+    "appearance": "Appearance",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "themeSampleHint": "Switch the app theme. Your choice persists across refresh and restart.",
     "diffTool": "Diff Tool",
     "path": "Path",
     "custom": "Custom",

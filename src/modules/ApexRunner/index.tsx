@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { dateLocaleFromI18n } from "../../lib/locale";
 import { useOrgStore } from "../../store/org";
+import { useEffectiveTheme } from "../../store/settings";
 import { useApexRunnerStore, type ApexRunStatus } from "./store";
 
 loader.config({ monaco });
@@ -38,6 +39,7 @@ interface LogEntry {
 export function ApexRunner() {
   const { t, i18n: i18nInstance } = useTranslation();
   const { currentOrg } = useOrgStore();
+  const effectiveTheme = useEffectiveTheme();
   const { draft, setDraft, history, pushHistory, clearHistory } = useApexRunnerStore();
   const [result, setResult] = useState<ApexRunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +120,28 @@ export function ApexRunner() {
     }),
     [],
   );
+
+  // Define the shared light theme so the Apex editor matches the SOQL editor
+  // when the user selects the light appearance.
+  useEffect(() => {
+    monaco.editor.defineTheme("sfdevkit-light", {
+      base: "vs",
+      inherit: true,
+      rules: [],
+      colors: {
+        "editor.background": "#FBFCFE",
+        "editor.foreground": "#172033",
+        "editorLineNumber.foreground": "#68758C",
+        "editorLineNumber.activeForeground": "#3B465A",
+        "editorCursor.foreground": "#2563EB",
+        "editor.selectionBackground": "#CFE0FF",
+        "editor.inactiveSelectionBackground": "#E4ECFA",
+        "editor.lineHighlightBackground": "#F3F6FA",
+        "editorIndentGuide.background1": "#E2E7EF",
+        "editorIndentGuide.activeBackground1": "#B9C2D0",
+      },
+    });
+  }, []);
 
   // Register Cmd+Enter action
   useEffect(() => {
@@ -208,7 +232,7 @@ export function ApexRunner() {
             <Editor
               height="320px"
               defaultLanguage="apex"
-              theme="vs-dark"
+              theme={effectiveTheme === "light" ? "sfdevkit-light" : "vs-dark"}
               value={draft}
               onChange={(v) => setDraft(v ?? "")}
               options={editorOptions}
