@@ -5,6 +5,7 @@ import type { TFunction } from "i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOrgStore } from "../../store/org";
+import { useUiStore } from "../../store/ui";
 import { type TraceTarget, useLogStore } from "./store";
 
 function dateLocaleFromI18n(lng: string): string {
@@ -45,6 +46,7 @@ interface ActiveTrace {
 export function LogViewer() {
   const { t } = useTranslation();
   const { currentOrg } = useOrgStore();
+  const activeModule = useUiStore((s) => s.activeModule);
   const { userFilter, selectedLogId, setSelectedLogId, downloadConfig, setDownloadConfig } = useLogStore();
   const queryClient = useQueryClient();
 
@@ -73,7 +75,7 @@ export function LogViewer() {
         limit: 50,
         userFilter: userFilter.trim() ? userFilter.trim() : null,
       }),
-    enabled: Boolean(currentOrg),
+    enabled: Boolean(currentOrg) && activeModule === "logs",
     refetchInterval: 10_000,
   });
 
