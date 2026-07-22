@@ -13,6 +13,7 @@ const ORDER: WidgetKind[] = [
   "recentSoql",
   "recentActivity",
   "news",
+  "todo",
 ];
 
 const ICONS: Record<WidgetKind, string> = {
@@ -22,6 +23,7 @@ const ICONS: Record<WidgetKind, string> = {
   recentSoql: "🔍",
   recentActivity: "🕒",
   news: "📰",
+  todo: "✓",
 };
 
 export function AddWidgetPopover({ onPick, onClose }: Props) {

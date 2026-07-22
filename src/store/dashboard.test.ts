@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { appendMissingNewsSources, type NewsSource } from "./dashboard";
+import {
+  appendMissingNewsSources,
+  prependTodo,
+  removeTodoItem,
+  toggleTodoItem,
+  type NewsSource,
+} from "./dashboard";
 
 const additions: NewsSource[] = [
   {
@@ -46,5 +52,24 @@ describe("appendMissingNewsSources", () => {
     expect(merged).toHaveLength(2);
     expect(merged[0]).toBe(current[0]);
     expect(merged[1]).toEqual(additions[1]);
+  });
+});
+
+describe("dashboard todos", () => {
+  it("adds a trimmed todo and ignores empty input", () => {
+    const todos = prependTodo([], "  Review deployment  ");
+
+    expect(prependTodo(todos, "   ")).toMatchObject([
+      { text: "Review deployment", completed: false },
+    ]);
+  });
+
+  it("toggles and removes a todo", () => {
+    const [todo] = prependTodo([], "Run tests");
+
+    const toggled = toggleTodoItem([todo], todo.id);
+    expect(toggled[0].completed).toBe(true);
+
+    expect(removeTodoItem(toggled, todo.id)).toEqual([]);
   });
 });

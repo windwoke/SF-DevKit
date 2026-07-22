@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { greetingPeriodForHour } from "./greetingTime";
+import { greetingPeriodForHour, greetingSubtitleIndex } from "./greetingTime";
 
 export function GreetingCard() {
   const { t, i18n } = useTranslation();
@@ -29,6 +29,7 @@ export function GreetingCard() {
   );
 
   const period = greetingPeriodForHour(now.getHours());
+  const subtitleIndex = greetingSubtitleIndex(now);
 
   return (
     <div className={`home-card home-card--greeting is-${period}`}>
@@ -36,7 +37,7 @@ export function GreetingCard() {
         <p className="greeting-card__date">{formatters.date.format(now)}</p>
         <h2>{t(`dashboard.greeting.${period}`)}</h2>
         <p className="greeting-card__subtitle">
-          {t("dashboard.greeting.subtitle")}
+          {t(`dashboard.greeting.subtitles.${subtitleIndex}`)}
         </p>
       </div>
       <time className="greeting-card__time" dateTime={now.toISOString()}>

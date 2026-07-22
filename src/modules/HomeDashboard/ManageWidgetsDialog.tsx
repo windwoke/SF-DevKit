@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   useDashboardStore,
@@ -38,7 +39,7 @@ export function ManageWidgetsDialog({ onClose }: Props) {
     setAddingSource(false);
   };
 
-  return (
+  return createPortal(
     <div
       className="dialog-backdrop"
       role="dialog"
@@ -146,7 +147,8 @@ export function ManageWidgetsDialog({ onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

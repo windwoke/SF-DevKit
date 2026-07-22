@@ -138,12 +138,12 @@ export function NewsCard() {
             </span>
           )}
           <button
-            className="btn btn-ghost btn-sm"
+            className="btn btn-ghost btn-sm quick-actions-manage-btn"
             onClick={() => setManaging(true)}
             aria-label={t("dashboard.manage.sections.sources")}
             title={t("dashboard.manage.sections.sources")}
           >
-            ⚙
+            <span aria-hidden>⚙</span>
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore, type QuickActionKind } from "../../store/dashboard";
 import { tauriApi } from "../../lib/tauri";
@@ -16,7 +17,7 @@ export function AddQuickActionDialog({ onClose }: Props) {
   const [kind, setKind] = useState<QuickActionKind>("module");
   const [label, setLabel] = useState("");
   const [icon, setIcon] = useState("•");
-  const [moduleId, setModuleId] = useState<typeof MODULE_IDS[number]>("soql");
+  const [moduleId, setModuleId] = useState<(typeof MODULE_IDS)[number]>("soql");
   const [target, setTarget] = useState("");
   const [args, setArgs] = useState("");
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -48,12 +49,21 @@ export function AddQuickActionDialog({ onClose }: Props) {
     }
   };
 
-  return (
-    <div className="dialog-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
+  return createPortal(
+    <div
+      className="dialog-backdrop"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
         <div className="dialog__header">
           <h4>{t("dashboard.quickActions.dialog.title")}</h4>
-          <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Close">
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            aria-label="Close"
+          >
             ×
           </button>
         </div>
@@ -64,9 +74,15 @@ export function AddQuickActionDialog({ onClose }: Props) {
               value={kind}
               onChange={(e) => setKind(e.target.value as QuickActionKind)}
             >
-              <option value="module">{t("dashboard.quickActions.dialog.kindModule")}</option>
-              <option value="url">{t("dashboard.quickActions.dialog.kindUrl")}</option>
-              <option value="app">{t("dashboard.quickActions.dialog.kindApp")}</option>
+              <option value="module">
+                {t("dashboard.quickActions.dialog.kindModule")}
+              </option>
+              <option value="url">
+                {t("dashboard.quickActions.dialog.kindUrl")}
+              </option>
+              <option value="app">
+                {t("dashboard.quickActions.dialog.kindApp")}
+              </option>
             </select>
           </label>
           <label className="form-row">
@@ -162,6 +178,7 @@ export function AddQuickActionDialog({ onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

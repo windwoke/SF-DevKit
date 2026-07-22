@@ -107,27 +107,6 @@ body,
   align-items: center;
 }
 
-.sidebar-brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 12px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #1a2740, #111a2a);
-  border: 1px solid #2a3850;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  color: #a0b8e8;
-  cursor: default;
-}
-
-.sidebar-brand-text {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
 .sidebar-nav {
   display: flex;
   flex-direction: column;
@@ -3210,6 +3189,43 @@ button.deployer-outline-btn {
   margin-left: 4px;
 }
 
+.home-toolbar__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.home-toolbar__button svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.home-toolbar__reset {
+  color: #8792a9;
+}
+
+.home-toolbar__reset:hover:not(:disabled) {
+  color: #c4cede;
+}
+
+.home-toolbar__add {
+  border-color: rgba(82, 211, 164, 0.28);
+  background: rgba(82, 211, 164, 0.08);
+  color: #74dcb6;
+}
+
+.home-toolbar__add:hover:not(:disabled) {
+  border-color: rgba(82, 211, 164, 0.5);
+  background: rgba(82, 211, 164, 0.14);
+  color: #9aebcd;
+}
+
 .home-grid-host {
   position: relative;
   min-height: 400px;
@@ -3808,7 +3824,7 @@ button.deployer-outline-btn {
 .news-item__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   color: #6a738c;
   font-size: 11px;
@@ -3864,10 +3880,10 @@ button.deployer-outline-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 14px 8px 10px;
+  gap: 5px;
+  padding: 11px 7px 8px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 9px;
   background: #1c2435;
   color: #eef1fb;
   font-size: 12px;
@@ -3887,7 +3903,7 @@ button.deployer-outline-btn {
 }
 
 .quick-action__icon {
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1;
 }
 
@@ -3946,7 +3962,8 @@ button.deployer-outline-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
+  isolation: isolate;
 }
 
 .dialog {
@@ -4374,6 +4391,225 @@ button.deployer-outline-btn {
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.home-card--todo {
+  gap: 10px;
+}
+
+.todo-card__count {
+  flex: 0 0 auto;
+  color: #68738b;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.todo-card__composer {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  gap: 7px;
+}
+
+.todo-card__composer input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid rgba(130, 147, 180, 0.16);
+  border-radius: 7px;
+  outline: none;
+  background: rgba(8, 12, 19, 0.35);
+  color: #dce4f5;
+  font: inherit;
+  font-size: 12px;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.todo-card__composer input::placeholder {
+  color: #5e687d;
+}
+
+.todo-card__composer input:focus {
+  border-color: rgba(106, 208, 255, 0.42);
+  background: rgba(8, 12, 19, 0.58);
+}
+
+.todo-card__composer button {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(106, 208, 255, 0.24);
+  border-radius: 7px;
+  background: rgba(106, 208, 255, 0.09);
+  color: #8cddff;
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.todo-card__composer button:hover:not(:disabled) {
+  border-color: rgba(106, 208, 255, 0.48);
+  background: rgba(106, 208, 255, 0.16);
+}
+
+.todo-card__composer button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.todo-card__empty {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  color: #5e687d;
+  font-size: 12px;
+}
+
+.todo-card__list {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-width: none;
+}
+
+.todo-card__list::-webkit-scrollbar {
+  display: none;
+}
+
+.todo-card__list li {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  border-radius: 6px;
+  transition: background 120ms ease;
+}
+
+.todo-card__list li:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.todo-card__item {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 4px;
+  cursor: pointer;
+}
+
+.todo-card__item input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.todo-card__check {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  border: 1px solid #48536a;
+  border-radius: 50%;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.todo-card__item input:focus-visible + .todo-card__check {
+  outline: 2px solid rgba(106, 208, 255, 0.45);
+  outline-offset: 2px;
+}
+
+.todo-card__item input:checked + .todo-card__check {
+  border-color: #6ad0ff;
+  background: #6ad0ff;
+}
+
+.todo-card__item input:checked + .todo-card__check::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 6px;
+  height: 3px;
+  border-bottom: 1.5px solid #0e1723;
+  border-left: 1.5px solid #0e1723;
+  transform: rotate(-45deg);
+}
+
+.todo-card__text {
+  min-width: 0;
+  overflow: hidden;
+  color: #c7d0e2;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    color 140ms ease,
+    opacity 140ms ease;
+}
+
+.todo-card__list li.is-completed .todo-card__text {
+  color: #68738b;
+  text-decoration: line-through;
+  text-decoration-color: #4e586c;
+  opacity: 0.72;
+}
+
+.todo-card__remove {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #7d5360;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.35;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    opacity 120ms ease;
+}
+
+.todo-card__list li:hover .todo-card__remove,
+.todo-card__remove:focus-visible {
+  opacity: 1;
+}
+
+.todo-card__remove:hover {
+  background: rgba(255, 112, 139, 0.09);
+  color: #ff708b;
 }
 
 .news-item__source {
