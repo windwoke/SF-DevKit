@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { Sidebar } from "./components/Layout/Sidebar";
 import { TopBar } from "./components/Layout/TopBar";
 import { ApexRunner } from "./modules/ApexRunner";
@@ -12,10 +12,17 @@ import { useUiStore, type ModuleId } from "./store/ui";
 import { useTranslation } from "react-i18next";
 import i18n from "./i18n";
 import { tauriApi, type TrayLabels } from "./lib/tauri";
+import { useEffectiveTheme } from "./store/settings";
 
 export default function App() {
   const { t } = useTranslation();
   const { activeModule, setActiveModule } = useUiStore();
+  const effective = useEffectiveTheme();
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = effective;
+    document.documentElement.style.colorScheme = effective;
+  }, [effective]);
   const moduleRegistry: Array<{ id: ModuleId; label: string; render: () => JSX.Element }> = [
     { id: "home", label: t("modules.home"), render: HomeDashboard },
     { id: "orgs", label: t("modules.orgs"), render: OrgManager },
