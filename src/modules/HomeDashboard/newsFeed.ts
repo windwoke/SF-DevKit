@@ -131,7 +131,7 @@ export function parseRss(xml: string): NewsItem[] {
     if (title || link) {
       items.push({
         title: decodeEntities(stripCdata(title)),
-        link: link.trim(),
+        link: decodeEntities(stripCdata(link)).trim(),
         published,
         answerCount: 0,
         score: 0,

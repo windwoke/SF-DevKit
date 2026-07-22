@@ -116,6 +116,32 @@ describe("parseRss", () => {
     expect(parseRss(xml)[0].title).toBe("A & B <tag>");
   });
 
+  it("decodes entities in link URLs", () => {
+    const xml = `
+      <rss><channel>
+        <item>
+          <title>Article</title>
+          <link>https://example.com/article/9be3?utm_source=rss&amp;utm_medium=feed&amp;utm_campaign=resources&amp;entry=rss_article_item</link>
+        </item>
+      </channel></rss>
+    `;
+    const link = parseRss(xml)[0].link;
+    expect(link).toBe("https://example.com/article/9be3?utm_source=rss&utm_medium=feed&utm_campaign=resources&entry=rss_article_item");
+    expect(link).not.toContain("&amp;");
+  });
+
+  it("decodes entities in Atom href URLs", () => {
+    const xml = `
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <entry>
+          <title>Atom</title>
+          <link href="https://example.com/a?x=1&amp;y=2" />
+        </entry>
+      </feed>
+    `;
+    expect(parseRss(xml)[0].link).toBe("https://example.com/a?x=1&y=2");
+  });
+
   it("returns empty for malformed input", () => {
     expect(parseRss("not xml")).toEqual([]);
     expect(parseRss("")).toEqual([]);
