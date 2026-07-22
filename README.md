@@ -37,6 +37,15 @@ Other useful commands:
 
 ## Features
 
+### Home dashboard
+
+- **Customizable grid**: drag and resize cards in edit mode, add or remove cards, and reset the dashboard to its default layout.
+- **Daily overview**: time-aware greeting with rotating daily messages, current org status, recent SOQL, and recent retrieve / deploy activity.
+- **Quick actions**: jump to an internal module, open a URL, or launch a local application; actions can be added, reordered, and removed.
+- **Developer news**: combine multiple RSS / Atom feeds and the Salesforce Stack Exchange API, then filter articles by source. Default sources include Salesforce Developers Blog and Radar AI.
+- **Todo card**: a minimal, locally persisted checklist for quickly adding, completing, and removing tasks.
+- Dashboard layout, quick actions, subscriptions, and todos are stored locally and restored across app launches.
+
 ### Org management
 
 - Sync orgs from the CLI, set a default org, log in / log out, and open an org in the browser.
@@ -80,7 +89,7 @@ Other useful commands:
 
 ## Tech stack
 
-- **UI**: React 18, Vite, Zustand, TanStack Query, Monaco Editor (`@monaco-editor/react`)
+- **UI**: React 18, Vite, Zustand, TanStack Query, React Grid Layout, Monaco Editor (`@monaco-editor/react`)
 - **Desktop**: Tauri 2, `rfd` for export save dialogs
 - **Backend**: Rust (`tokio`, `sqlx` + SQLite for local auth / cache state), Tauri commands for org sync, schema describe, SOQL execution, metadata list/retrieve, Apex logs and trace flags, etc.
 
