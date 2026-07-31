@@ -17,6 +17,8 @@
   "topbar": {
     "currentOrg": "当前 Org: {{name}}",
     "noOrg": "当前 Org: 未选择",
+    "activeOrg": "当前组织",
+    "switchOrgTitle": "快速切换默认 Org",
     "open": "Open",
     "opening": "Opening...",
     "language": "语言"

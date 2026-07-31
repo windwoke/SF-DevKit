@@ -17,6 +17,8 @@
   "topbar": {
     "currentOrg": "Current Org: {{name}}",
     "noOrg": "Current Org: None",
+    "activeOrg": "Active Org",
+    "switchOrgTitle": "Quickly switch default org",
     "open": "Open",
     "opening": "Opening...",
     "language": "Language"
