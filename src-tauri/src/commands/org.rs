@@ -113,6 +113,7 @@ pub async fn logout_org(
 
 /// Frontend pushes localized tray strings whenever the i18n locale loads
 /// or changes. The Rust side then rebuilds the macOS menu bar menu.
+#[cfg(target_os = "macos")]
 #[tauri::command]
 pub async fn update_tray_labels(
     app: AppHandle,
@@ -121,6 +122,18 @@ pub async fn update_tray_labels(
     crate::tray::update_labels(&app, labels)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// The frontend shares localized tray labels on every platform. Windows has
+/// no native tray menu yet, so accepting the command here keeps that shared
+/// frontend path quiet while macOS handles the real menu update above.
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub async fn update_tray_labels(
+    _app: AppHandle,
+    _labels: serde_json::Value,
+) -> Result<(), String> {
+    Ok(())
 }
 
 /// Browser OAuth only; returns immediately after CLI finishes. Call `sync_orgs` next to refresh DB.
