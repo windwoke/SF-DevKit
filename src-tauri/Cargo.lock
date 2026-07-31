@@ -3956,7 +3956,7 @@ dependencies = [
 
 [[package]]
 name = "sf-devkit"
-version = "0.7.2"
+version = "0.7.4"
 dependencies = [
  "anyhow",
  "chrono",

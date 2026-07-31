@@ -205,5 +205,7 @@ jobs:
           body_path: release_notes.md
           files: |
             sf-devkit-macos-aarch64/**/*.dmg
-            release-assets/*
+            release-assets/latest.json
+            release-assets/*.app.tar.gz
+            release-assets/*-setup.exe
           generate_release_notes: true
