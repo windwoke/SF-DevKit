@@ -36,6 +36,15 @@ pub struct TrayLabels {
     pub no_orgs: String,
     pub show_main: String,
     pub refresh: String,
+    pub check_updates: String,
+    pub update_available_title: String,
+    pub update_available_message: String,
+    pub up_to_date_title: String,
+    pub up_to_date_message: String,
+    pub update_check_failed_title: String,
+    pub update_check_failed_message: String,
+    pub open_download: String,
+    pub later: String,
     pub quit: String,
     pub tooltip: String,
 }
@@ -56,6 +65,15 @@ fn fallback_labels() -> TrayLabels {
         no_orgs: "暂无 Org，请先在主窗口登录".into(),
         show_main: "显示主窗口".into(),
         refresh: "刷新 Org 列表".into(),
+        check_updates: "检查更新".into(),
+        update_available_title: "发现新版本".into(),
+        update_available_message: "SF DevKit {{version}} 已可下载。现在打开下载页面吗？".into(),
+        up_to_date_title: "已是最新版本".into(),
+        up_to_date_message: "当前已是最新版本（{{version}}）。".into(),
+        update_check_failed_title: "检查更新失败".into(),
+        update_check_failed_message: "无法检查更新：{{message}}".into(),
+        open_download: "打开下载页面".into(),
+        later: "稍后".into(),
         quit: "退出 SF DevKit".into(),
         tooltip: "SF DevKit".into(),
     }
@@ -125,6 +143,7 @@ async fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<tauri::menu::Menu<Wry
         no_orgs_label,
         show_main_label,
         refresh_label,
+        check_updates_label,
         quit_label,
     ) = labels()
         .lock()
@@ -136,6 +155,7 @@ async fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<tauri::menu::Menu<Wry
                 g.no_orgs.clone(),
                 g.show_main.clone(),
                 g.refresh.clone(),
+                g.check_updates.clone(),
                 g.quit.clone(),
             )
         })
@@ -148,6 +168,7 @@ async fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<tauri::menu::Menu<Wry
                 f.no_orgs,
                 f.show_main,
                 f.refresh,
+                f.check_updates,
                 f.quit,
             )
         });
@@ -197,6 +218,7 @@ async fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<tauri::menu::Menu<Wry
 
     let show_main = MenuItem::with_id(app, "show-main", show_main_label, true, None::<&str>)?;
     let refresh = MenuItem::with_id(app, "refresh-orgs", refresh_label, true, None::<&str>)?;
+    let check_updates = MenuItem::with_id(app, "check-updates", check_updates_label, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
 
     MenuBuilder::new(app)
@@ -204,6 +226,7 @@ async fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<tauri::menu::Menu<Wry
         .separator()
         .item(&show_main)
         .item(&refresh)
+        .item(&check_updates)
         .separator()
         .item(&quit)
         .build()
@@ -243,6 +266,51 @@ pub fn on_menu_event(app: &AppHandle<Wry>, event: tauri::menu::MenuEvent) {
                     eprintln!("[tray] sync_orgs failed: {e}");
                 }
                 let _ = rebuild_menu(&app).await;
+            });
+        }
+        "check-updates" => {
+            tauri::async_runtime::spawn(async move {
+                let outcome = crate::commands::update::check_for_update().await;
+                let labels = labels().lock().map(|value| value.clone()).unwrap_or_else(|_| fallback_labels());
+                let (title, message, open_url) = match outcome {
+                    Ok(update) if update.update_available => (
+                        labels.update_available_title,
+                        labels.update_available_message.replace("{{version}}", &update.latest_version),
+                        Some(update.download_url),
+                    ),
+                    Ok(update) => (
+                        labels.up_to_date_title,
+                        labels.up_to_date_message.replace("{{version}}", &update.current_version),
+                        None,
+                    ),
+                    Err(error) => (
+                        labels.update_check_failed_title,
+                        labels.update_check_failed_message.replace("{{message}}", &error),
+                        None,
+                    ),
+                };
+                let open_download = labels.open_download;
+                let later = labels.later;
+                let has_update = open_url.is_some();
+                let response = tokio::task::spawn_blocking(move || {
+                    let buttons = if has_update {
+                        rfd::MessageButtons::OkCancelCustom(open_download, later)
+                    } else {
+                        rfd::MessageButtons::Ok
+                    };
+                    rfd::MessageDialog::new()
+                        .set_level(rfd::MessageLevel::Info)
+                        .set_title(title)
+                        .set_description(message)
+                        .set_buttons(buttons)
+                        .show()
+                })
+                .await;
+                if matches!(response, Ok(rfd::MessageDialogResult::Custom(_))) {
+                    if let Some(url) = open_url {
+                        let _ = std::process::Command::new("open").arg(url).spawn();
+                    }
+                }
             });
         }
         "quit" => {

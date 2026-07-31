@@ -91,6 +91,13 @@ export interface QuickDeployRecord {
   created_at: string | null;
 }
 
+export interface UpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  downloadUrl: string;
+  updateAvailable: boolean;
+}
+
 export interface ApexClassMeta {
   id: string;
   name: string;
@@ -105,6 +112,15 @@ export interface TrayLabels {
   noOrgs: string;
   showMain: string;
   refresh: string;
+  checkUpdates: string;
+  updateAvailableTitle: string;
+  updateAvailableMessage: string;
+  upToDateTitle: string;
+  upToDateMessage: string;
+  updateCheckFailedTitle: string;
+  updateCheckFailedMessage: string;
+  openDownload: string;
+  later: string;
   quit: string;
   tooltip: string;
 }
@@ -159,6 +175,7 @@ export const tauriApi = {
     invoke<void>("open_org_linked_project_in_ide", { orgId }),
   updateTrayLabels: (labels: TrayLabels) =>
     invoke<void>("update_tray_labels", { labels }),
+  checkForUpdates: () => invoke<UpdateInfo>("check_for_updates"),
   listMetadataTypes: (payload: { orgId: string; forceRefresh?: boolean }) =>
     invoke<MetadataTypeMeta[]>("list_metadata_types", {
       orgId: payload.orgId,

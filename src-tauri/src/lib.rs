@@ -15,6 +15,8 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let pool = db::init::init_db(app.handle())?;
             app.manage(DbState(pool));
@@ -88,6 +90,7 @@ pub fn run() {
             commands::dashboard::open_external,
             commands::dashboard::fetch_feed,
             commands::dashboard::pick_app_path,
+            commands::update::check_for_updates,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start SF DevKit");

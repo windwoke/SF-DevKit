@@ -649,7 +649,17 @@
     "path": "路径",
     "custom": "自定义",
     "command": "命令",
-    "commandHint": "变量: {working} = 工作目录, {reference} = 参考目录"
+    "commandHint": "变量: {working} = 工作目录, {reference} = 参考目录",
+    "updates": "软件更新",
+    "checkUpdates": "检查更新",
+    "checkingUpdates": "正在检查…",
+    "updateAvailable": "发现新版本 {{version}}（当前 {{currentVersion}}）。",
+    "upToDate": "当前已是最新版本（{{version}}）。",
+    "updateCheckFailed": "检查更新失败：{{message}}",
+    "downloadUpdate": "打开下载页面",
+    "installUpdate": "下载并安装更新",
+    "installingUpdate": "正在安装更新…",
+    "updateNotSigned": "新版本尚未提供可验证的自动更新包。"
   },
   "tray": {
     "openOrgsLabel": "打开 Org",
@@ -658,6 +668,15 @@
     "noOrgs": "暂无 Org，请先在主窗口登录",
     "showMain": "显示主窗口",
     "refresh": "刷新 Org 列表",
+    "checkUpdates": "检查更新",
+    "updateAvailableTitle": "发现新版本",
+    "updateAvailableMessage": "SF DevKit {{version}} 已可下载。现在打开下载页面吗？",
+    "upToDateTitle": "已是最新版本",
+    "upToDateMessage": "当前已是最新版本（{{version}}）。",
+    "updateCheckFailedTitle": "检查更新失败",
+    "updateCheckFailedMessage": "无法检查更新：{{message}}",
+    "openDownload": "打开下载页面",
+    "later": "稍后",
     "quit": "退出 SF DevKit",
     "tooltip": "SF DevKit"
   }

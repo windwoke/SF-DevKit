@@ -7,3 +7,4 @@ pub mod metadata;
 pub mod org;
 pub mod schema;
 pub mod soql;
+pub mod update;

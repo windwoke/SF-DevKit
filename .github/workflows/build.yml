@@ -11,6 +11,7 @@ jobs:
     env:
       APPLE_SIGNING_IDENTITY: "Developer ID Application: zhonghui li (JSRAB4F28W)"
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
     steps:
       - name: Checkout
@@ -77,10 +78,49 @@ jobs:
             src-tauri/target/release/bundle/
           if-no-files-found: warn
 
+  build-windows:
+    runs-on: windows-latest
+
+    env:
+      # This signs the Tauri updater payload. It is separate from Windows
+      # Authenticode signing, which can be added later when a publisher
+      # certificate or Microsoft Store distribution is available.
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+
+      - name: Build Tauri app
+        run: npm run tauri build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf-devkit-windows-x86_64
+          path: |
+            src-tauri/target/release/bundle/
+          if-no-files-found: error
+
   # --- Release on tag push ---
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build]
+    needs: [build, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -120,6 +160,40 @@ jobs:
           echo "----- release_notes.md -----"
           cat release_notes.md
 
+      - name: Prepare signed updater assets
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          RELEASE_DIR="release-assets"
+          mkdir -p "$RELEASE_DIR"
+
+          MAC_UPDATER=$(find sf-devkit-macos-aarch64 -type f -name '*.app.tar.gz' -print -quit)
+          WINDOWS_UPDATER=$(find sf-devkit-windows-x86_64 -type f -path '*/nsis/*' -name '*.exe' -print -quit)
+          test -n "$MAC_UPDATER" && test -f "$MAC_UPDATER"
+          test -n "$WINDOWS_UPDATER" && test -f "$WINDOWS_UPDATER"
+          test -f "${MAC_UPDATER}.sig"
+          test -f "${WINDOWS_UPDATER}.sig"
+
+          MAC_ASSET="sf-devkit_${VERSION}_aarch64.app.tar.gz"
+          WINDOWS_ASSET="sf-devkit_${VERSION}_x64-setup.exe"
+          cp "$MAC_UPDATER" "$RELEASE_DIR/$MAC_ASSET"
+          cp "${MAC_UPDATER}.sig" "$RELEASE_DIR/$MAC_ASSET.sig"
+          cp "$WINDOWS_UPDATER" "$RELEASE_DIR/$WINDOWS_ASSET"
+          cp "${WINDOWS_UPDATER}.sig" "$RELEASE_DIR/$WINDOWS_ASSET.sig"
+
+          RELEASE_BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          MAC_SIGNATURE=$(tr -d '\n' < "$RELEASE_DIR/$MAC_ASSET.sig")
+          WINDOWS_SIGNATURE=$(tr -d '\n' < "$RELEASE_DIR/$WINDOWS_ASSET.sig")
+          jq -n \
+            --arg version "$VERSION" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg macUrl "$RELEASE_BASE/$MAC_ASSET" \
+            --arg macSignature "$MAC_SIGNATURE" \
+            --arg windowsUrl "$RELEASE_BASE/$WINDOWS_ASSET" \
+            --arg windowsSignature "$WINDOWS_SIGNATURE" \
+            '{version: $version, pub_date: $date, notes: "See the GitHub Release for details.", platforms: {"darwin-aarch64": {url: $macUrl, signature: $macSignature}, "windows-x86_64": {url: $windowsUrl, signature: $windowsSignature}}}' \
+            > "$RELEASE_DIR/latest.json"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -127,4 +201,5 @@ jobs:
           body_path: release_notes.md
           files: |
             sf-devkit-macos-aarch64/**/*.dmg
+            release-assets/*
           generate_release_notes: true

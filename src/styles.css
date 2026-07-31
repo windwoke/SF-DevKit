@@ -303,6 +303,37 @@ body,
   margin-top: 6px;
 }
 
+.sidebar-settings-update {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.sidebar-settings-update > button {
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.sidebar-settings-update-link {
+  display: block;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.sidebar-settings-update-error {
+  color: var(--danger-text);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
 .nav-item {
   width: 44px;
   height: 44px;

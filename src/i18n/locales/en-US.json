@@ -652,7 +652,17 @@
     "path": "Path",
     "custom": "Custom",
     "command": "Command",
-    "commandHint": "Variables: {working} = working dir, {reference} = reference dir"
+    "commandHint": "Variables: {working} = working dir, {reference} = reference dir",
+    "updates": "Software Updates",
+    "checkUpdates": "Check for Updates",
+    "checkingUpdates": "Checking…",
+    "updateAvailable": "Version {{version}} is available (current: {{currentVersion}}).",
+    "upToDate": "You're up to date ({{version}}).",
+    "updateCheckFailed": "Update check failed: {{message}}",
+    "downloadUpdate": "Open Download Page",
+    "installUpdate": "Download and Install Update",
+    "installingUpdate": "Installing update…",
+    "updateNotSigned": "The latest release doesn't provide a verified updater package yet."
   },
   "tray": {
     "openOrgsLabel": "Open Org",
@@ -661,6 +671,15 @@
     "noOrgs": "No orgs yet — sign in from the main window",
     "showMain": "Show Main Window",
     "refresh": "Refresh Org List",
+    "checkUpdates": "Check for Updates",
+    "updateAvailableTitle": "Update Available",
+    "updateAvailableMessage": "SF DevKit {{version}} is available. Open the download page now?",
+    "upToDateTitle": "You're Up to Date",
+    "upToDateMessage": "You're already running the latest version ({{version}}).",
+    "updateCheckFailedTitle": "Update Check Failed",
+    "updateCheckFailedMessage": "Couldn't check for updates: {{message}}",
+    "openDownload": "Open Download Page",
+    "later": "Later",
     "quit": "Quit SF DevKit",
     "tooltip": "SF DevKit"
   }

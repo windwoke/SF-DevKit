@@ -3,6 +3,9 @@ import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGUAGES } from "../../i18n";
 import { useSettingsStore, type DiffTool, type ThemeMode } from "../../store/settings";
 import type { ModuleId } from "../../store/ui";
+import { tauriApi, type UpdateInfo } from "../../lib/tauri";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { IconSettingsNav, SidebarModuleIcon } from "./SidebarIcons";
 
 // Show ⌘ on macOS, Ctrl+ elsewhere — matches the modifier the keydown
@@ -26,6 +29,11 @@ interface SidebarProps {
 export function Sidebar({ modules, active, onSelect }: SidebarProps) {
   const { t, i18n } = useTranslation();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const settingsWrapRef = useRef<HTMLDivElement>(null);
   const {
     themeMode,
@@ -37,6 +45,41 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
     setDiffToolPath,
     setDiffCustomCommand,
   } = useSettingsStore();
+
+  const checkForUpdates = async () => {
+    setUpdateChecking(true);
+    setUpdateError(null);
+    try {
+      const info = await tauriApi.checkForUpdates();
+      setUpdateInfo(info);
+      if (info.updateAvailable) {
+        const update = await check();
+        if (!update) throw new Error(t("settings.updateNotSigned"));
+        setAvailableUpdate(update);
+      } else {
+        setAvailableUpdate(null);
+      }
+    } catch (error) {
+      setUpdateInfo(null);
+      setAvailableUpdate(null);
+      setUpdateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
+
+  const installUpdate = async () => {
+    if (!availableUpdate) return;
+    setUpdateInstalling(true);
+    setUpdateError(null);
+    try {
+      await availableUpdate.downloadAndInstall();
+      await relaunch();
+    } catch (error) {
+      setUpdateError(error instanceof Error ? error.message : String(error));
+      setUpdateInstalling(false);
+    }
+  };
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -204,6 +247,36 @@ export function Sidebar({ modules, active, onSelect }: SidebarProps) {
                 </span>
               </label>
             )}
+
+            <div className="sidebar-settings-divider" />
+            <div className="sidebar-settings-section-title">{t("settings.updates")}</div>
+            <div className="sidebar-settings-update">
+              <button type="button" onClick={() => void checkForUpdates()} disabled={updateChecking}>
+                {updateChecking ? t("settings.checkingUpdates") : t("settings.checkUpdates")}
+              </button>
+              {updateInfo ? (
+                <div className="sidebar-settings-hint">
+                  {updateInfo.updateAvailable
+                    ? t("settings.updateAvailable", { version: updateInfo.latestVersion, currentVersion: updateInfo.currentVersion })
+                    : t("settings.upToDate", { version: updateInfo.currentVersion })}
+                  {availableUpdate ? (
+                    <button
+                      type="button"
+                      className="sidebar-settings-update-link"
+                      onClick={() => void installUpdate()}
+                      disabled={updateInstalling}
+                    >
+                      {updateInstalling ? t("settings.installingUpdate") : t("settings.installUpdate")}
+                    </button>
+                  ) : updateInfo.updateAvailable ? (
+                    <button type="button" className="sidebar-settings-update-link" onClick={() => void tauriApi.openExternal({ kind: "url", target: updateInfo.downloadUrl })}>
+                      {t("settings.downloadUpdate")}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              {updateError ? <div className="sidebar-settings-update-error">{t("settings.updateCheckFailed", { message: updateError })}</div> : null}
+            </div>
           </div>
         ) : null}
       </div>
