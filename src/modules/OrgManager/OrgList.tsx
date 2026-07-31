@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { orgTypeLabel } from "../../lib/orgTypeLabel";
 import { isAlibabaInstance } from "../../lib/isAlibabaInstance";
 import { tauriApi, type LoginDomain } from "../../lib/tauri";
-import { useOrgStore } from "../../store/org";
+import { useOrgStore, type OrgAuth } from "../../store/org";
 
 function IconFolder() {
   return (
@@ -48,6 +48,29 @@ function IconSwitch() {
   );
 }
 
+function IconReauthorize() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M19 8.5V5m0 0h-3.5M19 5l-4 4a6.5 6.5 0 1 0 1.7 5.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+type ConnectionKind = "connected" | "expired" | "unreachable" | "unknown";
+
+function getConnectionKind(org: { connection_status: string; expires_at: string | null; org_type: string }): ConnectionKind {
+  const expiresAt = org.expires_at ? Date.parse(org.expires_at) : Number.NaN;
+  if (org.org_type === "scratch" && Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+    return "expired";
+  }
+
+  const status = org.connection_status.trim().toLowerCase();
+  if (status === "connected") return "connected";
+  if (!status || status === "unknown") return "unknown";
+  if (/(expired|invalid|refresh token|inactive organization)/.test(status)) return "expired";
+  return "unreachable";
+}
+
 export function OrgList() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -68,6 +91,9 @@ export function OrgList() {
   const [loginConsumerKey, setLoginConsumerKey] = useState("");
   const [loginConsumerSecret, setLoginConsumerSecret] = useState("");
   const [loginPort, setLoginPort] = useState("1717");
+  const [editingAliasFor, setEditingAliasFor] = useState<string | null>(null);
+  const [aliasDraft, setAliasDraft] = useState("");
+  const [reauthorizingOrg, setReauthorizingOrg] = useState<OrgAuth | null>(null);
 
   useEffect(() => {
     if (!notice?.autoHide) return;
@@ -99,6 +125,19 @@ export function OrgList() {
     mutationFn: (username: string) => tauriApi.logoutOrg(username),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orgs"] });
+    },
+  });
+
+  const updateAliasMutation = useMutation({
+    mutationFn: ({ username, alias }: { username: string; alias: string }) => tauriApi.updateOrgAlias(username, alias),
+    onSuccess: async () => {
+      setEditingAliasFor(null);
+      await queryClient.invalidateQueries({ queryKey: ["orgs"] });
+      setNotice({ text: i18n.t("orgManager.notice.aliasSaved"), autoHide: true, variant: "success" });
+    },
+    onError: (e) => {
+      const message = e instanceof Error ? e.message : String(e);
+      setNotice({ text: i18n.t("orgManager.notice.aliasSaveFailed", { message }), autoHide: true, variant: "error" });
     },
   });
 
@@ -139,6 +178,23 @@ export function OrgList() {
     setLoginBusy(true);
     let browserAuthDone = false;
     try {
+      if (reauthorizingOrg) {
+        await tauriApi.reauthorizeOrg({
+          username: reauthorizingOrg.id,
+          alias: loginAlias,
+          instanceUrl: loginInstanceUrl,
+          consumerKey: loginDomain === "alibaba" ? loginConsumerKey : undefined,
+          consumerSecret: loginDomain === "alibaba" ? loginConsumerSecret : undefined,
+          port: loginDomain === "alibaba" && loginPort.trim() ? Number(loginPort) : undefined,
+        });
+        const orgs = await tauriApi.listOrgs();
+        setOrgs(orgs);
+        queryClient.setQueryData(["orgs"], orgs);
+        setShowLoginModal(false);
+        setReauthorizingOrg(null);
+        setNotice({ text: i18n.t("orgManager.notice.reauthorizeDone"), autoHide: true, variant: "success" });
+        return;
+      }
       await tauriApi.loginOrg({
         alias: loginAlias,
         loginDomain,
@@ -223,6 +279,31 @@ export function OrgList() {
     );
   }, [data, keyword]);
 
+  const beginAliasEdit = (orgId: string, alias: string | null) => {
+    setEditingAliasFor(orgId);
+    setAliasDraft(alias ?? "");
+  };
+
+  const saveAlias = (orgId: string) => {
+    const alias = aliasDraft.trim();
+    if (!alias) {
+      setNotice({ text: i18n.t("orgManager.aliasRequired"), autoHide: true, variant: "error" });
+      return;
+    }
+    updateAliasMutation.mutate({ username: orgId, alias });
+  };
+
+  const beginReauthorize = (org: OrgAuth) => {
+    setReauthorizingOrg(org);
+    setLoginAlias(org.alias ?? "");
+    setLoginDomain(isAlibabaInstance(org.instance_url) ? "alibaba" : org.org_type === "sandbox" ? "sandbox" : "production");
+    setLoginInstanceUrl(org.instance_url);
+    setLoginConsumerKey("");
+    setLoginConsumerSecret("");
+    setLoginError(null);
+    setShowLoginModal(true);
+  };
+
   if (isLoading) return <div className="empty-state">{t("orgManager.loading")}</div>;
   if (isError)
     return (
@@ -247,14 +328,20 @@ export function OrgList() {
         <button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending}>
           {refreshMutation.isPending ? t("orgManager.refreshing") : t("orgManager.refresh")}
         </button>
-        <button onClick={() => setShowLoginModal(true)} disabled={loginBusy}>
+        <button
+          onClick={() => {
+            setReauthorizingOrg(null);
+            setShowLoginModal(true);
+          }}
+          disabled={loginBusy}
+        >
           {t("orgManager.addOrg")}
         </button>
       </div>
       {showLoginModal ? (
         <div className="org-login-modal-backdrop" onClick={() => !loginBusy && setShowLoginModal(false)}>
           <div className="org-login-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="org-login-title">{t("orgManager.modalTitle")}</h3>
+            <h3 className="org-login-title">{reauthorizingOrg ? t("orgManager.reauthorizeTitle") : t("orgManager.modalTitle")}</h3>
             <label className="org-form-label">{t("orgManager.aliasLabel")}</label>
             <input
               type="text"
@@ -268,12 +355,13 @@ export function OrgList() {
               className="org-form-select"
               value={loginDomain}
               onChange={(e) => setLoginDomain(e.target.value as LoginDomain)}
+              disabled={Boolean(reauthorizingOrg)}
             >
               <option value="production">{t("orgManager.domainProduction")}</option>
               <option value="sandbox">{t("orgManager.domainSandbox")}</option>
               <option value="alibaba">{t("orgManager.domainAlibaba")}</option>
             </select>
-            {loginDomain === "alibaba" ? (
+            {loginDomain === "alibaba" || reauthorizingOrg ? (
               <>
                 <label className="org-form-label">{t("orgManager.instanceUrlLabel")}</label>
                 <input
@@ -282,31 +370,18 @@ export function OrgList() {
                   value={loginInstanceUrl}
                   onChange={(e) => setLoginInstanceUrl(e.target.value)}
                   placeholder={t("orgManager.instanceUrlPlaceholder")}
+                  readOnly={Boolean(reauthorizingOrg)}
                 />
-                <label className="org-form-label">{t("orgManager.consumerKeyLabel")}</label>
-                <input
-                  type="text"
-                  className="org-form-input"
-                  value={loginConsumerKey}
-                  onChange={(e) => setLoginConsumerKey(e.target.value)}
-                  placeholder={t("orgManager.consumerKeyPlaceholder")}
-                />
-                <label className="org-form-label">{t("orgManager.consumerSecretLabel")}</label>
-                <input
-                  type="password"
-                  className="org-form-input"
-                  value={loginConsumerSecret}
-                  onChange={(e) => setLoginConsumerSecret(e.target.value)}
-                  placeholder={t("orgManager.consumerSecretPlaceholder")}
-                />
-                <label className="org-form-label">{t("orgManager.portLabel")}</label>
-                <input
-                  type="text"
-                  className="org-form-input"
-                  value={loginPort}
-                  onChange={(e) => setLoginPort(e.target.value.replace(/\D/g, ""))}
-                  placeholder={t("orgManager.portPlaceholder")}
-                />
+                {loginDomain === "alibaba" ? (
+                  <>
+                    <label className="org-form-label">{t("orgManager.consumerKeyLabel")}</label>
+                    <input type="text" className="org-form-input" value={loginConsumerKey} onChange={(e) => setLoginConsumerKey(e.target.value)} placeholder={t("orgManager.consumerKeyPlaceholder")} />
+                    <label className="org-form-label">{t("orgManager.consumerSecretLabel")}</label>
+                    <input type="password" className="org-form-input" value={loginConsumerSecret} onChange={(e) => setLoginConsumerSecret(e.target.value)} placeholder={t("orgManager.consumerSecretPlaceholder")} />
+                    <label className="org-form-label">{t("orgManager.portLabel")}</label>
+                    <input type="text" className="org-form-input" value={loginPort} onChange={(e) => setLoginPort(e.target.value.replace(/\D/g, ""))} placeholder={t("orgManager.portPlaceholder")} />
+                  </>
+                ) : null}
               </>
             ) : null}
             {loginError ? <div className="org-login-error">{loginError}</div> : null}
@@ -323,6 +398,7 @@ export function OrgList() {
                   }
                   setShowLoginModal(false);
                   setLoginError(null);
+                  setReauthorizingOrg(null);
                   setLoginInstanceUrl("");
                   setLoginConsumerKey("");
                   setLoginConsumerSecret("");
@@ -339,7 +415,7 @@ export function OrgList() {
                     (!loginInstanceUrl.trim() || !loginConsumerKey.trim() || !loginConsumerSecret.trim()))
                 }
               >
-                {loginBusy ? t("orgManager.loginWaitingBrowser") : t("orgManager.loginAndSetDefault")}
+                {loginBusy ? t("orgManager.loginWaitingBrowser") : reauthorizingOrg ? t("orgManager.reauthorize") : t("orgManager.loginAndSetDefault")}
               </button>
             </div>
           </div>
@@ -351,11 +427,60 @@ export function OrgList() {
             <div className="org-card-top">
               <div className="org-name-block">
                 <div className="org-name">
-                  {org.alias ?? org.id}
+                  {editingAliasFor === org.id ? (
+                    <form
+                      className="org-alias-editor"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        saveAlias(org.id);
+                      }}
+                    >
+                      <input
+                        autoFocus
+                        aria-label={t("orgManager.editAliasAria")}
+                        className="org-alias-input"
+                        value={aliasDraft}
+                        onChange={(event) => setAliasDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            setEditingAliasFor(null);
+                          }
+                        }}
+                        disabled={updateAliasMutation.isPending}
+                      />
+                      <button type="submit" className="org-alias-save" disabled={updateAliasMutation.isPending}>
+                        {t("orgManager.saveAlias")}
+                      </button>
+                      <button
+                        type="button"
+                        className="org-alias-cancel"
+                        onClick={() => setEditingAliasFor(null)}
+                        disabled={updateAliasMutation.isPending}
+                      >
+                        {t("orgManager.cancel")}
+                      </button>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="org-alias-trigger"
+                      title={t("orgManager.editAliasTitle")}
+                      onClick={() => beginAliasEdit(org.id, org.alias)}
+                    >
+                      {org.alias ?? org.id}
+                    </button>
+                  )}
                   {org.is_default ? <span className="org-default-tag">{t("orgManager.defaultTag")}</span> : null}
                   <span className={`org-type org-type-${org.org_type}`}>{orgTypeLabel(org.org_type, t)}</span>
                   {isAlibabaInstance(org.instance_url) ? <span className="org-type org-type-alibaba">{t("orgManager.alibabaTag")}</span> : null}
+                  <span
+                    className={`org-connection-status org-connection-${getConnectionKind(org)}`}
+                    title={org.connection_status}
+                  >
+                    {t(`orgManager.connectionStatus.${getConnectionKind(org)}`)}
+                  </span>
                 </div>
+                <div className="org-username" title={org.id}>{org.id}</div>
                 <div className="org-sub">{org.instance_url}</div>
               </div>
             </div>
@@ -410,6 +535,17 @@ export function OrgList() {
                 >
                   <IconCompass />
                 </button>
+                {getConnectionKind(org) === "expired" ? (
+                  <button
+                    className="org-icon-btn org-reauthorize-btn"
+                    title={t("orgManager.reauthorizeTitle")}
+                    aria-label={t("orgManager.reauthorizeAria")}
+                    onClick={() => beginReauthorize(org)}
+                    disabled={loginBusy}
+                  >
+                    <IconReauthorize />
+                  </button>
+                ) : null}
                 <button
                   className="org-icon-btn"
                   title={t("orgManager.setDefaultTitle")}

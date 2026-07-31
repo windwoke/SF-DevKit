@@ -26,6 +26,56 @@ pub async fn list_orgs(state: State<'_, DbState>) -> Result<Vec<OrgAuth>, String
 }
 
 #[tauri::command]
+pub async fn update_org_alias(
+    state: State<'_, DbState>,
+    app: AppHandle,
+    username: String,
+    alias: String,
+) -> Result<(), String> {
+    manager::update_org_alias(&state.0, &username, &alias)
+        .await
+        .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(e) = crate::tray::rebuild_menu(&app).await {
+            eprintln!("[tray] rebuild_menu failed: {e}");
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reauthorize_org(
+    state: State<'_, DbState>,
+    app: AppHandle,
+    username: String,
+    alias: Option<String>,
+    instance_url: String,
+    consumer_key: Option<String>,
+    consumer_secret: Option<String>,
+    port: Option<u16>,
+) -> Result<(), String> {
+    manager::reauthorize_org(
+        &state.0,
+        &username,
+        alias,
+        &instance_url,
+        consumer_key,
+        consumer_secret,
+        port,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(e) = crate::tray::rebuild_menu(&app).await {
+            eprintln!("[tray] rebuild_menu failed: {e}");
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn set_default_org(
     state: State<'_, DbState>,
     app: AppHandle,
@@ -90,6 +140,7 @@ pub async fn login_org(
         consumer_key.as_deref(),
         consumer_secret.as_deref(),
         port,
+        true,
     )
     .await
     .map_err(|e| e.to_string())

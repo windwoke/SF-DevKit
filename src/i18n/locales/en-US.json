@@ -251,6 +251,19 @@
     "modalTitle": "Add org",
     "aliasLabel": "Alias",
     "aliasPlaceholder": "Org alias (optional)",
+    "reauthorizeTitle": "Reauthorize org",
+    "reauthorize": "Reauthorize",
+    "reauthorizeAria": "Reauthorize this org",
+    "editAliasTitle": "Edit org alias",
+    "editAliasAria": "Edit org alias",
+    "saveAlias": "Save",
+    "aliasRequired": "Enter an org alias.",
+    "connectionStatus": {
+      "connected": "Connected",
+      "expired": "Authorization expired",
+      "unreachable": "Unreachable",
+      "unknown": "Unknown"
+    },
     "domainLabel": "Environment",
     "domainProduction": "Production (login.salesforce.com)",
     "domainSandbox": "Sandbox (test.salesforce.com)",
@@ -302,7 +315,10 @@
       "linkFailed": "Failed to link path: {{message}}",
       "linkCleared": "Local project link cleared.",
       "clearFailed": "Clear failed: {{message}}",
-      "loginNotCompleted": "Login incomplete: browser authorization may not have finished. Please try again."
+      "loginNotCompleted": "Login incomplete: browser authorization may not have finished. Please try again.",
+      "aliasSaved": "Org alias updated.",
+      "aliasSaveFailed": "Failed to update org alias: {{message}}",
+      "reauthorizeDone": "Authorization succeeded; CLI credentials updated."
     }
   },
   "soqlEditor": {

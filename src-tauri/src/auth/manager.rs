@@ -17,7 +17,8 @@ fn active_login() -> &'static Mutex<Option<u32>> {
 pub struct SfOrg {
     pub username: String,
     pub alias: Option<String>,
-    pub instance_url: String,
+    pub instance_url: Option<String>,
+    pub connected_status: Option<String>,
     pub expiration_date: Option<String>,
     pub is_default_username: Option<bool>,
 }
@@ -52,7 +53,11 @@ pub async fn sync_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
     for org in all_orgs {
         let org_type = if org.expiration_date.is_some() {
             "scratch"
-        } else if org.instance_url.contains("sandbox") {
+        } else if org
+            .instance_url
+            .as_deref()
+            .is_some_and(|instance_url| instance_url.contains("sandbox"))
+        {
             "sandbox"
         } else {
             "production"
@@ -63,23 +68,25 @@ pub async fn sync_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
 
         sqlx::query(
             r#"
-            INSERT INTO org_auth (id, alias, instance_url, org_type, is_default, expires_at, last_used)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))
+            INSERT INTO org_auth (id, alias, instance_url, org_type, is_default, expires_at, connection_status, last_used)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
             ON CONFLICT(id) DO UPDATE SET
               alias = excluded.alias,
               instance_url = excluded.instance_url,
               org_type = excluded.org_type,
               is_default = excluded.is_default,
               expires_at = excluded.expires_at,
+              connection_status = excluded.connection_status,
               last_used = datetime('now')
             "#,
         )
         .bind(&org.username)
         .bind(&org.alias)
-        .bind(&org.instance_url)
+        .bind(org.instance_url.as_deref().unwrap_or_default())
         .bind(org_type)
         .bind(if is_default { 1_i64 } else { 0_i64 })
         .bind(&org.expiration_date)
+        .bind(org.connected_status.as_deref().unwrap_or("Unknown"))
         .execute(&mut *tx)
         .await?;
     }
@@ -94,14 +101,60 @@ pub async fn sync_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
 pub async fn list_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
     let rows = sqlx::query_as::<_, OrgAuth>(
         r#"
-        SELECT id, alias, instance_url, org_type, is_default, expires_at, last_used, linked_project_path
+        SELECT id, alias, instance_url, org_type, is_default, expires_at, connection_status, last_used, linked_project_path
         FROM org_auth
-        ORDER BY is_default DESC, datetime(last_used) DESC
+        ORDER BY
+          is_default DESC,
+          COALESCE(NULLIF(TRIM(alias), ''), id) COLLATE NOCASE ASC,
+          id COLLATE NOCASE ASC
         "#,
     )
     .fetch_all(pool)
     .await?;
     Ok(rows)
+}
+
+/// Update the CLI's global alias mapping, then mirror the new value in SQLite
+/// so the management view updates immediately without a full refresh.
+pub async fn update_org_alias(pool: &SqlitePool, username: &str, alias: &str) -> anyhow::Result<()> {
+    let alias = alias.trim();
+    if alias.is_empty() {
+        anyhow::bail!("Org 别名不能为空");
+    }
+    if alias.contains('=') {
+        anyhow::bail!("Org 别名不能包含 '='");
+    }
+
+    let existing_alias = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT alias FROM org_auth WHERE id = ?1",
+    )
+    .bind(username)
+    .fetch_optional(pool)
+    .await?
+    .flatten()
+    .filter(|value| value != alias);
+
+    let assignment = format!("{alias}={username}");
+    let output = run_command(&["alias", "set", &assignment], false).await?;
+    if !output.success {
+        anyhow::bail!("设置 Org 别名失败: {}", output.stderr.trim());
+    }
+
+    // A username can otherwise retain multiple global CLI aliases. Remove its
+    // former alias only after the new one has been registered successfully.
+    if let Some(previous) = existing_alias {
+        let output = run_command(&["alias", "unset", &previous], false).await?;
+        if !output.success {
+            anyhow::bail!("新别名已设置，但移除旧别名失败: {}", output.stderr.trim());
+        }
+    }
+
+    sqlx::query("UPDATE org_auth SET alias = ?1, last_used = datetime('now') WHERE id = ?2")
+        .bind(alias)
+        .bind(username)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 pub async fn set_default_org(pool: &SqlitePool, username: &str) -> anyhow::Result<()> {
@@ -131,23 +184,28 @@ pub async fn login_org_web(
     consumer_key: Option<&str>,
     consumer_secret: Option<&str>,
     port: Option<u16>,
+    set_default: bool,
 ) -> anyhow::Result<()> {
-    let resolved_url = match login_domain {
-        "alibaba" => instance_url
-            .map(str::trim)
-            .filter(|u| !u.is_empty())
-            .ok_or_else(|| anyhow::anyhow!("阿里云版 Salesforce 必须提供 Instance URL"))?,
-        _ => login_instance_url(login_domain),
-    };
+    let resolved_url = instance_url
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| login_instance_url(login_domain).to_owned());
+
+    if login_domain == "alibaba" && instance_url.is_none() {
+        anyhow::bail!("阿里云版 Salesforce 必须提供 Instance URL");
+    }
 
     let mut args: Vec<String> = vec![
         "org".to_string(),
         "login".to_string(),
         "web".to_string(),
-        "--set-default".to_string(),
         "--instance-url".to_string(),
-        resolved_url.to_string(),
+        resolved_url,
     ];
+    if set_default {
+        args.push("--set-default".to_string());
+    }
 
     // Alibaba Cloud requires the connected app consumer key (-i)
     if let Some(key) = consumer_key.map(str::trim).filter(|k| !k.is_empty()) {
@@ -197,6 +255,38 @@ pub async fn login_org_web(
         *guard = None;
     }
     result
+}
+
+/// Reauthorize one existing org without changing the user's default org.
+pub async fn reauthorize_org(
+    pool: &SqlitePool,
+    username: &str,
+    alias: Option<String>,
+    instance_url: &str,
+    consumer_key: Option<String>,
+    consumer_secret: Option<String>,
+    port: Option<u16>,
+) -> anyhow::Result<()> {
+    let is_alibaba = instance_url.contains(".sfcrmproducts.cn");
+    login_org_web(
+        alias.clone(),
+        if is_alibaba { "alibaba" } else { "production" },
+        Some(instance_url),
+        consumer_key.as_deref(),
+        consumer_secret.as_deref(),
+        port,
+        false,
+    )
+    .await?;
+
+    sqlx::query(
+        "UPDATE org_auth SET alias = COALESCE(?1, alias), connection_status = 'Connected', last_used = datetime('now') WHERE id = ?2",
+    )
+    .bind(alias)
+    .bind(username)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 /// Cancel an in-progress login by killing the sf CLI process.

@@ -248,6 +248,19 @@
     "modalTitle": "添加 Org",
     "aliasLabel": "别名",
     "aliasPlaceholder": "Org 别名（可选）",
+    "reauthorizeTitle": "重新授权 Org",
+    "reauthorize": "重新授权",
+    "reauthorizeAria": "重新授权此 Org",
+    "editAliasTitle": "点击修改 Org 别名",
+    "editAliasAria": "修改 Org 别名",
+    "saveAlias": "保存",
+    "aliasRequired": "请输入 Org 别名。",
+    "connectionStatus": {
+      "connected": "已连接",
+      "expired": "授权失效",
+      "unreachable": "无法连接",
+      "unknown": "状态未知"
+    },
     "domainLabel": "环境",
     "domainProduction": "正式环境（login.salesforce.com）",
     "domainSandbox": "测试环境（test.salesforce.com）",
@@ -299,7 +312,10 @@
       "linkFailed": "关联路径失败：{{message}}",
       "linkCleared": "已清除本地项目关联。",
       "clearFailed": "清除失败：{{message}}",
-      "loginNotCompleted": "登录未完成：浏览器可能未完成授权，请重试。"
+      "loginNotCompleted": "登录未完成：浏览器可能未完成授权，请重试。",
+      "aliasSaved": "Org 别名已更新。",
+      "aliasSaveFailed": "更新 Org 别名失败：{{message}}",
+      "reauthorizeDone": "授权成功，CLI 凭据已更新。"
     }
   },
   "soqlEditor": {

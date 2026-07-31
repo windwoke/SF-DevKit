@@ -37,6 +37,7 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
               org_type TEXT NOT NULL,
               is_default INTEGER DEFAULT 0,
               expires_at TEXT,
+              connection_status TEXT NOT NULL DEFAULT 'Unknown',
               last_used TEXT,
               linked_project_path TEXT,
               created_at TEXT DEFAULT (datetime('now'))
@@ -344,6 +345,18 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
             let msg = e.to_string();
             if !msg.contains("duplicate column") {
                 return Err(anyhow::Error::from(e).context("failed to migrate org_auth.linked_project_path"));
+            }
+        }
+
+        if let Err(e) = sqlx::query(
+            "ALTER TABLE org_auth ADD COLUMN connection_status TEXT NOT NULL DEFAULT 'Unknown'",
+        )
+        .execute(&pool)
+        .await
+        {
+            let msg = e.to_string();
+            if !msg.contains("duplicate column") {
+                return Err(anyhow::Error::from(e).context("failed to migrate org_auth.connection_status"));
             }
         }
 

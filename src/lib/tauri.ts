@@ -112,6 +112,24 @@ export interface TrayLabels {
 export const tauriApi = {
   syncOrgs: () => invoke<OrgAuth[]>("sync_orgs"),
   listOrgs: () => invoke<OrgAuth[]>("list_orgs"),
+  updateOrgAlias: (username: string, alias: string) =>
+    invoke<void>("update_org_alias", { username, alias }),
+  reauthorizeOrg: (payload: {
+    username: string;
+    alias?: string | null;
+    instanceUrl: string;
+    consumerKey?: string | null;
+    consumerSecret?: string | null;
+    port?: number | null;
+  }) =>
+    invoke<void>("reauthorize_org", {
+      username: payload.username,
+      alias: payload.alias?.trim() || null,
+      instanceUrl: payload.instanceUrl.trim(),
+      consumerKey: payload.consumerKey?.trim() || null,
+      consumerSecret: payload.consumerSecret?.trim() || null,
+      port: payload.port ?? null,
+    }),
   setDefaultOrg: (username: string) =>
     invoke<void>("set_default_org", { username }),
   logoutOrg: (username: string) => invoke<void>("logout_org", { username }),

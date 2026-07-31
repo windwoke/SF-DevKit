@@ -37,6 +37,8 @@ pub fn run() {
             commands::export::open_in_editor,
             commands::org::sync_orgs,
             commands::org::list_orgs,
+            commands::org::update_org_alias,
+            commands::org::reauthorize_org,
             commands::org::set_default_org,
             commands::org::logout_org,
             commands::org::login_org,

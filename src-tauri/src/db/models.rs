@@ -9,6 +9,7 @@ pub struct OrgAuth {
     pub org_type: String,
     pub is_default: i64,
     pub expires_at: Option<String>,
+    pub connection_status: String,
     pub last_used: Option<String>,
     /// Local workspace folder associated with this org (optional).
     pub linked_project_path: Option<String>,
