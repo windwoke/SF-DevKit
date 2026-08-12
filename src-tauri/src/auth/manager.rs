@@ -213,7 +213,7 @@ pub async fn login_org_web(
         args.push(key.to_string());
     }
 
-    // Consumer secret is piped via stdin (not a CLI flag in sf CLI < 2.130)
+    // Consumer secret is entered through the CLI prompt; it has no public flag.
 
     if let Some(trimmed_alias) = alias
         .as_deref()
@@ -231,20 +231,21 @@ pub async fn login_org_web(
     // Alibaba Cloud needs special env vars to bypass DNS/domain checks
     let is_alibaba = login_domain == "alibaba";
 
-    // For Alibaba Cloud with consumer secret: use `expect` to create a PTY.
-    // Flow: CLI prompts for secret FIRST → then opens browser → callback arrives.
-    // `expect` auto-sends the secret so the CLI can proceed to start the HTTP server.
-    let use_expect = is_alibaba
+    // The sf CLI uses an Inquirer input prompt for the connected-app secret.
+    // Feed that prompt through stdin so this works in bundled GUI apps on every
+    // platform. The previous `/usr/bin/expect` implementation could never run
+    // on Windows.
+    let has_consumer_secret = is_alibaba
         && consumer_secret
             .map(str::trim)
             .is_some_and(|s| !s.is_empty());
 
-    let result = if use_expect {
+    let result = if has_consumer_secret {
         let secret = consumer_secret
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .unwrap_or("");
-        run_login_with_expect(&arg_refs, secret, port).await
+        run_login_with_secret(&arg_refs, secret, port).await
     } else {
         run_login_command(&arg_refs).await
     };
@@ -575,66 +576,47 @@ async fn run_login_command(args: &[&str]) -> anyhow::Result<()> {
     }
 }
 
-/// Run login via `/usr/bin/expect` to create a real PTY.
-/// The CLI prompts for consumer secret BEFORE opening the browser.
-/// `expect` auto-sends the secret, then the CLI starts the HTTP server and opens browser.
-async fn run_login_with_expect(
+/// Run a connected-app login and answer the CLI's client-secret prompt through
+/// stdin. Salesforce CLI's Inquirer prompt accepts piped input, which avoids a
+/// platform-specific PTY/expect dependency and keeps the secret out of argv.
+async fn run_login_with_secret(
     sf_args: &[&str],
     secret: &str,
     port: Option<u16>,
 ) -> anyhow::Result<()> {
     use std::process::Stdio;
-    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::io::{AsyncWriteExt, BufWriter};
     use tokio::process::Command;
 
     let sf_path = crate::cli::runner::find_sf()
         .ok_or_else(|| anyhow::anyhow!("未找到 sf CLI，请先安装 Salesforce CLI"))?;
 
-    // Create a temp directory with sfdx-project.json containing oauthLocalPort
-    let temp_dir = std::env::temp_dir().join("sf-devkit-login");
-    std::fs::create_dir_all(&temp_dir)?;
+    // oauthLocalPort is read from the nearest sfdx-project.json. Keep this
+    // temporary workspace alive until the login process exits.
+    let temp_dir = tempfile::Builder::new()
+        .prefix("sf-devkit-login-")
+        .tempdir()?;
     let oauth_port = port.unwrap_or(1717);
     let project_json = format!(
         r#"{{"packageDirectories":[{{"path":"force-app","default":true}}],"name":"sf-devkit-login","oauthLocalPort":"{}"}}"#,
         oauth_port
     );
-    std::fs::write(temp_dir.join("sfdx-project.json"), &project_json)?;
+    std::fs::write(temp_dir.path().join("sfdx-project.json"), &project_json)?;
     eprintln!(
-        "[login:expect] temp sfdx-project.json at {:?}, port={}",
-        temp_dir, oauth_port
+        "[login:secret] temp sfdx-project.json at {:?}, port={}",
+        temp_dir.path(),
+        oauth_port
     );
 
-    // Kill stale process on the target port
-    let _ = Command::new("bash")
-        .suppress_console()
-        .arg("-c")
-        .arg(format!(
-            "lsof -ti:{} | xargs kill -9 2>/dev/null || true",
-            oauth_port
-        ))
-        .status()
-        .await;
+    clear_oauth_port(oauth_port).await;
 
-    // Build the expect script:
-    //   1. spawn sf CLI (it will prompt for consumer secret first)
-    //   2. wait for the "OAuth client secret" prompt
-    //   3. send the secret
-    //   4. wait for process to finish
-    let escaped_secret = secret.replace('\\', "\\\\").replace('"', "\\\"");
-    let expect_script = format!(
-        "set timeout 300\nspawn {} {}\nexpect -re \"OAuth client secret\" {{ sleep 1; send \"{}\\r\" }}\nexpect eof\n",
-        sf_path.display(),
-        sf_args.join(" "),
-        escaped_secret,
-    );
+    eprintln!("[login:secret] sf {}", sf_args.join(" "));
 
-    eprintln!("[login:expect] sf {}", sf_args.join(" "));
-
-    let mut cmd = Command::new("/usr/bin/expect");
+    let mut cmd = Command::new(&sf_path);
     cmd.suppress_console();
-    cmd.current_dir(&temp_dir)
-        .arg("-c")
-        .arg(&expect_script)
+    cmd.current_dir(temp_dir.path())
+        .args(sf_args)
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
@@ -651,56 +633,82 @@ async fn run_login_with_expect(
     let mut child = cmd.spawn()?;
 
     if let Some(pid) = child.id() {
-        eprintln!("[login:expect] pid={}", pid);
+        eprintln!("[login:secret] pid={}", pid);
         if let Ok(mut guard) = active_login().lock() {
             *guard = Some(pid);
         }
     }
 
-    // Collect output
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    let collect_handle = tokio::spawn(async move {
-        let mut stdout_lines = stdout.map(|r| BufReader::new(r).lines());
-        let mut stderr_lines = stderr.map(|r| BufReader::new(r).lines());
-        let mut combined_output = String::new();
+    // Keep draining both output streams while waiting for the interactive
+    // client-secret prompt. The prompt doesn't end with a newline, so the
+    // collectors read byte chunks rather than lines.
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("无法读取 Salesforce CLI 标准输出"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("无法读取 Salesforce CLI 错误输出"))?;
+    let (prompt_tx, mut prompt_rx) = tokio::sync::mpsc::unbounded_channel();
+    let stdout_task = tokio::spawn(collect_login_output(stdout, prompt_tx.clone()));
+    let stderr_task = tokio::spawn(collect_login_output(stderr, prompt_tx));
 
-        loop {
-            tokio::select! {
-                line = async { match &mut stdout_lines {
-                    Some(lines) => lines.next_line().await,
-                    None => Ok(None),
-                }} => match line {
-                    Ok(Some(l)) => {
-                        eprintln!("[login:expect:out] {}", l);
-                        combined_output.push_str(&l);
-                        combined_output.push('\n');
-                    }
-                    _ => break,
-                },
-                line = async { match &mut stderr_lines {
-                    Some(lines) => lines.next_line().await,
-                    None => Ok(None),
-                }} => match line {
-                    Ok(Some(l)) => {
-                        eprintln!("[login:expect:err] {}", l);
-                        combined_output.push_str(&l);
-                        combined_output.push('\n');
-                    }
-                    _ => break,
-                },
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("无法向 Salesforce CLI 输入 Consumer Secret"))?;
+    let mut stdin = BufWriter::new(stdin);
+
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(300);
+    match tokio::time::timeout_at(deadline, prompt_rx.recv()).await {
+        Ok(Some(())) => {}
+        Ok(None) => {
+            let status = child.wait().await?;
+            let stdout = stdout_task.await??;
+            let stderr = stderr_task.await??;
+            let combined_output = format!(
+                "{}\n{}",
+                String::from_utf8_lossy(&stdout),
+                String::from_utf8_lossy(&stderr)
+            );
+            if !status.success() {
+                anyhow::bail!("登录失败：{}", extract_cli_error(&combined_output));
             }
+            anyhow::bail!("登录失败：Salesforce CLI 未请求 Consumer Secret");
         }
-        combined_output
-    });
+        Err(_) => {
+            eprintln!("[login:secret] timeout waiting for client-secret prompt");
+            let _ = kill_process(
+                active_login()
+                    .lock()
+                    .ok()
+                    .and_then(|mut g| g.take())
+                    .unwrap_or(0),
+            )
+            .await;
+            anyhow::bail!("登录超时（300s），Salesforce CLI 未请求 Consumer Secret");
+        }
+    }
 
-    let status = tokio::time::timeout(std::time::Duration::from_secs(300), child.wait()).await;
+    // The Alibaba flow is now at its interactive secret step. Write the value
+    // only at this point, then close stdin so the CLI can continue to OAuth.
+    stdin.write_all(secret.as_bytes()).await?;
+    stdin.write_all(b"\n").await?;
+    stdin.flush().await?;
+    stdin.shutdown().await?;
+
+    let status = tokio::time::timeout_at(deadline, child.wait()).await;
 
     match status {
-        Ok(Ok(s)) => {
-            let combined_output = collect_handle.await.unwrap_or_default();
-            eprintln!("[login:expect] exit={}", s.code().unwrap_or(-1));
-            if !s.success() {
+        Ok(Ok(status)) => {
+            let stdout = stdout_task.await??;
+            let stderr = stderr_task.await??;
+            let stdout = String::from_utf8_lossy(&stdout);
+            let stderr = String::from_utf8_lossy(&stderr);
+            let combined_output = format!("{}\n{}", stdout, stderr);
+            eprintln!("[login:secret] exit={}", status.code().unwrap_or(-1));
+            if !status.success() {
                 let error_msg = extract_cli_error(&combined_output);
                 anyhow::bail!("登录失败：{}", error_msg);
             }
@@ -710,11 +718,10 @@ async fn run_login_with_expect(
             Ok(())
         }
         Ok(Err(e)) => {
-            let _ = collect_handle.await;
             anyhow::bail!("登录进程异常：{}", e);
         }
         Err(_) => {
-            eprintln!("[login:expect] timeout 300s");
+            eprintln!("[login:secret] timeout 300s");
             let _ = kill_process(
                 active_login()
                     .lock()
@@ -723,12 +730,71 @@ async fn run_login_with_expect(
                     .unwrap_or(0),
             )
             .await;
-            let combined_output = collect_handle.await.unwrap_or_default();
-            anyhow::bail!(
-                "登录超时，CLI 输出：{}",
-                extract_cli_error(&combined_output)
-            );
+            anyhow::bail!("登录超时（300s），请确认浏览器已完成授权");
         }
+    }
+}
+
+async fn collect_login_output<R>(
+    mut reader: R,
+    prompt_tx: tokio::sync::mpsc::UnboundedSender<()>,
+) -> std::io::Result<Vec<u8>>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    use tokio::io::AsyncReadExt;
+
+    let mut output = Vec::new();
+    let mut chunk = [0_u8; 1024];
+    let mut prompt_reported = false;
+    loop {
+        let read = reader.read(&mut chunk).await?;
+        if read == 0 {
+            break;
+        }
+        output.extend_from_slice(&chunk[..read]);
+        if !prompt_reported && contains_client_secret_prompt(&output) {
+            prompt_reported = true;
+            let _ = prompt_tx.send(());
+        }
+    }
+    Ok(output)
+}
+
+fn contains_client_secret_prompt(output: &[u8]) -> bool {
+    let lower = String::from_utf8_lossy(output).to_lowercase();
+    lower.contains("oauth client secret")
+        || lower.contains("oauth consumer secret")
+        || lower.contains("consumer secret")
+}
+
+/// Best-effort cleanup of a stale CLI callback listener. Failure is ignored so
+/// sf can report a useful bind error, and a user-selected port remains usable.
+async fn clear_oauth_port(port: u16) {
+    #[cfg(target_os = "windows")]
+    {
+        let script = format!(
+            "$pids = Get-NetTCPConnection -LocalPort {} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; $pids | ForEach-Object {{ Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }}",
+            port
+        );
+        let _ = tokio::process::Command::new("powershell.exe")
+            .suppress_console()
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .status()
+            .await;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = tokio::process::Command::new("bash")
+            .suppress_console()
+            .arg("-c")
+            .arg(format!(
+                "lsof -ti:{} | xargs kill -9 2>/dev/null || true",
+                port
+            ))
+            .status()
+            .await;
     }
 }
 
@@ -838,4 +904,22 @@ async fn apply_default_org(pool: &SqlitePool, default_org_ref: &str) -> anyhow::
     .execute(pool)
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::contains_client_secret_prompt;
+
+    #[test]
+    fn detects_salesforce_client_secret_prompt_with_terminal_codes() {
+        let output = b"\x1b[2m? OAuth client secret\x1b[22m";
+        assert!(contains_client_secret_prompt(output));
+    }
+
+    #[test]
+    fn ignores_unrelated_oauth_output() {
+        assert!(!contains_client_secret_prompt(
+            b"Waiting for browser authentication..."
+        ));
+    }
 }
