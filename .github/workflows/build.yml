@@ -7,6 +7,10 @@ on:
 jobs:
   build:
     runs-on: macos-latest
+    # The build itself finishes in ~11 min. This cap is a safety net: the
+    # failure mode is codesign hanging on a headless keychain auth prompt,
+    # which would otherwise burn the full 6h job limit before timing out.
+    timeout-minutes: 30
 
     env:
       APPLE_SIGNING_IDENTITY: "Developer ID Application: zhonghui li (JSRAB4F28W)"
@@ -42,11 +46,18 @@ jobs:
         run: |
           CERT_PATH=$RUNNER_TEMP/apple_cert.p12
           echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
-          security create-keychain -p "" build.keychain
+          # A non-empty keychain password is required: with an empty one the
+          # partition list is unreliable and codesign can hang on an invisible
+          # GUI authorization prompt for the private key in headless CI
+          # (macos-latest). The keychain is per-job and discarded afterwards,
+          # so a freshly generated password is fine.
+          KEYCHAIN_PW=$(uuidgen)
+          security create-keychain -p "$KEYCHAIN_PW" build.keychain
           security default-keychain -s build.keychain
-          security unlock-keychain -p "" build.keychain
+          security list-keychains -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PW" build.keychain
           security import "$CERT_PATH" -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" build.keychain
           rm "$CERT_PATH"
 
       - name: Setup notarization API key
