@@ -45,19 +45,29 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
         run: |
           CERT_PATH=$RUNNER_TEMP/apple_cert.p12
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
-          # A non-empty keychain password is required: with an empty one the
-          # partition list is unreliable and codesign can hang on an invisible
-          # GUI authorization prompt for the private key in headless CI
-          # (macos-latest). The keychain is per-job and discarded afterwards,
-          # so a freshly generated password is fine.
+          KEYCHAIN_PATH=$RUNNER_TEMP/sf-devkit-signing.keychain-db
           KEYCHAIN_PW=$(uuidgen)
-          security create-keychain -p "$KEYCHAIN_PW" build.keychain
-          security default-keychain -s build.keychain
-          security list-keychains -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PW" build.keychain
-          security import "$CERT_PATH" -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" build.keychain
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN_PATH"
+          security default-keychain -d user -s "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PW" "$KEYCHAIN_PATH"
+
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F "$APPLE_SIGNING_IDENTITY"
+
+          # Exercise the same private key access that Tauri will use. This
+          # fails immediately instead of leaving codesign blocked on a hidden
+          # keychain authorization prompt in the headless runner.
+          CODESIGN_PROBE=$RUNNER_TEMP/codesign-probe
+          cp /usr/bin/true "$CODESIGN_PROBE"
+          codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp=none "$CODESIGN_PROBE"
+          codesign --verify --strict "$CODESIGN_PROBE"
+
           rm "$CERT_PATH"
 
       - name: Setup notarization API key
