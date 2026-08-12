@@ -1,6 +1,6 @@
 [package]
 name = "sf-devkit"
-version = "0.7.4"
+version = "0.7.5"
 description = "Salesforce developer desktop toolkit"
 authors = ["you"]
 edition = "2021"
