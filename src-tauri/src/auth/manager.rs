@@ -244,9 +244,9 @@ pub async fn login_org_web(
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .unwrap_or("");
-        run_login_with_expect(&arg_refs, is_alibaba, secret, port).await
+        run_login_with_expect(&arg_refs, secret, port).await
     } else {
-        run_login_command(&arg_refs, is_alibaba).await
+        run_login_command(&arg_refs).await
     };
     {
         let mut guard = active_login()
@@ -446,8 +446,13 @@ fn login_instance_url(login_domain: &str) -> &'static str {
 }
 
 /// Like `run_command` but tracks the child PID for cancellation.
-/// When `alibaba_env` is true, sets SF_DISABLE_DNS_CHECK and SF_DOMAIN_RETRY env vars.
-async fn run_login_command(args: &[&str], alibaba_env: bool) -> anyhow::Result<()> {
+///
+/// `SF_DISABLE_DNS_CHECK` and `SF_DOMAIN_RETRY=0` are always set to skip the
+/// post-OAuth My Domain DNS readiness check (forcedotcom/cli #3370), which
+/// otherwise keeps the CLI alive ~30–60s after the browser has already
+/// authorized. The instance URL is already known from the token response, so
+/// the check adds nothing here.
+async fn run_login_command(args: &[&str]) -> anyhow::Result<()> {
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
@@ -473,10 +478,8 @@ async fn run_login_command(args: &[&str], alibaba_env: bool) -> anyhow::Result<(
         cmd.env("PATH", format!("{}:{}", extra, current_path));
     }
 
-    if alibaba_env {
-        cmd.env("SF_DISABLE_DNS_CHECK", "true");
-        cmd.env("SF_DOMAIN_RETRY", "0");
-    }
+    cmd.env("SF_DISABLE_DNS_CHECK", "true");
+    cmd.env("SF_DOMAIN_RETRY", "0");
 
     cmd.stdin(Stdio::inherit())
         .stdout(Stdio::piped())
@@ -577,7 +580,6 @@ async fn run_login_command(args: &[&str], alibaba_env: bool) -> anyhow::Result<(
 /// `expect` auto-sends the secret, then the CLI starts the HTTP server and opens browser.
 async fn run_login_with_expect(
     sf_args: &[&str],
-    alibaba_env: bool,
     secret: &str,
     port: Option<u16>,
 ) -> anyhow::Result<()> {
@@ -643,10 +645,8 @@ async fn run_login_with_expect(
         cmd.env("PATH", format!("{}:{}", extra, current_path));
     }
 
-    if alibaba_env {
-        cmd.env("SF_DISABLE_DNS_CHECK", "true");
-        cmd.env("SF_DOMAIN_RETRY", "0");
-    }
+    cmd.env("SF_DISABLE_DNS_CHECK", "true");
+    cmd.env("SF_DOMAIN_RETRY", "0");
 
     let mut child = cmd.spawn()?;
 
