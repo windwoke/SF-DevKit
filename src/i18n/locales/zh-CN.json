@@ -11,6 +11,7 @@
     "soql": "SOQL",
     "metadata": "元数据浏览器",
     "apex": "Apex Runner",
+    "apexTests": "Apex 测试",
     "deployer": "Deployer",
     "logs": "Log Viewer"
   },
@@ -514,6 +515,7 @@
       "logCancelRequested": "已请求取消任务。",
       "running": "正在下载 {{count}} 个组件…",
       "successMessage": "下载完成！输出目录：",
+      "runApexTests": "解析并运行测试",
       "errors": {
         "needOrg": "请先选择 Org",
         "needOutputDir": "请先选择输出目录",
@@ -576,6 +578,85 @@
       "runStart": "执行 Apex，org={{org}}",
       "runSuccess": "完成，耗时 {{ms}}ms",
       "runFail": "失败：{{message}}"
+    }
+  },
+  "apexTestRunner": {
+    "testClasses": "测试类",
+    "results": "运行结果",
+    "picker": {
+      "packageTests": "检索包测试类",
+      "orgTests": "当前 Org 测试类（补充选择）"
+    },
+    "coverage": {
+      "notRun": "未触达",
+      "outsidePackage": "包外",
+      "filterAll": "所有",
+      "filterInPackage": "检索包内"
+    },
+    "source": {
+      "org": "当前 Org",
+      "retrieve": "最近检索包"
+    },
+    "searchClasses": "搜索测试类……",
+    "searchResults": "搜索测试结果……",
+    "searchCoverage": "搜索覆盖类……",
+    "filterAll": "全部",
+    "filterFailed": "失败",
+    "refresh": "刷新",
+    "choosePackage": "选择其他包",
+    "parsePackage": "重新解析",
+    "selectVisible": "全选结果",
+    "clearSelection": "清空",
+    "selectedCount": "已选择 {{count}} 个",
+    "runSelected": "运行所选测试（{{count}}）",
+    "running": "运行中……",
+    "runningDetail": "正在运行 {{count}} 个测试类，开始于 {{time}}",
+    "submitting": "正在提交 {{count}} 个测试类到 Salesforce……",
+    "waiting": "Salesforce 正在执行测试（Test Run ID: {{id}}）",
+    "startedAt": "开始于 {{time}}",
+    "fetchResult": "获取最新结果",
+    "fetchingResult": "获取中……",
+    "pending": "测试仍在 Salesforce 中运行",
+    "loadingClasses": "正在加载测试类……",
+    "loadingOrgClasses": "正在加载 Org 测试类作为补充选项……",
+    "tabs": {
+      "tests": "测试结果",
+      "coverage": "代码覆盖率"
+    },
+    "summary": {
+      "testsRan": "运行测试数",
+      "passing": "通过",
+      "failing": "失败",
+      "skipped": "跳过",
+      "executionTime": "执行耗时",
+      "testRunCoverage": "本次覆盖率",
+      "orgWideCoverage": "Org 覆盖率",
+      "testRunId": "测试运行 ID",
+      "openRunInBrowser": "在浏览器中打开测试运行详情"
+    },
+    "columns": {
+      "message": "错误消息",
+      "stackTrace": "Stack Trace",
+      "uncoveredLines": "未覆盖行号",
+      "uncoveredCount": "{{count}} 行未覆盖"
+    },
+    "empty": {
+      "noOrg": "未选择 Org，请先在顶栏选择。",
+      "noClasses": "没有匹配的测试类。",
+      "noPackage": "暂无检索包路径，请先在 Metadata Browser 检索。",
+      "noPackageTests": "检索包中没有测试类。请在 Metadata Browser 中检索 ApexClass。",
+      "noRun": "选择测试类并运行后，结果将显示在这里。",
+      "noResults": "没有匹配的测试结果。",
+      "noCoverage": "本次运行没有覆盖率数据。",
+      "noDetail": "无错误详情。",
+      "noUncovered": "全部行已覆盖。"
+    },
+    "errors": {
+      "noOrg": "未选择 Org。",
+      "noSelection": "请至少选择一个测试类。"
+    },
+    "warnings": {
+      "orgMismatch": "检索包来自 {{retrieveOrg}}，与当前 Org（{{currentOrgName}}）不一致。运行目标始终是当前 Org。"
     }
   },
   "deployer": {

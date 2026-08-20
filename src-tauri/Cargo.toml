@@ -28,6 +28,7 @@ tauri-plugin-shell = "2"
 tokio = { version = "1", features = ["process", "rt-multi-thread", "macros", "io-util", "fs"] }
 urlencoding = "2"
 which = "7"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 

@@ -60,12 +60,24 @@ export function IconApexNav() {
   );
 }
 
+/** Apex 测试 / 烧瓶 + 对勾 */
+export function IconApexTestNav() {
+  return (
+    <svg {...stroke} aria-hidden>
+      <path d="M10 3h4" />
+      <path d="M10 3v5.5L4.8 17a2 2 0 0 0 1.8 3h10.8a2 2 0 0 0 1.8-3L14 8.5V3" />
+      <path d="M7.5 13.5h9" />
+      <path d="M9.5 17.5l1.8 1.8 3.5-3.5" />
+    </svg>
+  );
+}
+
 export function IconDeployNav() {
   return (
     <svg {...stroke} aria-hidden>
-      <path d="M12 4v9" />
-      <path d="M8.5 9.5L12 13l3.5-3.5" />
-      <rect x="4" y="16" width="16" height="4" rx="1.5" />
+      <path d="M16 16l-4-4-4 4" />
+      <path d="M12 12v9" />
+      <path d="M20.2 16.6a4.5 4.5 0 0 0-1.2-8.6 6 6 0 0 0-11.4-1.4A4 4 0 0 0 5 16" />
     </svg>
   );
 }
@@ -95,6 +107,7 @@ export function SidebarModuleIcon({ id }: { id: ModuleId }) {
   if (id === "soql") return <IconSoqlNav />;
   if (id === "metadata") return <IconMetadataNav />;
   if (id === "apex") return <IconApexNav />;
+  if (id === "apex_tests") return <IconApexTestNav />;
   if (id === "deployer") return <IconDeployNav />;
   return <IconLogNav />;
 }

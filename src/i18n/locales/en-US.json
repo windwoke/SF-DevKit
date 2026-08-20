@@ -11,6 +11,7 @@
     "soql": "SOQL",
     "metadata": "Metadata Browser",
     "apex": "Apex Runner",
+    "apexTests": "Apex Tests",
     "deployer": "Deployer",
     "logs": "Log Viewer"
   },
@@ -517,6 +518,7 @@
       "logCancelRequested": "Cancel requested.",
       "running": "Retrieving {{count}} items…",
       "successMessage": "Retrieve completed successfully! Output:",
+      "runApexTests": "Parse & Run Tests",
       "errors": {
         "needOrg": "Select an org first",
         "needOutputDir": "Choose an output folder first",
@@ -579,6 +581,85 @@
       "runStart": "Running Apex, org={{org}}",
       "runSuccess": "Completed in {{ms}}ms",
       "runFail": "Failed: {{message}}"
+    }
+  },
+  "apexTestRunner": {
+    "testClasses": "Test Classes",
+    "results": "Results",
+    "picker": {
+      "packageTests": "Package Test Classes",
+      "orgTests": "Current Org Test Classes (extra picks)"
+    },
+    "coverage": {
+      "notRun": "Not run",
+      "outsidePackage": "Outside package",
+      "filterAll": "All",
+      "filterInPackage": "In Package"
+    },
+    "source": {
+      "org": "Current Org",
+      "retrieve": "Last Retrieve Package"
+    },
+    "searchClasses": "Search test classes…",
+    "searchResults": "Search test results…",
+    "searchCoverage": "Search covered classes…",
+    "filterAll": "All",
+    "filterFailed": "Failed",
+    "refresh": "Refresh",
+    "choosePackage": "Choose Package…",
+    "parsePackage": "Re-parse",
+    "selectVisible": "Select Visible",
+    "clearSelection": "Clear",
+    "selectedCount": "{{count}} selected",
+    "runSelected": "Run Selected Tests ({{count}})",
+    "running": "Running…",
+    "runningDetail": "Running {{count}} test classes, started at {{time}}",
+    "submitting": "Submitting {{count}} test classes to Salesforce…",
+    "waiting": "Salesforce is running tests (Test Run ID: {{id}})",
+    "startedAt": "Started at {{time}}",
+    "fetchResult": "Fetch Latest Result",
+    "fetchingResult": "Fetching…",
+    "pending": "Tests are still running in Salesforce",
+    "loadingClasses": "Loading test classes…",
+    "loadingOrgClasses": "Loading org test classes as extra options…",
+    "tabs": {
+      "tests": "Test Results",
+      "coverage": "Code Coverage"
+    },
+    "summary": {
+      "testsRan": "Tests Ran",
+      "passing": "Passing",
+      "failing": "Failing",
+      "skipped": "Skipped",
+      "executionTime": "Execution Time",
+      "testRunCoverage": "Test Run Coverage",
+      "orgWideCoverage": "Org Wide Coverage",
+      "testRunId": "Test Run ID",
+      "openRunInBrowser": "Open test run in browser"
+    },
+    "columns": {
+      "message": "Message",
+      "stackTrace": "Stack Trace",
+      "uncoveredLines": "Uncovered Lines",
+      "uncoveredCount": "{{count}} uncovered"
+    },
+    "empty": {
+      "noOrg": "No org selected. Pick one in the top bar first.",
+      "noClasses": "No matching test classes.",
+      "noPackage": "No retrieve package yet. Retrieve from Metadata Browser first.",
+      "noPackageTests": "No test classes in this package. Retrieve ApexClass in Metadata Browser.",
+      "noRun": "Select test classes and run — results will appear here.",
+      "noResults": "No matching test results.",
+      "noCoverage": "No coverage data for this run.",
+      "noDetail": "No detail available.",
+      "noUncovered": "All lines covered."
+    },
+    "errors": {
+      "noOrg": "No org selected.",
+      "noSelection": "Select at least one test class."
+    },
+    "warnings": {
+      "orgMismatch": "This package was retrieved from {{retrieveOrg}}, which differs from the current org ({{currentOrgName}}). Tests always run against the current org."
     }
   },
   "deployer": {

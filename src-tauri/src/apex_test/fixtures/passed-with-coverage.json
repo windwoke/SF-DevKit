@@ -1,0 +1,107 @@
+{
+  "status": 0,
+  "result": {
+    "summary": {
+      "failRate": "0%",
+      "failing": 0,
+      "hostname": "https://example--dev.sandbox.my.salesforce.com",
+      "orgId": "00DFAKEORGID0001",
+      "outcome": "Passed",
+      "passRate": "100%",
+      "passing": 3,
+      "skipped": 0,
+      "testRunId": "7079z00000AbCdE1",
+      "testStartTime": "2026-08-18T07:56:43.000Z",
+      "testsRan": 3,
+      "userId": "005FAKEUSERID001",
+      "username": "user@example.com.dev",
+      "commandTime": "231 ms",
+      "testExecutionTime": "2456 ms",
+      "testTotalTime": "4829 ms",
+      "orgWideCoverage": "45%",
+      "testRunCoverage": "24%"
+    },
+    "tests": [
+      {
+        "Id": "07MFAKERESULTID01",
+        "QueueItemId": "709FAKEQUEUEID01",
+        "StackTrace": null,
+        "Message": null,
+        "AsyncApexJobId": "7079z00000AbCdE1",
+        "MethodName": "itCreatesAccounts",
+        "Outcome": "Pass",
+        "ApexClass": {
+          "Id": "01pFAKECLASSID001",
+          "Name": "AccountServiceSpec",
+          "NamespacePrefix": null
+        },
+        "RunTime": 412,
+        "FullName": "AccountServiceSpec.itCreatesAccounts"
+      },
+      {
+        "Id": "07MFAKERESULTID02",
+        "QueueItemId": "709FAKEQUEUEID02",
+        "StackTrace": null,
+        "Message": null,
+        "AsyncApexJobId": "7079z00000AbCdE1",
+        "MethodName": "itUpdatesContacts",
+        "Outcome": "Pass",
+        "ApexClass": {
+          "Id": "01pFAKECLASSID001",
+          "Name": "AccountServiceSpec",
+          "NamespacePrefix": null
+        },
+        "RunTime": 530,
+        "FullName": "AccountServiceSpec.itUpdatesContacts"
+      },
+      {
+        "Id": "07MFAKERESULTID03",
+        "QueueItemId": "709FAKEQUEUEID03",
+        "StackTrace": null,
+        "Message": null,
+        "AsyncApexJobId": "7079z00000AbCdE1",
+        "MethodName": "bulkTest",
+        "Outcome": "Pass",
+        "ApexClass": {
+          "Id": "01pFAKECLASSID002",
+          "Name": "PriceEngineTest",
+          "NamespacePrefix": null
+        },
+        "RunTime": 1514,
+        "FullName": "PriceEngineTest.bulkTest"
+      }
+    ],
+    "coverage": {
+      "coverage": [
+        {
+          "id": "01pFAKECLASSID003",
+          "name": "AccountService",
+          "totalLines": 11,
+          "totalCovered": 10,
+          "coveredPercent": 91,
+          "lines": {
+            "1": 1, "2": 1, "3": 1, "4": 1, "5": 1,
+            "6": 1, "7": 1, "8": 1, "9": 1, "10": 1,
+            "42": 0
+          }
+        },
+        {
+          "id": "01qFAKETRIGGERID01",
+          "name": "AccountTrigger",
+          "totalLines": 4,
+          "totalCovered": 4,
+          "coveredPercent": 100,
+          "lines": { "1": 1, "2": 1, "3": 1, "4": 1 }
+        }
+      ],
+      "records": [],
+      "summary": {
+        "totalLines": 15,
+        "coveredLines": 14,
+        "orgWideCoverage": "45%",
+        "testRunCoverage": "24%"
+      }
+    }
+  },
+  "warnings": []
+}

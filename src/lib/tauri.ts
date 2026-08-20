@@ -1,5 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { OrgAuth } from "../store/org";
+import type {
+  ApexPackageScan,
+  ApexTestClass,
+  ApexTestRunResult,
+} from "../modules/ApexTestRunner/types";
 
 export type LoginDomain = "production" | "sandbox" | "alibaba";
 export type RetrieveOutputMode = "extract" | "zip";
@@ -277,6 +282,37 @@ export const tauriApi = {
     }),
   checkPackageXml: (workingDir: string) =>
     invoke<boolean>("check_package_xml", { workingDir }),
+
+  // Apex Test Runner
+  listApexTestClasses: (payload: { orgId: string; forceRefresh?: boolean }) =>
+    invoke<ApexTestClass[]>("list_apex_test_classes", {
+      orgId: payload.orgId,
+      forceRefresh: payload.forceRefresh ?? false,
+    }),
+  scanApexTestPackage: (path: string) =>
+    invoke<ApexPackageScan>("scan_apex_test_package", { path }),
+  pickApexTestPackage: () => invoke<string | null>("pick_apex_test_package"),
+  runApexTests: (payload: { orgId: string; classNames: string[] }) =>
+    invoke<ApexTestRunResult>("run_apex_tests", {
+      orgId: payload.orgId,
+      classNames: payload.classNames,
+    }),
+  getApexTestResult: (payload: { orgId: string; testRunId: string }) =>
+    invoke<ApexTestRunResult>("get_apex_test_result", {
+      orgId: payload.orgId,
+      testRunId: payload.testRunId,
+    }),
+  /** Streams polling/completed/failed events on `eventId` while waiting. */
+  pollApexTestResult: (payload: {
+    orgId: string;
+    testRunId: string;
+    eventId: string;
+  }) =>
+    invoke<ApexTestRunResult>("poll_apex_test_result", {
+      orgId: payload.orgId,
+      testRunId: payload.testRunId,
+      eventId: payload.eventId,
+    }),
 
   // Dashboard
   listRetrieveHistory: (payload: { orgId: string; limit?: number }) =>

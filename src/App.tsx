@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect } from "react";
 import { Sidebar } from "./components/Layout/Sidebar";
 import { TopBar } from "./components/Layout/TopBar";
 import { ApexRunner } from "./modules/ApexRunner";
+import { ApexTestRunner } from "./modules/ApexTestRunner";
 import { Deployer } from "./modules/Deployer";
 import { HomeDashboard } from "./modules/HomeDashboard";
 import { LogViewer } from "./modules/LogViewer";
@@ -29,6 +30,11 @@ export default function App() {
     { id: "soql", label: t("modules.soql"), render: SoqlEditor },
     { id: "metadata", label: t("modules.metadata"), render: MetadataBrowser },
     {
+      id: "apex_tests",
+      label: t("modules.apexTests"),
+      render: ApexTestRunner,
+    },
+    {
       id: "deployer",
       label: t("modules.deployer"),
       render: Deployer,
@@ -40,7 +46,7 @@ export default function App() {
     },
     { id: "apex", label: t("modules.apex"), render: ApexRunner },
   ];
-  // Keyboard shortcuts: Cmd/Ctrl + 1..6 to switch modules
+  // Keyboard shortcuts: Cmd/Ctrl + 1..N to switch modules (registry length)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;

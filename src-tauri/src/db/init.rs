@@ -360,6 +360,25 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
             }
         }
 
+        // Apex test-class cache: namespace + accurate is_test flag (shared by
+        // Deployer and Apex Test Runner).
+        for ddl in [
+            "ALTER TABLE apex_class_cache ADD COLUMN namespace_prefix TEXT",
+            "ALTER TABLE apex_class_cache ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0",
+        ] {
+            if let Err(e) = sqlx::query(ddl).execute(&pool).await {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column") {
+                    return Err(anyhow::Error::from(e).context(format!("failed migration: {}", ddl)));
+                }
+            }
+        }
+        // Legacy rows were name-guessed; treat them as unknown so the next
+        // refresh repopulates with accurate detection.
+        let _ = sqlx::query("UPDATE apex_class_cache SET is_test = 0 WHERE is_test IS NULL")
+            .execute(&pool)
+            .await;
+
         Ok::<SqlitePool, anyhow::Error>(pool)
     })?;
 

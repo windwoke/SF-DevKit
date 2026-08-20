@@ -1,3 +1,4 @@
+mod apex_test;
 mod auth;
 mod cli;
 mod commands;
@@ -77,6 +78,12 @@ pub fn run() {
             commands::log_viewer::disable_trace,
             commands::log_viewer::pick_log_output_directory,
             commands::apex::run_apex,
+            commands::apex_test::list_apex_test_classes,
+            commands::apex_test::scan_apex_test_package,
+            commands::apex_test::pick_apex_test_package,
+            commands::apex_test::run_apex_tests,
+            commands::apex_test::get_apex_test_result,
+            commands::apex_test::poll_apex_test_result,
             commands::deployer::deploy_metadata,
             commands::deployer::check_package_xml,
             commands::deployer::cancel_deploy,

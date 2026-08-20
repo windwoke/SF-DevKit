@@ -1,0 +1,42 @@
+{
+  "status": 0,
+  "result": {
+    "summary": {
+      "failRate": "0%",
+      "failing": 0,
+      "hostname": "https://example--dev.sandbox.my.salesforce.com",
+      "orgId": "00DFAKEORGID0001",
+      "outcome": "Passed",
+      "passRate": "100%",
+      "passing": 1,
+      "skipped": 0,
+      "testRunId": "7079z00000NoCoVr3",
+      "testStartTime": "2026-08-18T08:10:00.000Z",
+      "testsRan": 1,
+      "userId": "005FAKEUSERID001",
+      "username": "user@example.com.dev",
+      "commandTime": "120 ms",
+      "testExecutionTime": "320 ms",
+      "testTotalTime": "410 ms"
+    },
+    "tests": [
+      {
+        "Id": "07MFAKERESULTID06",
+        "QueueItemId": "709FAKEQUEUEID06",
+        "StackTrace": null,
+        "Message": null,
+        "AsyncApexJobId": "7079z00000NoCoVr3",
+        "MethodName": "helloWorld",
+        "Outcome": "Pass",
+        "ApexClass": {
+          "Id": "01pFAKECLASSID006",
+          "Name": "HelloWorldTest",
+          "NamespacePrefix": null
+        },
+        "RunTime": 320,
+        "FullName": "HelloWorldTest.helloWorld"
+      }
+    ]
+  },
+  "warnings": []
+}

@@ -1,0 +1,83 @@
+{
+  "status": 1,
+  "result": {
+    "summary": {
+      "failRate": "50%",
+      "failing": 1,
+      "hostname": "https://example--dev.sandbox.my.salesforce.com",
+      "orgId": "00DFAKEORGID0001",
+      "outcome": "Failed",
+      "passRate": "50%",
+      "passing": 1,
+      "skipped": 0,
+      "testRunId": "7079z00000FaIlEd",
+      "testStartTime": "2026-08-18T08:05:00.000Z",
+      "testsRan": 2,
+      "userId": "005FAKEUSERID001",
+      "username": "user@example.com.dev",
+      "commandTime": "410 ms",
+      "testExecutionTime": "1830 ms",
+      "testTotalTime": "2210 ms",
+      "orgWideCoverage": "45%",
+      "testRunCoverage": "64%"
+    },
+    "tests": [
+      {
+        "Id": "07MFAKERESULTID04",
+        "QueueItemId": "709FAKEQUEUEID04",
+        "StackTrace": "Class.OrderServiceSpec.itRejectsBadInput: line 12, column 1",
+        "Message": "System.AssertException: Assertion Failed: Expected: 0, Actual: 1",
+        "AsyncApexJobId": "7079z00000FaIlEd",
+        "MethodName": "itRejectsBadInput",
+        "Outcome": "Fail",
+        "ApexClass": {
+          "Id": "01pFAKECLASSID004",
+          "Name": "OrderServiceSpec",
+          "NamespacePrefix": null
+        },
+        "RunTime": 1210,
+        "FullName": "OrderServiceSpec.itRejectsBadInput"
+      },
+      {
+        "Id": "07MFAKERESULTID05",
+        "QueueItemId": "709FAKEQUEUEID05",
+        "StackTrace": null,
+        "Message": null,
+        "AsyncApexJobId": "7079z00000FaIlEd",
+        "MethodName": "itCalculatesTotals",
+        "Outcome": "Pass",
+        "ApexClass": {
+          "Id": "01pFAKECLASSID004",
+          "Name": "OrderServiceSpec",
+          "NamespacePrefix": null
+        },
+        "RunTime": 620,
+        "FullName": "OrderServiceSpec.itCalculatesTotals"
+      }
+    ],
+    "coverage": {
+      "coverage": [
+        {
+          "id": "01pFAKECLASSID005",
+          "name": "OrderService",
+          "totalLines": 25,
+          "totalCovered": 16,
+          "coveredPercent": 64,
+          "lines": {
+            "1": 1, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1, "8": 1,
+            "9": 1, "10": 1, "11": 1, "12": 1, "13": 1, "14": 1, "15": 1, "16": 1,
+            "17": 0, "18": 0, "19": 0, "20": 0, "21": 0, "22": 0, "23": 0, "24": 0, "25": 0
+          }
+        }
+      ],
+      "records": [],
+      "summary": {
+        "totalLines": 25,
+        "coveredLines": 16,
+        "orgWideCoverage": "45%",
+        "testRunCoverage": "64%"
+      }
+    }
+  },
+  "warnings": []
+}

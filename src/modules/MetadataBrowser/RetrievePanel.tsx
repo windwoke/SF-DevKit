@@ -6,7 +6,9 @@ import i18n from "../../i18n";
 import { tauriApi } from "../../lib/tauri";
 import { useMetadataStore } from "../../store/metadata";
 import { useOrgStore } from "../../store/org";
+import { useUiStore } from "../../store/ui";
 import { useWorkspaceStore } from "../../store/workspace";
+import { useApexTestRunnerStore } from "../ApexTestRunner/store";
 
 interface LogLine {
   type: "start" | "stdout" | "stderr" | "exit" | "info";
@@ -44,10 +46,11 @@ export function RetrievePanel() {
     }
   }, [logs]);
 
-  // Auto-dismiss success banner after 5 seconds
+  // Auto-dismiss success banner after 15 seconds (long enough to read the
+  // output path and decide whether to jump into Apex tests)
   useEffect(() => {
     if (!showSuccess) return;
-    const timer = setTimeout(() => setShowSuccess(false), 5000);
+    const timer = setTimeout(() => setShowSuccess(false), 15000);
     return () => clearTimeout(timer);
   }, [showSuccess]);
 
@@ -137,6 +140,16 @@ export function RetrievePanel() {
         <div className="metadata-success-banner">
           {t("metadataBrowser.retrieve.successMessage")}
           {lastOutputPath ? <span className="metadata-success-path">{lastOutputPath}</span> : null}
+          <button
+            type="button"
+            className="metadata-success-action"
+            onClick={() => {
+              useApexTestRunnerStore.getState().openRetrievePackage(lastOutputPath);
+              useUiStore.getState().setActiveModule("apex_tests");
+            }}
+          >
+            {t("metadataBrowser.retrieve.runApexTests")}
+          </button>
         </div>
       ) : null}
 
