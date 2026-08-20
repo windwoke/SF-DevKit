@@ -86,6 +86,33 @@ export function getByPath(input: unknown, path: string[]): unknown {
   return cur;
 }
 
+/**
+ * Aggregate functions without an alias come back as generated `expr0`,
+ * `expr1`… keys instead of the SELECT expression text, so layout paths like
+ * `Count(Id)` never match and every cell renders empty. When the rows use
+ * expr-keys, re-point each unresolved field column at the expr-key matching
+ * its SELECT position (already-resolvable columns — aliased aggregates,
+ * plain fields — stay put; subquery columns don't consume expr slots).
+ */
+export function remapAggregateExprColumns(
+  cols: MainColumn[],
+  rows: Record<string, unknown>[],
+): MainColumn[] {
+  const sample = rows.find((r) => r && typeof r === "object");
+  if (!sample) return cols;
+  const exprKeys = Object.keys(sample).filter((k) => /^expr\d+$/.test(k));
+  if (exprKeys.length === 0) return cols;
+  const byIndex = new Map(exprKeys.map((k) => [Number(k.slice(4)), k]));
+  let exprIdx = 0;
+  return cols.map((col) => {
+    if (col.kind !== "field") return col;
+    if (getByPath(sample, col.path) !== undefined) return col;
+    const exprKey = byIndex.get(exprIdx);
+    exprIdx += 1;
+    return exprKey ? { ...col, path: [exprKey] } : col;
+  });
+}
+
 export function extractSubqueryRows(row: Record<string, unknown>, subqueryName: string): Record<string, unknown>[] {
   const subqueryKey = resolveKeyCaseInsensitive(row, subqueryName);
   const value = subqueryKey ? row[subqueryKey] : undefined;

@@ -9,7 +9,13 @@ import { useOrgStore } from "../../store/org";
 import { useSoqlStore } from "../../store/soql";
 import { SoqlMonacoEditor } from "./SoqlMonacoEditor";
 import { extractFromObject } from "./contextParser";
-import { extractSubqueryRows, getByPath, parseSoqlLayout, type MainColumn } from "./resultLayout";
+import {
+  extractSubqueryRows,
+  getByPath,
+  parseSoqlLayout,
+  remapAggregateExprColumns,
+  type MainColumn,
+} from "./resultLayout";
 import { clearSoqlCompletionCache } from "./soqlCompletion";
 import { formatSoql } from "./soqlFormat";
 import { IconCopy, IconExport, IconFormat, IconRefresh, IconRun } from "./SoqlToolbarIcons";
@@ -192,7 +198,9 @@ export function SoqlEditor() {
       kind: "field" as const,
       path: label.split(".").filter(Boolean),
     }));
-    const cols = resultLayout?.mainColumns.length ? resultLayout.mainColumns : fallbackColumns;
+    const cols = resultLayout?.mainColumns.length
+      ? remapAggregateExprColumns(resultLayout.mainColumns, rows)
+      : fallbackColumns;
     if (sortState.column) {
       const sortableCol = cols.find(
         (col): col is Extract<MainColumn, { kind: "field" }> => col.id === sortState.column && col.kind === "field",
