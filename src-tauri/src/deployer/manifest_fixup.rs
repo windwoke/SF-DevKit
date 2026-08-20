@@ -4,9 +4,7 @@
 //! members of their parent type in `package.xml`, not as top-level `<types>`.
 //! When a user authors a manifest with child types listed directly (e.g.
 //! `WorkflowFieldUpdate`, `WorkflowTask`), `sf project deploy start` fails
-//! with errors like:
-//!
-//!     命名字段更新操作在包里... 部署报错
+//! with errors like "命名字段更新操作在包里... 部署报错".
 //!
 //! This module reads the user's manifest, folds any child type into its
 //! parent (using the referenced parent's fullName), and returns a new
