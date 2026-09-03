@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use serde::Serialize;
 use serde_json::Value;
 use sqlx::SqlitePool;
@@ -461,14 +463,26 @@ pub async fn refresh_schema_cache(
     Ok(())
 }
 
+fn normalize_soql_line_endings(query: &str) -> String {
+    // Treat CRLF as one line break; preserve all other whitespace and escapes.
+    query.replace("\r\n", " ").replace(['\r', '\n'], " ")
+}
+
 pub async fn run_soql_query(org_id: &str, query: &str) -> anyhow::Result<Value> {
     eprintln!(
         "[soql] run query org={} sql={}",
         org_id,
         query.replace('\n', " ")
     );
+    // Windows sf.cmd rejects arguments containing CR/LF at process spawn.
+    // Normalize only the CLI argument, leaving the editor draft/history untouched.
+    let cli_query = if cfg!(target_os = "windows") {
+        Cow::Owned(normalize_soql_line_endings(query))
+    } else {
+        Cow::Borrowed(query)
+    };
     let output = run_command(
-        &["data", "query", "-q", query, "--target-org", org_id],
+        &["data", "query", "-q", cli_query.as_ref(), "--target-org", org_id],
         true,
     )
     .await?;
@@ -479,4 +493,45 @@ pub async fn run_soql_query(org_id: &str, query: &str) -> anyhow::Result<Value> 
     let total = parsed["result"]["totalSize"].as_i64().unwrap_or_default();
     eprintln!("[soql] success totalSize={}", total);
     Ok(parsed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_soql_line_endings;
+
+    #[test]
+    fn normalizes_lf_crlf_and_cr_without_joining_query_tokens() {
+        for newline in ["\n", "\r\n", "\r"] {
+            let query = format!(
+                "SELECT{newline}Id, Name{newline}FROM User{newline}WHERE Email = 'test@example.com'"
+            );
+            assert_eq!(
+                normalize_soql_line_endings(&query),
+                "SELECT Id, Name FROM User WHERE Email = 'test@example.com'"
+            );
+        }
+    }
+
+    #[test]
+    fn removes_mixed_leading_trailing_and_blank_line_breaks() {
+        assert_eq!(
+            normalize_soql_line_endings("\r\nSELECT Id\n\nFROM User\rLIMIT 1\r\n"),
+            " SELECT Id  FROM User LIMIT 1 "
+        );
+    }
+
+    #[test]
+    fn preserves_literal_spaces_escapes_and_other_characters() {
+        let query = r"SELECT Id FROM Account WHERE Name = 'A  B\'s 中文' AND Description = 'a\nb\r'";
+        assert_eq!(normalize_soql_line_endings(query), query);
+        assert_eq!(
+            normalize_soql_line_endings("SELECT\tId\nFROM User"),
+            "SELECT\tId FROM User"
+        );
+    }
+
+    #[test]
+    fn preserves_empty_input() {
+        assert_eq!(normalize_soql_line_endings(""), "");
+    }
 }
