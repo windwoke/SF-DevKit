@@ -35,6 +35,26 @@ Other useful commands:
 | `npm run tauri build` | Full desktop build |
 | `npm test` | Run Vitest unit tests |
 
+### Linux AppImage packaging
+
+The AppImage bundler requires **Tauri CLI 2.11.4 or later**. Earlier versions
+created absolute `.DirIcon` and `.desktop` symlinks that break after packaging
+([upstream fix](https://github.com/tauri-apps/tauri/pull/15596)). Use `npm ci`
+to install the CLI version recorded in `package-lock.json`.
+
+On Linux, build and check the packaged icon and desktop entry with:
+
+```bash
+npm run tauri build -- --bundles appimage -- --locked
+bash scripts/check-appimage.sh src-tauri/target/release/bundle/appimage/*.AppImage
+```
+
+The release workflow builds and checks the Linux x86_64 AppImage before publishing
+it alongside the macOS and Windows assets, and includes it in `latest.json` for
+automatic updates. The workflow can also be run manually to verify builds without
+creating a release. After publishing a fixed AppImage, comment `/retest` on the
+[AppImage catalog PR](https://github.com/AppImage/appimage.github.io/pull/7304).
+
 ## Features
 
 ### Home dashboard

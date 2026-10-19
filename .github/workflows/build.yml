@@ -3,6 +3,7 @@ name: Build and Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -142,10 +143,58 @@ jobs:
             src-tauri/target/release/bundle/
           if-no-files-found: error
 
+  build-linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libwebkit2gtk-4.1-dev libssl-dev \
+            libxdo-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Build AppImage
+        run: npm run tauri build -- --bundles appimage --ci -- --locked
+
+      - name: Verify AppImage icons and desktop entry
+        run: bash scripts/check-appimage.sh src-tauri/target/release/bundle/appimage/*.AppImage
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf-devkit-linux-x86_64
+          path: src-tauri/target/release/bundle/appimage/
+          if-no-files-found: error
+
   # --- Release on tag push ---
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, build-windows]
+    needs: [build, build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -181,6 +230,8 @@ jobs:
             echo "## 安装"
             echo ""
             echo "将 \`.dmg\` 拖入 Applications 文件夹即可安装。"
+            echo "Windows：运行 \`-setup.exe\` 安装程序。"
+            echo "Linux：为 \`.AppImage\` 添加执行权限后运行（\`chmod +x <文件名>.AppImage\`）。"
           } > release_notes.md
           echo "----- release_notes.md -----"
           cat release_notes.md
@@ -194,21 +245,28 @@ jobs:
 
           MAC_UPDATER=$(find sf-devkit-macos-aarch64 -type f -name '*.app.tar.gz' -print -quit)
           WINDOWS_UPDATER=$(find sf-devkit-windows-x86_64 -type f -path '*/nsis/*' -name '*.exe' -print -quit)
+          LINUX_UPDATER=$(find sf-devkit-linux-x86_64 -type f -name '*.AppImage' -print -quit)
           test -n "$MAC_UPDATER" && test -f "$MAC_UPDATER"
           test -n "$WINDOWS_UPDATER" && test -f "$WINDOWS_UPDATER"
+          test -n "$LINUX_UPDATER" && test -f "$LINUX_UPDATER"
           test -f "${MAC_UPDATER}.sig"
           test -f "${WINDOWS_UPDATER}.sig"
+          test -f "${LINUX_UPDATER}.sig"
 
           MAC_ASSET="sf-devkit_${VERSION}_aarch64.app.tar.gz"
           WINDOWS_ASSET="sf-devkit_${VERSION}_x64-setup.exe"
+          LINUX_ASSET="sf-devkit_${VERSION}_amd64.AppImage"
           cp "$MAC_UPDATER" "$RELEASE_DIR/$MAC_ASSET"
           cp "${MAC_UPDATER}.sig" "$RELEASE_DIR/$MAC_ASSET.sig"
           cp "$WINDOWS_UPDATER" "$RELEASE_DIR/$WINDOWS_ASSET"
           cp "${WINDOWS_UPDATER}.sig" "$RELEASE_DIR/$WINDOWS_ASSET.sig"
+          cp "$LINUX_UPDATER" "$RELEASE_DIR/$LINUX_ASSET"
+          cp "${LINUX_UPDATER}.sig" "$RELEASE_DIR/$LINUX_ASSET.sig"
 
           RELEASE_BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
           MAC_SIGNATURE=$(tr -d '\n' < "$RELEASE_DIR/$MAC_ASSET.sig")
           WINDOWS_SIGNATURE=$(tr -d '\n' < "$RELEASE_DIR/$WINDOWS_ASSET.sig")
+          LINUX_SIGNATURE=$(tr -d '\n' < "$RELEASE_DIR/$LINUX_ASSET.sig")
           jq -n \
             --arg version "$VERSION" \
             --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -216,7 +274,9 @@ jobs:
             --arg macSignature "$MAC_SIGNATURE" \
             --arg windowsUrl "$RELEASE_BASE/$WINDOWS_ASSET" \
             --arg windowsSignature "$WINDOWS_SIGNATURE" \
-            '{version: $version, pub_date: $date, notes: "See the GitHub Release for details.", platforms: {"darwin-aarch64": {url: $macUrl, signature: $macSignature}, "windows-x86_64": {url: $windowsUrl, signature: $windowsSignature}}}' \
+            --arg linuxUrl "$RELEASE_BASE/$LINUX_ASSET" \
+            --arg linuxSignature "$LINUX_SIGNATURE" \
+            '{version: $version, pub_date: $date, notes: "See the GitHub Release for details.", platforms: {"darwin-aarch64": {url: $macUrl, signature: $macSignature}, "windows-x86_64": {url: $windowsUrl, signature: $windowsSignature}, "linux-x86_64": {url: $linuxUrl, signature: $linuxSignature}}}' \
             > "$RELEASE_DIR/latest.json"
 
       - name: Create GitHub Release
@@ -229,4 +289,5 @@ jobs:
             release-assets/latest.json
             release-assets/*.app.tar.gz
             release-assets/*-setup.exe
+            release-assets/*.AppImage
           generate_release_notes: true
