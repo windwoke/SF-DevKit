@@ -60,11 +60,12 @@ const COMMON_SF_PATHS: &[&str] = &[
 ];
 
 pub fn find_sf() -> Option<PathBuf> {
-    // 1. Try PATH lookup first (works in dev mode).
-    if let Ok(path) = which::which("sf") {
+    // 1. Search the same recovered PATH passed to child processes.
+    let runtime_path = super::environment::runtime_path();
+    if let Some(path) = super::environment::find_on_path("sf", &runtime_path) {
         return Some(path);
     }
-    if let Ok(path) = which::which("sfdx") {
+    if let Some(path) = super::environment::find_on_path("sfdx", &runtime_path) {
         return Some(path);
     }
     // 2. Fallback: check common install paths (for bundled macOS app).
@@ -80,7 +81,7 @@ pub fn find_sf() -> Option<PathBuf> {
 /// Resolve a CLI binary with PATH lookup + macOS hardcoded fallbacks.
 /// Useful for bundled macOS apps where user shell PATH is not inherited.
 pub fn find_binary(name: &str, macos_fallbacks: &[&str]) -> Option<PathBuf> {
-    if let Ok(path) = which::which(name) {
+    if let Some(path) = super::environment::find_on_path(name, &super::environment::runtime_path()) {
         return Some(path);
     }
     #[cfg(target_os = "macos")]
@@ -139,12 +140,8 @@ pub async fn run_command(args: &[&str], force_json: bool) -> anyhow::Result<CliO
         cmd.arg("--json");
     }
 
-    // Bundle macOS GUI apps lack user shell PATH – inject common Homebrew paths.
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
-    if !current_path.contains("/opt/homebrew") {
-        cmd.env("PATH", format!("{}:{}", extra, current_path));
-    }
+    // Discovery and execution must use the same PATH, including Node managers.
+    cmd.env("PATH", crate::cli::environment::runtime_path());
 
     let mut child = cmd
         .stdout(Stdio::piped())

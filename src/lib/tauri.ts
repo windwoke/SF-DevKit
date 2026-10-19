@@ -130,7 +130,23 @@ export interface TrayLabels {
   tooltip: string;
 }
 
+export interface EnvironmentCheck {
+  id: "node" | "salesforceCli" | "storage";
+  status: "ok" | "warning" | "error";
+  path: string | null;
+  version: string | null;
+  issue: "missing" | "launchFailed" | "timeout" | "unsupportedVersion" | "cliAvailable" | "storageUnavailable" | null;
+  detail: string | null;
+}
+
+export interface EnvironmentReport {
+  checks: EnvironmentCheck[];
+  checked_at: string;
+  search_path: string;
+}
+
 export const tauriApi = {
+  checkEnvironment: () => invoke<EnvironmentReport>("check_environment"),
   syncOrgs: () => invoke<OrgAuth[]>("sync_orgs"),
   listOrgs: () => invoke<OrgAuth[]>("list_orgs"),
   updateOrgAlias: (username: string, alias: string) =>

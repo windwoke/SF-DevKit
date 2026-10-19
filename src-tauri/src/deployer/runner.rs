@@ -127,11 +127,7 @@ impl DeployRunner {
             .kill_on_drop(true);
 
         // Inject PATH for bundled macOS apps
-        let current_path = std::env::var("PATH").unwrap_or_default();
-        let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
-        if !current_path.contains("/opt/homebrew") {
-            cmd.env("PATH", format!("{}:{}", extra, current_path));
-        }
+        cmd.env("PATH", crate::cli::environment::runtime_path());
         // Force Node.js to flush stdout more frequently
         cmd.env("FORCE_COLOR", "0");
 
@@ -343,11 +339,7 @@ impl DeployRunner {
             "--json",
         ]);
 
-        let current_path = std::env::var("PATH").unwrap_or_default();
-        let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
-        if !current_path.contains("/opt/homebrew") {
-            cmd.env("PATH", format!("{}:{}", extra, current_path));
-        }
+        cmd.env("PATH", crate::cli::environment::runtime_path());
 
         cmd.stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -577,6 +569,8 @@ async fn fetch_deploy_report(
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(30),
         Command::new(sf_path)
+            .env("PATH", crate::cli::environment::runtime_path())
+            .kill_on_drop(true)
             .suppress_console()
             .args([
                 "project",

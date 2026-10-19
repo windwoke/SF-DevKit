@@ -363,13 +363,7 @@ async fn open_path_in_ide(path: &str) -> anyhow::Result<()> {
     }
 
     // Inject PATH for bundled macOS apps so child processes can find tools
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let extra_path = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
-    let path_env = if !current_path.contains("/opt/homebrew") {
-        format!("{}:{}", extra_path, current_path)
-    } else {
-        current_path
-    };
+    let path_env = crate::cli::environment::runtime_path();
 
     #[cfg(target_os = "macos")]
     let editor_bins: &[&str] = &["cursor", "code"];
@@ -473,11 +467,7 @@ async fn run_login_command(args: &[&str]) -> anyhow::Result<()> {
     cmd.suppress_console();
     cmd.args(args);
 
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
-    if !current_path.contains("/opt/homebrew") {
-        cmd.env("PATH", format!("{}:{}", extra, current_path));
-    }
+    cmd.env("PATH", crate::cli::environment::runtime_path());
 
     cmd.env("SF_DISABLE_DNS_CHECK", "true");
     cmd.env("SF_DOMAIN_RETRY", "0");
@@ -621,11 +611,7 @@ async fn run_login_with_secret(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
-    if !current_path.contains("/opt/homebrew") {
-        cmd.env("PATH", format!("{}:{}", extra, current_path));
-    }
+    cmd.env("PATH", crate::cli::environment::runtime_path());
 
     cmd.env("SF_DISABLE_DNS_CHECK", "true");
     cmd.env("SF_DOMAIN_RETRY", "0");

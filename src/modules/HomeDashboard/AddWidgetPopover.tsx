@@ -8,6 +8,7 @@ interface Props {
 
 const ORDER: WidgetKind[] = [
   "greeting",
+  "environment",
   "orgStatus",
   "quickActions",
   "recentSoql",
@@ -18,6 +19,7 @@ const ORDER: WidgetKind[] = [
 
 const ICONS: Record<WidgetKind, string> = {
   greeting: "☀️",
+  environment: "⚙️",
   orgStatus: "🏢",
   quickActions: "⚡",
   recentSoql: "🔍",

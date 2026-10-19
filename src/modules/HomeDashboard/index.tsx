@@ -13,9 +13,11 @@ import { AddWidgetPopover } from "./AddWidgetPopover";
 import { WidgetFrame } from "./WidgetFrame";
 import { GreetingCard } from "./GreetingCard";
 import { TodoCard } from "./TodoCard";
+import { EnvironmentCard } from "./EnvironmentCard";
 
 const WIDGET_RENDERERS: Record<WidgetKind, () => JSX.Element> = {
   greeting: GreetingCard,
+  environment: EnvironmentCard,
   orgStatus: OrgStatusCard,
   quickActions: QuickActionsPanel,
   recentSoql: RecentSoqlCard,
@@ -161,7 +163,7 @@ export function HomeDashboard() {
           isBounded={false}
           compactType="vertical"
           preventCollision={false}
-          draggableCancel=".widget-frame__remove, .home-card__header-actions, .org-status-actions, .quick-action__manage-tools, .news-source-filters, .todo-card__composer, .todo-card__list"
+          draggableCancel=".widget-frame__remove, .home-card__header-actions, .environment-card__body, .org-status-actions, .quick-action__manage-tools, .news-source-filters, .todo-card__composer, .todo-card__list"
           onLayoutChange={onLayoutChange}
         >
           {widgets.map((w) => {

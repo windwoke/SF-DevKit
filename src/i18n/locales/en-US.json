@@ -29,6 +29,38 @@
     "en-US": "English"
   },
   "dashboard": {
+    "environment": {
+      "title": "Environment Check",
+      "checking": "Checking…",
+      "recheck": "Recheck",
+      "ready": "Prerequisites are ready",
+      "readyWithWarning": "CLI is ready · review Node setup",
+      "needsAttention_one": "{{count}} prerequisite needs attention",
+      "needsAttention_other": "{{count}} prerequisites need attention",
+      "checkFailed": "Environment check failed. Try again.",
+      "details": "Check details · tool search paths",
+      "checkedAt": "Last checked at {{time}}",
+      "installCli": "Get Salesforce CLI ↗",
+      "installNode": "Get Node.js ↗",
+      "items": {
+        "node": "Node.js",
+        "salesforceCli": "Salesforce CLI",
+        "storage": "Local data directory"
+      },
+      "status": {
+        "ok": "Ready",
+        "warning": "Review",
+        "error": "Unavailable"
+      },
+      "issues": {
+        "missing": "{{tool}} was not found. Install it and check again.",
+        "launchFailed": "{{tool}} was found but could not run. Check its installation and runtime dependencies, then retry.",
+        "timeout": "The check timed out. Check your shell startup scripts and tool installation, then retry.",
+        "unsupportedVersion": "Node.js 20 or later is required. Select a supported version and check again.",
+        "cliAvailable": "Salesforce CLI can start, but standalone Node.js is unavailable or below version 20. Review your Node installation.",
+        "storageUnavailable": "The local data directory could not be written to, or the database could not be accessed. Check disk space and directory permissions."
+      }
+    },
     "greeting": {
       "morning": "Good morning",
       "noon": "Good afternoon",
@@ -112,6 +144,7 @@
         "sources": "News Sources"
       },
       "widgets": {
+        "environment": "Environment Check",
         "greeting": "Daily Greeting",
         "orgStatus": "Current Org",
         "quickActions": "Quick Actions",

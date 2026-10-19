@@ -109,11 +109,7 @@ impl RetrieveRunner {
             .kill_on_drop(true);
 
         // Inject PATH for bundled macOS apps
-        let current_path = std::env::var("PATH").unwrap_or_default();
-        let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
-        if !current_path.contains("/opt/homebrew") {
-            cmd.env("PATH", format!("{}:{}", extra, current_path));
-        }
+        cmd.env("PATH", crate::cli::environment::runtime_path());
 
         let mut child = cmd.spawn()?;
         if let Some(pid) = child.id() {

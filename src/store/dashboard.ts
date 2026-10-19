@@ -32,6 +32,7 @@ export interface TodoItem {
 /** Logical widget kinds — each maps to a renderer. */
 export type WidgetKind =
   | "greeting"
+  | "environment"
   | "orgStatus"
   | "recentSoql"
   | "recentActivity"
@@ -147,12 +148,13 @@ const DEFAULT_WIDGETS: WidgetInstance[] = [
     layout: { x: 4, y: 2, w: 4, h: 3 },
   },
   { id: "w-todo", kind: "todo", layout: { x: 0, y: 5, w: 4, h: 5 } },
+  { id: "w-environment", kind: "environment", layout: { x: 4, y: 5, w: 4, h: 5 } },
+  { id: "w-recentsql", kind: "recentSoql", layout: { x: 8, y: 7, w: 4, h: 3 } },
   {
     id: "w-recentactivity",
     kind: "recentActivity",
-    layout: { x: 4, y: 5, w: 4, h: 5 },
+    layout: { x: 4, y: 10, w: 4, h: 5 },
   },
-  { id: "w-recentsql", kind: "recentSoql", layout: { x: 8, y: 7, w: 4, h: 3 } },
 ];
 
 const ADDED_NEWS_SOURCES_V5: NewsSource[] = [
@@ -249,7 +251,7 @@ function findFreeSlot(
   return { x: 0, y: maxY, w, h };
 }
 
-function migrateWidgets(
+export function migrateWidgets(
   widgets: WidgetInstance[] | undefined,
   persistedVersion: number,
 ): WidgetInstance[] {
@@ -281,6 +283,37 @@ function migrateWidgets(
         layout: findFreeSlot(migrated, 4, 4),
       },
     ];
+  }
+  if (persistedVersion < 7 && !migrated.some((widget) => widget.kind === "environment")) {
+    migrated = [...migrated, {
+      id: "w-environment",
+      kind: "environment",
+      layout: findFreeSlot(migrated, 4, 5),
+    }];
+  }
+  if (Array.isArray(widgets) && persistedVersion < 8) {
+    const environment = migrated.find((widget) => widget.kind === "environment");
+    const activity = migrated.find((widget) => widget.kind === "recentActivity");
+    if (environment && activity) {
+      const environmentLayout = { ...activity.layout };
+      const others = migrated.filter((widget) => widget.kind !== "recentActivity");
+      const bottom = others.reduce((max, widget) => {
+        const layout = widget.id === environment.id ? environmentLayout : widget.layout;
+        return Math.max(max, layout.y + layout.h);
+      }, 0);
+      let nextY = bottom;
+      migrated = migrated.map((widget) => {
+        if (widget.id === environment.id) {
+          return { ...widget, layout: environmentLayout };
+        }
+        if (widget.kind === "recentActivity") {
+          const layout = { ...widget.layout, y: nextY };
+          nextY += layout.h;
+          return { ...widget, layout };
+        }
+        return widget;
+      });
+    }
   }
   return migrated;
 }
@@ -324,6 +357,7 @@ export const useDashboardStore = create<DashboardState>()(
       addWidget: (kind, layout) => {
         const fallback: Record<WidgetKind, WidgetInstance["layout"]> = {
           greeting: { w: 8, h: 2, x: 0, y: 0 },
+          environment: { w: 4, h: 5, x: 0, y: 0 },
           orgStatus: { w: 4, h: 3, x: 0, y: 0 },
           quickActions: { w: 4, h: 3, x: 0, y: 0 },
           recentSoql: { w: 4, h: 3, x: 0, y: 0 },
@@ -389,7 +423,7 @@ export const useDashboardStore = create<DashboardState>()(
     }),
     {
       name: "dashboard-store",
-      version: 6,
+      version: 8,
       partialize: (state) => ({
         quickActions: state.quickActions,
         widgets: state.widgets,

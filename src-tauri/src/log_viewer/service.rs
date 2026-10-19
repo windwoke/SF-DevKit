@@ -172,11 +172,7 @@ pub async fn open_in_vscode(file_path: &str) -> anyhow::Result<()> {
     cmd.arg(file_path);
 
     // Inject PATH for bundled macOS apps so child processes can find related tools
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
-    if !current_path.contains("/opt/homebrew") {
-        cmd.env("PATH", format!("{}:{}", extra, current_path));
-    }
+    cmd.env("PATH", crate::cli::environment::runtime_path());
 
     let status = cmd.status().await?;
     if !status.success() {

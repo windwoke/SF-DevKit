@@ -94,6 +94,7 @@ pub fn run() {
             commands::deployer::open_diff_tool,
             commands::deployer::search_apex_test_classes,
             commands::deployer::scan_local_test_classes,
+            commands::environment::check_environment,
             commands::dashboard::open_external,
             commands::dashboard::fetch_feed,
             commands::dashboard::pick_app_path,

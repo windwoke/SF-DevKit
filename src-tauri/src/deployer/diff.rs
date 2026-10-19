@@ -63,11 +63,7 @@ pub async fn retrieve_for_diff(
     // Run from temp workspace so sf CLI finds sfdx-project.json
     cmd.current_dir(&workspace);
 
-    let current_path = std::env::var("PATH").unwrap_or_default();
-    let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
-    if !current_path.contains("/opt/homebrew") {
-        cmd.env("PATH", format!("{}:{}", extra, current_path));
-    }
+    cmd.env("PATH", crate::cli::environment::runtime_path());
 
     cmd.stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -167,13 +163,7 @@ const BC4_APP_FALLBACK: &str = "/Applications/Beyond Compare.app/Contents/MacOS/
 pub async fn open_diff_tool(command: &str) -> anyhow::Result<()> {
     let cmd = command.to_string();
     tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
-        let path_env = std::env::var("PATH").unwrap_or_default();
-        let extra = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin";
-        let full_path = if path_env.contains("/opt/homebrew") {
-            path_env
-        } else {
-            format!("{}:{}", extra, path_env)
-        };
+        let full_path = crate::cli::environment::runtime_path();
 
         let parts = parse_command(&cmd);
         if parts.is_empty() {
