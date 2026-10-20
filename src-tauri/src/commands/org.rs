@@ -1,6 +1,6 @@
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
-use crate::auth::manager;
+use crate::auth::{certificates, login, manager, status};
 use crate::db::models::OrgAuth;
 use crate::db::DbState;
 
@@ -20,7 +20,20 @@ pub async fn sync_orgs(state: State<'_, DbState>, app: AppHandle) -> Result<Vec<
 
 #[tauri::command]
 pub async fn list_orgs(state: State<'_, DbState>) -> Result<Vec<OrgAuth>, String> {
+    manager::refresh_auth_methods(&state.0)
+        .await
+        .map_err(|e| e.to_string())?;
     manager::list_orgs(&state.0)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn check_org_login_status(
+    state: State<'_, DbState>,
+    username: String,
+) -> Result<OrgAuth, String> {
+    status::check(&state.0, &username)
         .await
         .map_err(|e| e.to_string())
 }
@@ -49,23 +62,11 @@ pub async fn reauthorize_org(
     state: State<'_, DbState>,
     app: AppHandle,
     username: String,
-    alias: Option<String>,
-    instance_url: String,
-    consumer_key: Option<String>,
-    consumer_secret: Option<String>,
-    port: Option<u16>,
+    request: login::LoginRequest,
 ) -> Result<(), String> {
-    manager::reauthorize_org(
-        &state.0,
-        &username,
-        alias,
-        &instance_url,
-        consumer_key,
-        consumer_secret,
-        port,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    login::login(&state.0, request, Some(&username))
+        .await
+        .map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
     {
         if let Err(e) = crate::tray::rebuild_menu(&app).await {
@@ -129,34 +130,134 @@ pub async fn update_tray_labels(
 /// frontend path quiet while macOS handles the real menu update above.
 #[cfg(not(target_os = "macos"))]
 #[tauri::command]
-pub async fn update_tray_labels(
-    _app: AppHandle,
-    _labels: serde_json::Value,
-) -> Result<(), String> {
+pub async fn update_tray_labels(_app: AppHandle, _labels: serde_json::Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Browser OAuth only; returns immediately after CLI finishes. Call `sync_orgs` next to refresh DB.
+/// Call `sync_orgs` after either login method to refresh DB and tray state.
 #[tauri::command]
 pub async fn login_org(
-    alias: Option<String>,
-    login_domain: Option<String>,
-    instance_url: Option<String>,
-    consumer_key: Option<String>,
-    consumer_secret: Option<String>,
-    port: Option<u16>,
+    state: State<'_, DbState>,
+    request: login::LoginRequest,
 ) -> Result<(), String> {
-    manager::login_org_web(
-        alias,
-        login_domain.as_deref().unwrap_or("production"),
-        instance_url.as_deref(),
-        consumer_key.as_deref(),
-        consumer_secret.as_deref(),
-        port,
-        true,
+    login::login(&state.0, request, None)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_org_login_profile(
+    state: State<'_, DbState>,
+    username: String,
+) -> Result<Option<login::LoginProfile>, String> {
+    login::get_profile(&state.0, &username)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn pick_jwt_key_file() -> Option<String> {
+    rfd::FileDialog::new()
+        .add_filter("*.key / *.pem", &["key", "pem"])
+        .add_filter("*", &["*"])
+        .pick_file()
+        .map(|path| path.to_string_lossy().into_owned())
+}
+
+fn jwt_storage(app: &AppHandle, directory: Option<String>) -> Result<std::path::PathBuf, String> {
+    if let Some(directory) = directory.filter(|directory| !directory.trim().is_empty()) {
+        let path = std::path::PathBuf::from(directory);
+        if !path.is_absolute() || !path.is_dir() {
+            return Err("JWT_CERT_STORAGE_FAILED".into());
+        }
+        Ok(path)
+    } else {
+        app.path()
+            .app_data_dir()
+            .map(|path| path.join("jwt"))
+            .map_err(|_| "JWT_CERT_STORAGE_FAILED".into())
+    }
+}
+
+#[tauri::command]
+pub async fn get_jwt_certificate_tools(
+    app: AppHandle,
+) -> Result<certificates::CertificateTools, String> {
+    let _ =
+        tauri::async_runtime::spawn_blocking(crate::cli::environment::refresh_runtime_path).await;
+    Ok(certificates::tools(&jwt_storage(&app, None)?).await)
+}
+
+#[tauri::command]
+pub async fn generate_jwt_certificate(
+    app: AppHandle,
+    common_name: String,
+    days: u32,
+    directory: Option<String>,
+) -> Result<certificates::KeyMaterial, String> {
+    certificates::generate(&jwt_storage(&app, directory)?, &common_name, days)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn pick_jwt_keystore() -> Option<String> {
+    rfd::FileDialog::new()
+        .add_filter("*.jks / *.p12 / *.pfx", &["jks", "p12", "pfx"])
+        .pick_file()
+        .map(|path| path.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub async fn list_jwt_keystore_entries(
+    path: String,
+    password: String,
+) -> Result<Vec<String>, String> {
+    certificates::list_entries(&path, &password)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn import_jwt_keystore(
+    app: AppHandle,
+    path: String,
+    password: String,
+    alias: String,
+    key_password: Option<String>,
+    directory: Option<String>,
+) -> Result<certificates::KeyMaterial, String> {
+    certificates::import(
+        &jwt_storage(&app, directory)?,
+        &path,
+        &password,
+        &alias,
+        key_password.as_deref(),
     )
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn export_jwt_public_certificate(path: String) -> Result<Option<String>, String> {
+    let contents = certificates::public_certificate(std::path::Path::new(&path))
+        .await
+        .map_err(|error| error.to_string())?;
+    // File dialogs run outside the async executor, just like other native pickers.
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(destination) = rfd::FileDialog::new()
+            .set_file_name("server.crt")
+            .add_filter("*.crt", &["crt"])
+            .save_file()
+        else {
+            return Ok(None);
+        };
+        certificates::save_public_certificate(&destination, &contents)
+            .map_err(|error| error.to_string())?;
+        Ok(Some(destination.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|_| "JWT_CERT_EXPORT_FAILED".to_string())?
 }
 
 #[tauri::command]

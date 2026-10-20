@@ -5,6 +5,7 @@ export interface OrgAuth {
   alias: string | null;
   instance_url: string;
   org_type: string;
+  auth_method: "web" | "jwt" | "token" | "unknown";
   is_default: boolean;
   expires_at: string | null;
   connection_status: string;
@@ -18,12 +19,14 @@ interface OrgState {
   orgs: OrgAuth[];
   setCurrentOrg: (orgId: string | null) => void;
   setOrgs: (orgs: OrgAuth[]) => void;
+  updateOrg: (org: OrgAuth) => void;
 }
 
 export const useOrgStore = create<OrgState>((set) => ({
   currentOrg: null,
   orgs: [],
   setCurrentOrg: (orgId) => set({ currentOrg: orgId }),
+  updateOrg: (org) => set((state) => ({ orgs: state.orgs.map((item) => item.id === org.id ? org : item) })),
   setOrgs: (orgs) =>
     set({
       orgs,

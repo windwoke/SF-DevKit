@@ -70,6 +70,7 @@ creating a release. After publishing a fixed AppImage, comment `/retest` on the
 
 - Sync orgs from the CLI, set a default org, log in / log out, and open an org in the browser.
 - Org context is shared with the rest of the app (e.g. SOQL execution and schema-backed completion).
+- JWT sign-in includes separate guides for generating a certificate locally or importing a Salesforce JKS / P12 keystore. Generation needs OpenSSL; import also needs JDK keytool. See the [English guide](docs/jwt-authorization.en.md) or [中文操作指引](docs/jwt-authorization.md).
 
 ### SOQL editor
 

@@ -7,6 +7,7 @@ pub struct OrgAuth {
     pub alias: Option<String>,
     pub instance_url: String,
     pub org_type: String,
+    pub auth_method: String,
     pub is_default: i64,
     pub expires_at: Option<String>,
     pub connection_status: String,

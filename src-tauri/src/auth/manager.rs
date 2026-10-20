@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,7 @@ use crate::db::models::OrgAuth;
 
 static ACTIVE_LOGIN: OnceLock<Mutex<Option<u32>>> = OnceLock::new();
 
-fn active_login() -> &'static Mutex<Option<u32>> {
+pub(super) fn active_login() -> &'static Mutex<Option<u32>> {
     ACTIVE_LOGIN.get_or_init(|| Mutex::new(None))
 }
 
@@ -49,6 +50,10 @@ pub async fn sync_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
             .map(|_| org.username.clone())
     });
 
+    // Read CLI metadata rather than infer authorization from a remembered form.
+    // This also detects accounts authorized outside this app. Never expose tokens.
+    let methods = cli_auth_methods().await;
+
     let mut tx = pool.begin().await?;
     for org in all_orgs {
         let org_type = if org.expiration_date.is_some() {
@@ -68,8 +73,8 @@ pub async fn sync_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
 
         sqlx::query(
             r#"
-            INSERT INTO org_auth (id, alias, instance_url, org_type, is_default, expires_at, connection_status, last_used)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))
+            INSERT INTO org_auth (id, alias, instance_url, org_type, is_default, expires_at, connection_status, last_used, auth_method)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'), COALESCE(?8, 'unknown'))
             ON CONFLICT(id) DO UPDATE SET
               alias = excluded.alias,
               instance_url = excluded.instance_url,
@@ -77,6 +82,7 @@ pub async fn sync_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
               is_default = excluded.is_default,
               expires_at = excluded.expires_at,
               connection_status = excluded.connection_status,
+              auth_method = COALESCE(?8, org_auth.auth_method),
               last_used = datetime('now')
             "#,
         )
@@ -87,6 +93,7 @@ pub async fn sync_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
         .bind(if is_default { 1_i64 } else { 0_i64 })
         .bind(&org.expiration_date)
         .bind(org.connected_status.as_deref().unwrap_or("Unknown"))
+        .bind(methods.as_ref().map(|methods| methods.get(&org.username).map(String::as_str).unwrap_or("unknown")))
         .execute(&mut *tx)
         .await?;
     }
@@ -101,7 +108,7 @@ pub async fn sync_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
 pub async fn list_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
     let rows = sqlx::query_as::<_, OrgAuth>(
         r#"
-        SELECT id, alias, instance_url, org_type, is_default, expires_at, connection_status, last_used, linked_project_path
+        SELECT id, alias, instance_url, org_type, auth_method, is_default, expires_at, connection_status, last_used, linked_project_path
         FROM org_auth
         ORDER BY
           is_default DESC,
@@ -114,9 +121,65 @@ pub async fn list_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
     Ok(rows)
 }
 
+async fn cli_auth_methods() -> Option<HashMap<String, String>> {
+    match run_command(&["org", "list", "auth"], true).await {
+        Ok(output) if output.success => serde_json::from_str::<serde_json::Value>(&output.stdout)
+            .ok()
+            .and_then(|json| parse_auth_methods(&json)),
+        _ => None,
+    }
+}
+
+/// This CLI command only reads local credentials; opening the list does not
+/// need a network connection to identify how each account was authorized.
+pub async fn refresh_auth_methods(pool: &SqlitePool) -> anyhow::Result<()> {
+    let Some(methods) = cli_auth_methods().await else {
+        return Ok(());
+    };
+    let mut tx = pool.begin().await?;
+    sqlx::query("UPDATE org_auth SET auth_method = 'unknown'")
+        .execute(&mut *tx)
+        .await?;
+    for (username, method) in methods {
+        sqlx::query("UPDATE org_auth SET auth_method = ?1 WHERE id = ?2")
+            .bind(method)
+            .bind(username)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+fn parse_auth_methods(json: &serde_json::Value) -> Option<HashMap<String, String>> {
+    if json["status"].as_i64() != Some(0) {
+        return None;
+    }
+    Some(
+        json["result"]
+            .as_array()?
+            .iter()
+            .filter_map(|auth| {
+                let username = auth["username"].as_str()?;
+                let method = match auth["oauthMethod"].as_str() {
+                    Some("jwt") => "jwt",
+                    Some("web") => "web",
+                    Some("token") => "token",
+                    _ => "unknown",
+                };
+                Some((username.to_owned(), method.to_owned()))
+            })
+            .collect(),
+    )
+}
+
 /// Update the CLI's global alias mapping, then mirror the new value in SQLite
 /// so the management view updates immediately without a full refresh.
-pub async fn update_org_alias(pool: &SqlitePool, username: &str, alias: &str) -> anyhow::Result<()> {
+pub async fn update_org_alias(
+    pool: &SqlitePool,
+    username: &str,
+    alias: &str,
+) -> anyhow::Result<()> {
     let alias = alias.trim();
     if alias.is_empty() {
         anyhow::bail!("Org 别名不能为空");
@@ -125,14 +188,13 @@ pub async fn update_org_alias(pool: &SqlitePool, username: &str, alias: &str) ->
         anyhow::bail!("Org 别名不能包含 '='");
     }
 
-    let existing_alias = sqlx::query_scalar::<_, Option<String>>(
-        "SELECT alias FROM org_auth WHERE id = ?1",
-    )
-    .bind(username)
-    .fetch_optional(pool)
-    .await?
-    .flatten()
-    .filter(|value| value != alias);
+    let existing_alias =
+        sqlx::query_scalar::<_, Option<String>>("SELECT alias FROM org_auth WHERE id = ?1")
+            .bind(username)
+            .fetch_optional(pool)
+            .await?
+            .flatten()
+            .filter(|value| value != alias);
 
     let assignment = format!("{alias}={username}");
     let output = run_command(&["alias", "set", &assignment], false).await?;
@@ -173,6 +235,7 @@ pub async fn logout_org(pool: &SqlitePool, username: &str) -> anyhow::Result<()>
         .bind(username)
         .execute(pool)
         .await?;
+    super::login::clear_profile(pool, username).await?;
     Ok(())
 }
 
@@ -185,7 +248,7 @@ pub async fn login_org_web(
     consumer_secret: Option<&str>,
     port: Option<u16>,
     set_default: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
     let resolved_url = instance_url
         .map(str::trim)
         .filter(|url| !url.is_empty())
@@ -258,40 +321,9 @@ pub async fn login_org_web(
     result
 }
 
-/// Reauthorize one existing org without changing the user's default org.
-pub async fn reauthorize_org(
-    pool: &SqlitePool,
-    username: &str,
-    alias: Option<String>,
-    instance_url: &str,
-    consumer_key: Option<String>,
-    consumer_secret: Option<String>,
-    port: Option<u16>,
-) -> anyhow::Result<()> {
-    let is_alibaba = instance_url.contains(".sfcrmproducts.cn");
-    login_org_web(
-        alias.clone(),
-        if is_alibaba { "alibaba" } else { "production" },
-        Some(instance_url),
-        consumer_key.as_deref(),
-        consumer_secret.as_deref(),
-        port,
-        false,
-    )
-    .await?;
-
-    sqlx::query(
-        "UPDATE org_auth SET alias = COALESCE(?1, alias), connection_status = 'Connected', last_used = datetime('now') WHERE id = ?2",
-    )
-    .bind(alias)
-    .bind(username)
-    .execute(pool)
-    .await?;
-    Ok(())
-}
-
 /// Cancel an in-progress login by killing the sf CLI process.
 pub async fn cancel_login() -> anyhow::Result<()> {
+    super::login::request_cancel();
     let pid = {
         let mut guard = active_login()
             .lock()
@@ -447,7 +479,7 @@ fn login_instance_url(login_domain: &str) -> &'static str {
 /// otherwise keeps the CLI alive ~30–60s after the browser has already
 /// authorized. The instance URL is already known from the token response, so
 /// the check adds nothing here.
-async fn run_login_command(args: &[&str]) -> anyhow::Result<()> {
+async fn run_login_command(args: &[&str]) -> anyhow::Result<String> {
     use std::process::Stdio;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
@@ -542,7 +574,7 @@ async fn run_login_command(args: &[&str]) -> anyhow::Result<()> {
             if !verify_login_success(&combined_output) {
                 anyhow::bail!("LOGIN_NOT_COMPLETED");
             }
-            Ok(())
+            Ok(combined_output)
         }
         Ok(Err(e)) => {
             let _ = collect_handle.await;
@@ -573,7 +605,7 @@ async fn run_login_with_secret(
     sf_args: &[&str],
     secret: &str,
     port: Option<u16>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
     use std::process::Stdio;
     use tokio::io::{AsyncWriteExt, BufWriter};
     use tokio::process::Command;
@@ -701,7 +733,7 @@ async fn run_login_with_secret(
             if !verify_login_success(&combined_output) {
                 anyhow::bail!("LOGIN_NOT_COMPLETED");
             }
-            Ok(())
+            Ok(combined_output)
         }
         Ok(Err(e)) => {
             anyhow::bail!("登录进程异常：{}", e);
@@ -822,12 +854,12 @@ fn extract_cli_error(output: &str) -> String {
     tail.join("\n")
 }
 
-async fn kill_process(pid: u32) -> anyhow::Result<()> {
+pub(super) async fn kill_process(pid: u32) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
         let status = tokio::process::Command::new("taskkill")
             .suppress_console()
-            .args(["/PID", &pid.to_string(), "/F"])
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
             .status()
             .await?;
         if !status.success() {
@@ -895,6 +927,26 @@ async fn apply_default_org(pool: &SqlitePool, default_org_ref: &str) -> anyhow::
 #[cfg(test)]
 mod tests {
     use super::contains_client_secret_prompt;
+
+    #[test]
+    fn cli_authorization_metadata_distinguishes_methods_without_exposing_secrets() {
+        let methods = super::parse_auth_methods(&serde_json::json!({"status":0,"result":[
+            {"username":"jwt@example.com","oauthMethod":"jwt","accessToken":"must-not-return"},
+            {"username":"web@example.com","oauthMethod":"web"},
+            {"username":"token@example.com","oauthMethod":"token"},
+            {"username":"other@example.com","oauthMethod":"future"}
+        ]}))
+        .unwrap();
+        assert_eq!(methods["jwt@example.com"], "jwt");
+        assert_eq!(methods["web@example.com"], "web");
+        assert_eq!(methods["token@example.com"], "token");
+        assert_eq!(methods["other@example.com"], "unknown");
+        assert!(!format!("{methods:?}").contains("must-not-return"));
+        assert!(
+            super::parse_auth_methods(&serde_json::json!({"status":1,"message":"failure"}))
+                .is_none()
+        );
+    }
 
     #[test]
     fn detects_salesforce_client_secret_prompt_with_terminal_codes() {

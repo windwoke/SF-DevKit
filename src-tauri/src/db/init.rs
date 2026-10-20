@@ -7,6 +7,23 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager};
 
+pub(crate) async fn migrate_org_auth_method(pool: &SqlitePool) -> anyhow::Result<()> {
+    if let Err(error) =
+        sqlx::query("ALTER TABLE org_auth ADD COLUMN auth_method TEXT NOT NULL DEFAULT 'unknown'")
+            .execute(pool)
+            .await
+    {
+        if !error.to_string().contains("duplicate column") {
+            return Err(error.into());
+        }
+    }
+    // Preserve JWT logins created before the method column existed. The next
+    // CLI sync resolves all other existing accounts without guessing web auth.
+    sqlx::query("UPDATE org_auth SET auth_method = 'jwt' WHERE auth_method = 'unknown' AND id IN (SELECT username FROM org_jwt_profiles)")
+        .execute(pool).await?;
+    Ok(())
+}
+
 pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
     let app_dir: PathBuf = app
         .path()
@@ -46,6 +63,11 @@ pub fn init_db(app: &AppHandle) -> anyhow::Result<SqlitePool> {
         )
         .execute(&pool)
         .await?;
+
+        sqlx::query(crate::auth::login::PROFILE_DDL)
+            .execute(&pool)
+            .await?;
+        migrate_org_auth_method(&pool).await?;
 
         sqlx::query(
             r#"

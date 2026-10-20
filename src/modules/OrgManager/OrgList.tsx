@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { orgTypeLabel } from "../../lib/orgTypeLabel";
 import { isAlibabaInstance } from "../../lib/isAlibabaInstance";
-import { tauriApi, type LoginDomain } from "../../lib/tauri";
+import { tauriApi } from "../../lib/tauri";
+import { OrgLoginDialog } from "./OrgLoginDialog";
+import { JwtKeyWizard } from "./JwtKeyWizard";
+import type { JwtKeyRoute } from "./JwtSetupGuide";
+import { authMethodKey, loginErrorKey, loginFormValid, loginRequest, newLoginForm, reauthorizeForm } from "./loginForm";
 import { useOrgStore, type OrgAuth } from "../../store/org";
 
 function IconFolder() {
@@ -56,6 +60,15 @@ function IconReauthorize() {
   );
 }
 
+function IconCheckStatus() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="10" cy="10" r="6.5" stroke="currentColor" strokeWidth="1.7" />
+      <path d="m7 10 2 2 4-4m2 7 5 5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 type ConnectionKind = "connected" | "expired" | "unreachable" | "unknown";
 
 function getConnectionKind(org: { connection_status: string; expires_at: string | null; org_type: string }): ConnectionKind {
@@ -74,11 +87,13 @@ function getConnectionKind(org: { connection_status: string; expires_at: string 
 export function OrgList() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
-  const { setCurrentOrg, setOrgs } = useOrgStore();
+  const { setCurrentOrg, setOrgs, updateOrg } = useOrgStore();
   const [keyword, setKeyword] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [loginAlias, setLoginAlias] = useState("");
-  const [loginDomain, setLoginDomain] = useState<LoginDomain>("production");
+  const [keyWizardRoute, setKeyWizardRoute] = useState<JwtKeyRoute | null>(null);
+  const [loginForm, setLoginForm] = useState(newLoginForm);
+  const [loadingLoginProfile, setLoadingLoginProfile] = useState(false);
+  const loginCancelled = useRef(false);
   const [notice, setNotice] = useState<{
     text: string;
     autoHide: boolean;
@@ -87,10 +102,6 @@ export function OrgList() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginCancelling, setLoginCancelling] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [loginInstanceUrl, setLoginInstanceUrl] = useState("");
-  const [loginConsumerKey, setLoginConsumerKey] = useState("");
-  const [loginConsumerSecret, setLoginConsumerSecret] = useState("");
-  const [loginPort, setLoginPort] = useState("1717");
   const [editingAliasFor, setEditingAliasFor] = useState<string | null>(null);
   const [aliasDraft, setAliasDraft] = useState("");
   const [reauthorizingOrg, setReauthorizingOrg] = useState<OrgAuth | null>(null);
@@ -118,6 +129,24 @@ export function OrgList() {
     onSuccess: (_, username) => {
       setCurrentOrg(username);
       queryClient.invalidateQueries({ queryKey: ["orgs"] });
+    },
+  });
+
+  const checkStatusMutation = useMutation({
+    mutationFn: (username: string) => tauriApi.checkOrgLoginStatus(username),
+    onSuccess: (org) => {
+      queryClient.setQueryData<OrgAuth[]>(["orgs"], (orgs) => orgs?.map((item) => item.id === org.id ? org : item));
+      updateOrg(org);
+      const status = getConnectionKind(org);
+      setNotice({
+        text: i18n.t(`orgManager.notice.statusCheck.${status}`, { name: org.alias ?? org.id }),
+        autoHide: true,
+        variant: status === "connected" ? "success" : "error",
+      });
+    },
+    onError: (error) => {
+      const code = error instanceof Error ? error.message : String(error);
+      setNotice({ text: i18n.t(code === "ORG_CHECK_CLI_MISSING" ? "orgManager.loginErrors.cliMissing" : "orgManager.notice.statusCheckFailed"), autoHide: true, variant: "error" });
     },
   });
 
@@ -173,70 +202,98 @@ export function OrgList() {
     },
   });
 
-  const handleLoginConfirm = async () => {
+  const loginMessage = (error: unknown) => {
+    const raw = error instanceof Error ? error.message : String(error);
+    const key = loginErrorKey(raw);
+    return key ? i18n.t(key) : raw;
+  };
+
+  useEffect(() => {
+    if (!showLoginModal || !reauthorizingOrg) return;
+    let active = true;
+    setLoadingLoginProfile(true);
+    tauriApi.getOrgLoginProfile(reauthorizingOrg.id)
+      .then((profile) => {
+        if (active) {
+          setLoginForm(reauthorizeForm(reauthorizingOrg, profile));
+        }
+      })
+      .catch((error) => { if (active) setLoginError(loginMessage(error)); })
+      .finally(() => { if (active) setLoadingLoginProfile(false); });
+    return () => { active = false; };
+  }, [showLoginModal, reauthorizingOrg]);
+
+  const closeLogin = () => {
+    setKeyWizardRoute(null);
+    setShowLoginModal(false);
+    setReauthorizingOrg(null);
+    setLoginForm(newLoginForm());
     setLoginError(null);
-    setLoginBusy(true);
-    let browserAuthDone = false;
-    try {
-      if (reauthorizingOrg) {
-        await tauriApi.reauthorizeOrg({
-          username: reauthorizingOrg.id,
-          alias: loginAlias,
-          instanceUrl: loginInstanceUrl,
-          consumerKey: loginDomain === "alibaba" ? loginConsumerKey : undefined,
-          consumerSecret: loginDomain === "alibaba" ? loginConsumerSecret : undefined,
-          port: loginDomain === "alibaba" && loginPort.trim() ? Number(loginPort) : undefined,
-        });
-        const orgs = await tauriApi.listOrgs();
-        setOrgs(orgs);
-        queryClient.setQueryData(["orgs"], orgs);
-        setShowLoginModal(false);
-        setReauthorizingOrg(null);
-        setNotice({ text: i18n.t("orgManager.notice.reauthorizeDone"), autoHide: true, variant: "success" });
+    setLoadingLoginProfile(false);
+  };
+
+  const handleLoginCancel = async () => {
+    if (loginBusy) {
+      loginCancelled.current = true;
+      setLoginCancelling(true);
+      try {
+        await tauriApi.cancelLogin();
+      } catch (error) {
+        loginCancelled.current = false;
+        setLoginError(loginMessage(error));
+        setLoginCancelling(false);
         return;
       }
-      await tauriApi.loginOrg({
-        alias: loginAlias,
-        loginDomain,
-        instanceUrl: loginDomain === "alibaba" ? loginInstanceUrl : undefined,
-        consumerKey: loginDomain === "alibaba" ? loginConsumerKey : undefined,
-        consumerSecret: loginDomain === "alibaba" ? loginConsumerSecret : undefined,
-        port: loginDomain === "alibaba" && loginPort.trim() ? Number(loginPort) : undefined,
-      });
-      setShowLoginModal(false);
-      setLoginAlias("");
-      setLoginDomain("production");
-      setLoginInstanceUrl("");
-      setLoginConsumerKey("");
-      setLoginConsumerSecret("");
-      setLoginPort("1717");
-      browserAuthDone = true;
-      setNotice({ text: i18n.t("orgManager.notice.browserAuthSyncing"), autoHide: false, variant: "success" });
+      setLoginCancelling(false);
+    }
+    closeLogin();
+  };
+
+  const handlePickJwtKey = async () => {
+    try {
+      const keyFile = await tauriApi.pickJwtKeyFile();
+      if (keyFile) setLoginForm((form) => ({ ...form, keyFile }));
+    } catch (error) {
+      setLoginError(loginMessage(error));
+    }
+  };
+
+  const handleLoginConfirm = async () => {
+    if (loginBusy || loadingLoginProfile || !loginFormValid(loginForm)) return;
+    setLoginError(null);
+    setLoginBusy(true);
+    loginCancelled.current = false;
+    let authDone = false;
+    const reauthorizing = Boolean(reauthorizingOrg);
+    try {
+      const request = loginRequest(loginForm, reauthorizing);
+      if (reauthorizingOrg) {
+        await tauriApi.reauthorizeOrg(reauthorizingOrg.id, request);
+      } else {
+        await tauriApi.loginOrg(request);
+      }
+      authDone = true;
+      closeLogin();
+      setNotice({ text: i18n.t("orgManager.notice.authSyncing"), autoHide: false, variant: "success" });
       const orgs = await tauriApi.syncOrgs();
       setOrgs(orgs);
       queryClient.setQueryData(["orgs"], orgs);
       const defaultOrg = orgs.find((org) => !!org.is_default) ?? null;
       setCurrentOrg(defaultOrg?.id ?? orgs[0]?.id ?? null);
-      setNotice(
-        defaultOrg
-          ? {
-              text: i18n.t("orgManager.notice.syncDoneDefault", {
-                name: defaultOrg.alias ?? defaultOrg.id,
-              }),
-              autoHide: true,
-              variant: "success",
-            }
-          : { text: i18n.t("orgManager.notice.syncDoneNoDefault"), autoHide: true, variant: "success" },
-      );
-    } catch (e) {
-      const raw = e instanceof Error ? e.message : String(e);
-      const message = raw === "LOGIN_NOT_COMPLETED"
-        ? i18n.t("orgManager.notice.loginNotCompleted")
-        : raw;
-      if (browserAuthDone) {
-        setNotice({ text: i18n.t("orgManager.notice.syncFailed", { message }), autoHide: true, variant: "error" });
-      } else {
-        setLoginError(message);
+      setNotice({
+        text: reauthorizing ? i18n.t("orgManager.notice.reauthorizeDone")
+          : defaultOrg ? i18n.t("orgManager.notice.syncDoneDefault", { name: defaultOrg.alias ?? defaultOrg.id })
+          : i18n.t("orgManager.notice.syncDoneNoDefault"),
+        autoHide: true, variant: "success",
+      });
+    } catch (error) {
+      if (!loginCancelled.current) {
+        const message = loginMessage(error);
+        if (authDone) {
+          setNotice({ text: i18n.t("orgManager.notice.syncFailed", { message }), autoHide: true, variant: "error" });
+        } else {
+          setLoginError(message);
+        }
       }
     } finally {
       setLoginBusy(false);
@@ -295,11 +352,8 @@ export function OrgList() {
 
   const beginReauthorize = (org: OrgAuth) => {
     setReauthorizingOrg(org);
-    setLoginAlias(org.alias ?? "");
-    setLoginDomain(isAlibabaInstance(org.instance_url) ? "alibaba" : org.org_type === "sandbox" ? "sandbox" : "production");
-    setLoginInstanceUrl(org.instance_url);
-    setLoginConsumerKey("");
-    setLoginConsumerSecret("");
+    setLoginForm(reauthorizeForm(org));
+    setLoadingLoginProfile(true);
     setLoginError(null);
     setShowLoginModal(true);
   };
@@ -325,12 +379,15 @@ export function OrgList() {
           onChange={(e) => setKeyword(e.target.value)}
           placeholder={t("orgManager.searchPlaceholder")}
         />
-        <button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending}>
+        <button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending || checkStatusMutation.isPending}>
           {refreshMutation.isPending ? t("orgManager.refreshing") : t("orgManager.refresh")}
         </button>
         <button
           onClick={() => {
             setReauthorizingOrg(null);
+            setLoginForm(newLoginForm());
+            setLoginError(null);
+            setLoadingLoginProfile(false);
             setShowLoginModal(true);
           }}
           disabled={loginBusy}
@@ -338,89 +395,31 @@ export function OrgList() {
           {t("orgManager.addOrg")}
         </button>
       </div>
-      {showLoginModal ? (
-        <div className="org-login-modal-backdrop" onClick={() => !loginBusy && setShowLoginModal(false)}>
-          <div className="org-login-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="org-login-title">{reauthorizingOrg ? t("orgManager.reauthorizeTitle") : t("orgManager.modalTitle")}</h3>
-            <label className="org-form-label">{t("orgManager.aliasLabel")}</label>
-            <input
-              type="text"
-              className="org-form-input"
-              value={loginAlias}
-              onChange={(e) => setLoginAlias(e.target.value)}
-              placeholder={t("orgManager.aliasPlaceholder")}
-            />
-            <label className="org-form-label">{t("orgManager.domainLabel")}</label>
-            <select
-              className="org-form-select"
-              value={loginDomain}
-              onChange={(e) => setLoginDomain(e.target.value as LoginDomain)}
-              disabled={Boolean(reauthorizingOrg)}
-            >
-              <option value="production">{t("orgManager.domainProduction")}</option>
-              <option value="sandbox">{t("orgManager.domainSandbox")}</option>
-              <option value="alibaba">{t("orgManager.domainAlibaba")}</option>
-            </select>
-            {loginDomain === "alibaba" || reauthorizingOrg ? (
-              <>
-                <label className="org-form-label">{t("orgManager.instanceUrlLabel")}</label>
-                <input
-                  type="text"
-                  className="org-form-input"
-                  value={loginInstanceUrl}
-                  onChange={(e) => setLoginInstanceUrl(e.target.value)}
-                  placeholder={t("orgManager.instanceUrlPlaceholder")}
-                  readOnly={Boolean(reauthorizingOrg)}
-                />
-                {loginDomain === "alibaba" ? (
-                  <>
-                    <label className="org-form-label">{t("orgManager.consumerKeyLabel")}</label>
-                    <input type="text" className="org-form-input" value={loginConsumerKey} onChange={(e) => setLoginConsumerKey(e.target.value)} placeholder={t("orgManager.consumerKeyPlaceholder")} />
-                    <label className="org-form-label">{t("orgManager.consumerSecretLabel")}</label>
-                    <input type="password" className="org-form-input" value={loginConsumerSecret} onChange={(e) => setLoginConsumerSecret(e.target.value)} placeholder={t("orgManager.consumerSecretPlaceholder")} />
-                    <label className="org-form-label">{t("orgManager.portLabel")}</label>
-                    <input type="text" className="org-form-input" value={loginPort} onChange={(e) => setLoginPort(e.target.value.replace(/\D/g, ""))} placeholder={t("orgManager.portPlaceholder")} />
-                  </>
-                ) : null}
-              </>
-            ) : null}
-            {loginError ? <div className="org-login-error">{loginError}</div> : null}
-            <div className="org-login-modal-actions">
-              <button
-                onClick={async () => {
-                  if (loginBusy) {
-                    setLoginCancelling(true);
-                    try {
-                      await tauriApi.cancelLogin();
-                    } catch { /* ignore */ }
-                    setLoginBusy(false);
-                    setLoginCancelling(false);
-                  }
-                  setShowLoginModal(false);
-                  setLoginError(null);
-                  setReauthorizingOrg(null);
-                  setLoginInstanceUrl("");
-                  setLoginConsumerKey("");
-                  setLoginConsumerSecret("");
-                  setLoginPort("1717");
-                }}
-              >
-                {loginCancelling ? t("orgManager.cancelling") ?? "Cancelling…" : t("orgManager.cancel")}
-              </button>
-              <button
-                onClick={() => void handleLoginConfirm()}
-                disabled={
-                  loginBusy ||
-                  (loginDomain === "alibaba" &&
-                    (!loginInstanceUrl.trim() || !loginConsumerKey.trim() || !loginConsumerSecret.trim()))
-                }
-              >
-                {loginBusy ? t("orgManager.loginWaitingBrowser") : reauthorizingOrg ? t("orgManager.reauthorize") : t("orgManager.loginAndSetDefault")}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {showLoginModal && !keyWizardRoute && (
+        <OrgLoginDialog
+          form={loginForm}
+          reauthorizing={Boolean(reauthorizingOrg)}
+          busy={loginBusy}
+          cancelling={loginCancelling}
+          loadingProfile={loadingLoginProfile}
+          error={loginError}
+          onChange={setLoginForm}
+          onSubmit={() => void handleLoginConfirm()}
+          onCancel={() => void handleLoginCancel()}
+          onPickKey={() => void handlePickJwtKey()}
+          onPrepareKey={setKeyWizardRoute}
+        />
+      )}
+      {showLoginModal && keyWizardRoute && <JwtKeyWizard
+        route={keyWizardRoute}
+        alibaba={loginForm.domain === "alibaba"}
+        onClose={() => setKeyWizardRoute(null)}
+        onComplete={(material) => {
+          setLoginForm((form) => ({ ...form, keyFile: material.keyFile }));
+          setLoginError(null);
+          setKeyWizardRoute(null);
+        }}
+      />}
       {filteredOrgs.length > 0 ? (
         filteredOrgs.map((org) => (
           <article className="org-card" key={org.id}>
@@ -473,11 +472,16 @@ export function OrgList() {
                   {org.is_default ? <span className="org-default-tag">{t("orgManager.defaultTag")}</span> : null}
                   <span className={`org-type org-type-${org.org_type}`}>{orgTypeLabel(org.org_type, t)}</span>
                   {isAlibabaInstance(org.instance_url) ? <span className="org-type org-type-alibaba">{t("orgManager.alibabaTag")}</span> : null}
+                  <span className="org-auth-method" title={t("orgManager.authMethodDisplay", { method: t(authMethodKey(org.auth_method)) })}>
+                    {t(org.auth_method === "web" ? "orgManager.authOauth" : authMethodKey(org.auth_method))}
+                  </span>
                   <span
                     className={`org-connection-status org-connection-${getConnectionKind(org)}`}
                     title={org.connection_status}
                   >
-                    {t(`orgManager.connectionStatus.${getConnectionKind(org)}`)}
+                    {checkStatusMutation.isPending && checkStatusMutation.variables === org.id
+                      ? t("orgManager.checkingLoginStatus")
+                      : t(`orgManager.connectionStatus.${getConnectionKind(org)}`)}
                   </span>
                 </div>
                 <div className="org-username" title={org.id}>{org.id}</div>
@@ -541,11 +545,23 @@ export function OrgList() {
                     title={t("orgManager.reauthorizeTitle")}
                     aria-label={t("orgManager.reauthorizeAria")}
                     onClick={() => beginReauthorize(org)}
-                    disabled={loginBusy}
+                    disabled={loginBusy || loadingLoginProfile || checkStatusMutation.isPending}
                   >
                     <IconReauthorize />
                   </button>
-                ) : null}
+                ) : (
+                  <button
+                    type="button"
+                    className="org-icon-btn"
+                    title={t(checkStatusMutation.isPending && checkStatusMutation.variables === org.id ? "orgManager.checkingLoginStatus" : "orgManager.checkLoginStatus")}
+                    aria-label={t("orgManager.checkLoginStatus")}
+                    aria-busy={checkStatusMutation.isPending && checkStatusMutation.variables === org.id}
+                    disabled={checkStatusMutation.isPending || loginBusy || loadingLoginProfile || refreshMutation.isPending}
+                    onClick={() => checkStatusMutation.mutate(org.id)}
+                  >
+                    <IconCheckStatus />
+                  </button>
+                )}
                 <button
                   className="org-icon-btn"
                   title={t("orgManager.setDefaultTitle")}

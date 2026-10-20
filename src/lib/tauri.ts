@@ -6,7 +6,49 @@ import type {
   ApexTestRunResult,
 } from "../modules/ApexTestRunner/types";
 
-export type LoginDomain = "production" | "sandbox" | "alibaba";
+export type LoginDomain = "production" | "sandbox" | "alibaba" | "custom";
+export type AuthMethod = "web" | "jwt";
+export type OrgLoginRequest =
+  | {
+      authMethod: "web";
+      setDefault?: boolean;
+      alias?: string;
+      loginDomain: LoginDomain;
+      instanceUrl?: string;
+      consumerKey?: string;
+      consumerSecret?: string;
+      port?: number;
+    }
+  | {
+      authMethod: "jwt";
+      setDefault?: boolean;
+      alias?: string;
+      username: string;
+      clientId: string;
+      jwtKeyFile: string;
+      instanceUrl: string;
+    };
+
+export interface OrgLoginProfile {
+  username: string;
+  clientId: string;
+  jwtKeyFile: string;
+  instanceUrl: string;
+}
+
+export interface JwtCertificateTools {
+  openssl: boolean;
+  keytool: boolean;
+  storageDirectory: string;
+}
+
+export interface JwtKeyMaterial {
+  keyFile: string;
+  certificateFile: string;
+  subject: string;
+  expiresAt: string;
+  fingerprintSha256: string;
+}
 export type RetrieveOutputMode = "extract" | "zip";
 
 export interface MetadataTypeMeta {
@@ -149,44 +191,28 @@ export const tauriApi = {
   checkEnvironment: () => invoke<EnvironmentReport>("check_environment"),
   syncOrgs: () => invoke<OrgAuth[]>("sync_orgs"),
   listOrgs: () => invoke<OrgAuth[]>("list_orgs"),
+  checkOrgLoginStatus: (username: string) => invoke<OrgAuth>("check_org_login_status", { username }),
   updateOrgAlias: (username: string, alias: string) =>
     invoke<void>("update_org_alias", { username, alias }),
-  reauthorizeOrg: (payload: {
-    username: string;
-    alias?: string | null;
-    instanceUrl: string;
-    consumerKey?: string | null;
-    consumerSecret?: string | null;
-    port?: number | null;
-  }) =>
-    invoke<void>("reauthorize_org", {
-      username: payload.username,
-      alias: payload.alias?.trim() || null,
-      instanceUrl: payload.instanceUrl.trim(),
-      consumerKey: payload.consumerKey?.trim() || null,
-      consumerSecret: payload.consumerSecret?.trim() || null,
-      port: payload.port ?? null,
-    }),
+  reauthorizeOrg: (username: string, request: OrgLoginRequest) =>
+    invoke<void>("reauthorize_org", { username, request }),
+  getOrgLoginProfile: (username: string) =>
+    invoke<OrgLoginProfile | null>("get_org_login_profile", { username }),
+  pickJwtKeyFile: () => invoke<string | null>("pick_jwt_key_file"),
+  getJwtCertificateTools: () => invoke<JwtCertificateTools>("get_jwt_certificate_tools"),
+  generateJwtCertificate: (options: { commonName: string; days: number; directory?: string }) =>
+    invoke<JwtKeyMaterial>("generate_jwt_certificate", { ...options, directory: options.directory || null }),
+  pickJwtKeystore: () => invoke<string | null>("pick_jwt_keystore"),
+  listJwtKeystoreEntries: (path: string, password: string) =>
+    invoke<string[]>("list_jwt_keystore_entries", { path, password }),
+  importJwtKeystore: (options: { path: string; password: string; alias: string; keyPassword?: string; directory?: string }) =>
+    invoke<JwtKeyMaterial>("import_jwt_keystore", { ...options, keyPassword: options.keyPassword || null, directory: options.directory || null }),
+  exportJwtPublicCertificate: (path: string) => invoke<string | null>("export_jwt_public_certificate", { path }),
   setDefaultOrg: (username: string) =>
     invoke<void>("set_default_org", { username }),
   logoutOrg: (username: string) => invoke<void>("logout_org", { username }),
-  /** Web OAuth only; call `syncOrgs` afterward to refresh the local list. */
-  loginOrg: (payload: {
-    alias?: string;
-    loginDomain: LoginDomain;
-    instanceUrl?: string;
-    consumerKey?: string;
-    consumerSecret?: string;
-    port?: number;
-  }) =>
-    invoke<void>("login_org", {
-      alias: payload.alias?.trim() || null,
-      loginDomain: payload.loginDomain,
-      instanceUrl: payload.instanceUrl?.trim() || null,
-      consumerKey: payload.consumerKey?.trim() || null,
-      consumerSecret: payload.consumerSecret?.trim() || null,
-      port: payload.port ?? null,
-    }),
+  /** Call `syncOrgs` afterward to refresh the local list. */
+  loginOrg: (request: OrgLoginRequest) => invoke<void>("login_org", { request }),
   cancelLogin: () => invoke<void>("cancel_login"),
   openOrg: (username: string) => invoke<void>("open_org", { username }),
   pickProjectDirectory: () => invoke<string | null>("pick_project_directory"),
