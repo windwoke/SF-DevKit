@@ -10,10 +10,12 @@ interface MetadataState {
   expandedTypes: string[];
   searchQuery: string;
   outputDir: string;
+  outputName: string;
   outputMode: "extract" | "zip";
   apiVersion: string;
   setSearchQuery: (q: string) => void;
   setOutputDir: (dir: string) => void;
+  setOutputName: (name: string) => void;
   setOutputMode: (mode: "extract" | "zip") => void;
   setApiVersion: (v: string) => void;
   toggleExpand: (metadataType: string) => void;
@@ -33,10 +35,12 @@ export const useMetadataStore = create<MetadataState>()(
       expandedTypes: [],
       searchQuery: "",
       outputDir: "",
+      outputName: "",
       outputMode: "extract",
       apiVersion: "60.0",
       setSearchQuery: (q) => set({ searchQuery: q }),
       setOutputDir: (dir) => set({ outputDir: dir }),
+      setOutputName: (name) => set({ outputName: name }),
       setOutputMode: (mode) => set({ outputMode: mode }),
       setApiVersion: (v) => set({ apiVersion: v }),
   toggleExpand: (metadataType) =>
@@ -101,6 +105,7 @@ export const useMetadataStore = create<MetadataState>()(
       name: "metadata-store",
       partialize: (state) => ({
         outputDir: state.outputDir,
+        outputName: state.outputName,
         outputMode: state.outputMode,
         apiVersion: state.apiVersion,
       }),

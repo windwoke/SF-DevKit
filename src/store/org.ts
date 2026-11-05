@@ -20,6 +20,18 @@ interface OrgState {
   setCurrentOrg: (orgId: string | null) => void;
   setOrgs: (orgs: OrgAuth[]) => void;
   updateOrg: (org: OrgAuth) => void;
+  upsertOrg: (org: OrgAuth, select?: boolean) => void;
+}
+
+export function mergeAuthorizedOrg(orgs: OrgAuth[], org: OrgAuth): OrgAuth[] {
+  const next = orgs.filter((item) => item.id !== org.id).map((item) =>
+    org.is_default && item.is_default ? { ...item, is_default: false } : item,
+  );
+  next.push(org);
+  const label = (item: OrgAuth) => item.alias?.trim() || item.id;
+  return next.sort((a, b) => Number(!!b.is_default) - Number(!!a.is_default)
+    || label(a).localeCompare(label(b), "en", { sensitivity: "base" })
+    || a.id.localeCompare(b.id, "en", { sensitivity: "base" }));
 }
 
 export const useOrgStore = create<OrgState>((set) => ({
@@ -27,6 +39,10 @@ export const useOrgStore = create<OrgState>((set) => ({
   orgs: [],
   setCurrentOrg: (orgId) => set({ currentOrg: orgId }),
   updateOrg: (org) => set((state) => ({ orgs: state.orgs.map((item) => item.id === org.id ? org : item) })),
+  upsertOrg: (org, select = false) => set((state) => ({
+    orgs: mergeAuthorizedOrg(state.orgs, org),
+    currentOrg: select || !state.currentOrg ? org.id : state.currentOrg,
+  })),
   setOrgs: (orgs) =>
     set({
       orgs,

@@ -8,7 +8,7 @@ import { OrgLoginDialog } from "./OrgLoginDialog";
 import { JwtKeyWizard } from "./JwtKeyWizard";
 import type { JwtKeyRoute } from "./JwtSetupGuide";
 import { authMethodKey, loginErrorKey, loginFormValid, loginRequest, newLoginForm, reauthorizeForm } from "./loginForm";
-import { useOrgStore, type OrgAuth } from "../../store/org";
+import { mergeAuthorizedOrg, useOrgStore, type OrgAuth } from "../../store/org";
 
 function IconFolder() {
   return (
@@ -87,7 +87,7 @@ function getConnectionKind(org: { connection_status: string; expires_at: string 
 export function OrgList() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
-  const { setCurrentOrg, setOrgs, updateOrg } = useOrgStore();
+  const { setCurrentOrg, setOrgs, updateOrg, upsertOrg } = useOrgStore();
   const [keyword, setKeyword] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [keyWizardRoute, setKeyWizardRoute] = useState<JwtKeyRoute | null>(null);
@@ -263,37 +263,27 @@ export function OrgList() {
     setLoginError(null);
     setLoginBusy(true);
     loginCancelled.current = false;
-    let authDone = false;
     const reauthorizing = Boolean(reauthorizingOrg);
     try {
       const request = loginRequest(loginForm, reauthorizing);
-      if (reauthorizingOrg) {
-        await tauriApi.reauthorizeOrg(reauthorizingOrg.id, request);
-      } else {
-        await tauriApi.loginOrg(request);
-      }
-      authDone = true;
+      const org = reauthorizingOrg
+        ? await tauriApi.reauthorizeOrg(reauthorizingOrg.id, request)
+        : await tauriApi.loginOrg(request);
+      await queryClient.cancelQueries({ queryKey: ["orgs"] });
+      queryClient.setQueryData<OrgAuth[]>(["orgs"], (orgs) =>
+        mergeAuthorizedOrg(orgs ?? useOrgStore.getState().orgs, org),
+      );
+      upsertOrg(org, !reauthorizing && loginForm.setDefault);
       closeLogin();
-      setNotice({ text: i18n.t("orgManager.notice.authSyncing"), autoHide: false, variant: "success" });
-      const orgs = await tauriApi.syncOrgs();
-      setOrgs(orgs);
-      queryClient.setQueryData(["orgs"], orgs);
-      const defaultOrg = orgs.find((org) => !!org.is_default) ?? null;
-      setCurrentOrg(defaultOrg?.id ?? orgs[0]?.id ?? null);
       setNotice({
         text: reauthorizing ? i18n.t("orgManager.notice.reauthorizeDone")
-          : defaultOrg ? i18n.t("orgManager.notice.syncDoneDefault", { name: defaultOrg.alias ?? defaultOrg.id })
-          : i18n.t("orgManager.notice.syncDoneNoDefault"),
+          : i18n.t("orgManager.notice.orgAdded", { name: org.alias ?? org.id }),
         autoHide: true, variant: "success",
       });
     } catch (error) {
       if (!loginCancelled.current) {
         const message = loginMessage(error);
-        if (authDone) {
-          setNotice({ text: i18n.t("orgManager.notice.syncFailed", { message }), autoHide: true, variant: "error" });
-        } else {
-          setLoginError(message);
-        }
+        setLoginError(message);
       }
     } finally {
       setLoginBusy(false);

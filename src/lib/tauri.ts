@@ -195,7 +195,7 @@ export const tauriApi = {
   updateOrgAlias: (username: string, alias: string) =>
     invoke<void>("update_org_alias", { username, alias }),
   reauthorizeOrg: (username: string, request: OrgLoginRequest) =>
-    invoke<void>("reauthorize_org", { username, request }),
+    invoke<OrgAuth>("reauthorize_org", { username, request }),
   getOrgLoginProfile: (username: string) =>
     invoke<OrgLoginProfile | null>("get_org_login_profile", { username }),
   pickJwtKeyFile: () => invoke<string | null>("pick_jwt_key_file"),
@@ -211,8 +211,7 @@ export const tauriApi = {
   setDefaultOrg: (username: string) =>
     invoke<void>("set_default_org", { username }),
   logoutOrg: (username: string) => invoke<void>("logout_org", { username }),
-  /** Call `syncOrgs` afterward to refresh the local list. */
-  loginOrg: (request: OrgLoginRequest) => invoke<void>("login_org", { request }),
+  loginOrg: (request: OrgLoginRequest) => invoke<OrgAuth>("login_org", { request }),
   cancelLogin: () => invoke<void>("cancel_login"),
   openOrg: (username: string) => invoke<void>("open_org", { username }),
   pickProjectDirectory: () => invoke<string | null>("pick_project_directory"),
@@ -243,6 +242,7 @@ export const tauriApi = {
     orgAlias: string;
     selections: MetadataSelectionItem[];
     outputDir: string;
+    outputName?: string;
     outputMode: RetrieveOutputMode;
     apiVersion: string;
     eventId: string;
@@ -252,6 +252,7 @@ export const tauriApi = {
       orgAlias: payload.orgAlias,
       selections: payload.selections,
       outputDir: payload.outputDir,
+      outputName: payload.outputName?.trim() || null,
       outputMode: payload.outputMode,
       apiVersion: payload.apiVersion,
       eventId: payload.eventId,

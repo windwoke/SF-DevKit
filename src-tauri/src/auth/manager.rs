@@ -121,6 +121,80 @@ pub async fn list_orgs(pool: &SqlitePool) -> anyhow::Result<Vec<OrgAuth>> {
     Ok(rows)
 }
 
+/// Read and cache only the account that just authorized. A successful login
+/// already confirms its connection, so there is no need to probe every org.
+pub async fn sync_authorized_org(
+    pool: &SqlitePool,
+    username: &str,
+    alias: Option<&str>,
+    auth_method: &str,
+    set_default: bool,
+) -> anyhow::Result<OrgAuth> {
+    let output = run_command(&["org", "display", "--target-org", username], true).await?;
+    let json: serde_json::Value = serde_json::from_str(&output.stdout)
+        .map_err(|_| anyhow::anyhow!("LOGIN_ORG_SYNC_FAILED"))?;
+    if !output.success || json["status"].as_i64() != Some(0) {
+        anyhow::bail!("LOGIN_ORG_SYNC_FAILED");
+    }
+    let org = serde_json::from_value::<SfOrg>(json["result"].clone())
+        .map_err(|_| anyhow::anyhow!("LOGIN_ORG_SYNC_FAILED"))?;
+    if org.username != username || org.instance_url.as_deref().is_none_or(str::is_empty) {
+        anyhow::bail!("LOGIN_ORG_SYNC_FAILED");
+    }
+    save_authorized_org(pool, &org, alias, auth_method, set_default).await
+}
+
+async fn save_authorized_org(
+    pool: &SqlitePool,
+    org: &SfOrg,
+    alias: Option<&str>,
+    auth_method: &str,
+    set_default: bool,
+) -> anyhow::Result<OrgAuth> {
+    let org_type = if org.expiration_date.is_some() {
+        "scratch"
+    } else if org
+        .instance_url
+        .as_deref()
+        .is_some_and(|url| url.contains("sandbox"))
+    {
+        "sandbox"
+    } else {
+        "production"
+    };
+    let alias = alias
+        .map(str::trim)
+        .filter(|alias| !alias.is_empty())
+        .or(org.alias.as_deref());
+    let mut tx = pool.begin().await?;
+    if set_default {
+        sqlx::query("UPDATE org_auth SET is_default = 0 WHERE is_default = 1 AND id != ?1")
+            .bind(&org.username)
+            .execute(&mut *tx)
+            .await?;
+    }
+    sqlx::query(
+        "INSERT INTO org_auth (id, alias, instance_url, org_type, auth_method, is_default, expires_at, connection_status, last_used)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'Connected', datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET
+           alias = COALESCE(excluded.alias, org_auth.alias),
+           instance_url = excluded.instance_url,
+           org_type = CASE WHEN org_auth.org_type = 'scratch' THEN 'scratch' ELSE excluded.org_type END,
+           auth_method = excluded.auth_method,
+           is_default = CASE WHEN ?6 = 1 THEN 1 ELSE org_auth.is_default END,
+           expires_at = COALESCE(excluded.expires_at, org_auth.expires_at),
+           connection_status = 'Connected', last_used = datetime('now')",
+    )
+    .bind(&org.username).bind(alias).bind(org.instance_url.as_deref().unwrap_or_default())
+    .bind(org_type).bind(auth_method).bind(if set_default { 1_i64 } else { 0_i64 })
+    .bind(&org.expiration_date).execute(&mut *tx).await?;
+    let saved = sqlx::query_as::<_, OrgAuth>(
+        "SELECT id, alias, instance_url, org_type, auth_method, is_default, expires_at, connection_status, last_used, linked_project_path FROM org_auth WHERE id = ?1",
+    ).bind(&org.username).fetch_one(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(saved)
+}
+
 async fn cli_auth_methods() -> Option<HashMap<String, String>> {
     match run_command(&["org", "list", "auth"], true).await {
         Ok(output) if output.success => serde_json::from_str::<serde_json::Value>(&output.stdout)
@@ -239,7 +313,7 @@ pub async fn logout_org(pool: &SqlitePool, username: &str) -> anyhow::Result<()>
     Ok(())
 }
 
-/// Web OAuth only. Caller should run `sync_orgs` afterward to refresh the local list.
+/// Web OAuth only. Returns CLI output so the caller can identify the account.
 pub async fn login_org_web(
     alias: Option<String>,
     login_domain: &str,
@@ -927,6 +1001,67 @@ async fn apply_default_org(pool: &SqlitePool, default_org_ref: &str) -> anyhow::
 #[cfg(test)]
 mod tests {
     use super::contains_client_secret_prompt;
+
+    #[tokio::test]
+    async fn authorization_upserts_only_one_account_and_preserves_current_settings() {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE org_auth (id TEXT PRIMARY KEY, alias TEXT, instance_url TEXT NOT NULL, org_type TEXT NOT NULL, auth_method TEXT, is_default INTEGER, expires_at TEXT, connection_status TEXT, last_used TEXT, linked_project_path TEXT)")
+            .execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO org_auth VALUES ('existing@example.com', 'Existing', 'https://example.my.salesforce.com', 'production', 'jwt', 1, NULL, 'Expired', '2026-01-01', '/workspace/dev')")
+            .execute(&pool).await.unwrap();
+        let existing = serde_json::to_value(&super::list_orgs(&pool).await.unwrap()[0]).unwrap();
+        let mut added: super::SfOrg = serde_json::from_value(serde_json::json!({
+            "username":"new@example.com", "instanceUrl":"https://new.sandbox.my.salesforce.com",
+            "alias":"New", "accessToken":"never-expose"
+        }))
+        .unwrap();
+        let saved = super::save_authorized_org(&pool, &added, None, "web", false)
+            .await
+            .unwrap();
+        assert_eq!(saved.is_default, 0);
+        assert_eq!(saved.org_type, "sandbox");
+        assert_eq!(saved.connection_status, "Connected");
+        let orgs = super::list_orgs(&pool).await.unwrap();
+        assert_eq!(orgs.len(), 2);
+        assert_eq!(serde_json::to_value(&orgs[0]).unwrap(), existing);
+        assert!(!serde_json::to_string(&saved)
+            .unwrap()
+            .contains("never-expose"));
+
+        // Reauthorizing an existing default org must retain its project and
+        // default flag, while updating its auth method, alias and status.
+        added.username = "existing@example.com".into();
+        let renewed = super::save_authorized_org(&pool, &added, Some("Renamed"), "web", false)
+            .await
+            .unwrap();
+        assert_eq!(renewed.is_default, 1);
+        assert_eq!(
+            renewed.linked_project_path.as_deref(),
+            Some("/workspace/dev")
+        );
+        assert_eq!(renewed.alias.as_deref(), Some("Renamed"));
+        assert_eq!(renewed.auth_method, "web");
+        assert_eq!(super::list_orgs(&pool).await.unwrap().len(), 2);
+
+        added.username = "new@example.com".into();
+        let saved = super::save_authorized_org(&pool, &added, None, "jwt", true)
+            .await
+            .unwrap();
+        assert_eq!(saved.is_default, 1);
+        let previous = super::list_orgs(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|org| org.id == renewed.id)
+            .unwrap();
+        let mut expected = serde_json::to_value(&renewed).unwrap();
+        expected["is_default"] = serde_json::json!(0);
+        assert_eq!(serde_json::to_value(previous).unwrap(), expected);
+    }
 
     #[test]
     fn cli_authorization_metadata_distinguishes_methods_without_exposing_secrets() {

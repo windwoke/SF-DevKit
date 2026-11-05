@@ -455,6 +455,7 @@
     "loginErrors": {
       "defaultRead": "无法读取当前默认 Org，请刷新 Org 列表后重试。",
       "defaultRestore": "无法恢复原来的默认 Org，请刷新列表确认授权状态，并重新设置默认 Org。",
+      "orgSync": "授权已成功，但未能保存此 Org 的信息。请关闭窗口并手动刷新 Org 列表。",
       "busy": "已有授权正在进行，请等待完成或取消后重试。",
       "cancelled": "已取消授权。",
       "usernameMismatch": "授权返回的用户名与当前 Org 不一致，请检查用户名后重试。",
@@ -515,6 +516,7 @@
       "openIdeError": "无法在 IDE 中打开：{{message}}",
       "openIdeSuccess": "已在 IDE 中打开关联项目。",
       "listRefreshed": "Org 列表已刷新。",
+      "orgAdded": "已添加 Org：{{name}}。",
       "statusCheckFailed": "未能完成登录状态检查，请确认 Salesforce CLI 可用后重试。",
       "statusCheck": {
         "connected": "{{name}}：登录有效。",
@@ -716,6 +718,10 @@
       "outputDir": "输出目录",
       "outputDirPlaceholder": "请选择输出目录…",
       "chooseDir": "选择",
+      "folderName": "文件夹名称",
+      "archiveName": "压缩包名称（无需 .zip）",
+      "outputNamePlaceholder": "留空使用 Org 别名＋时间戳",
+      "outputNameHint": "可自定义名称；同名时自动追加编号。",
       "outputFormat": "输出格式",
       "extract": "解压到目录",
       "keepZip": "保留 zip",
@@ -735,11 +741,16 @@
       "errors": {
         "needOrg": "请先选择 Org",
         "needOutputDir": "请先选择输出目录",
-        "needSelection": "请先勾选至少一个组件"
+        "needSelection": "请先勾选至少一个组件",
+        "invalidOutputName": "名称不能是路径，不能包含 / \\ : * ? \" < > |、控制字符，不能以句点结尾或使用系统保留名称。"
       }
     },
     "package": {
       "title": "package.xml 预览",
+      "copy": "复制",
+      "copied": "已复制",
+      "copyFailed": "复制失败",
+      "copyTitle": "复制当前 package.xml 内容",
       "edit": "编辑 package.xml",
       "exitEdit": "退出编辑",
       "dirty": "草稿未应用",

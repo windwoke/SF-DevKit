@@ -63,8 +63,8 @@ pub async fn reauthorize_org(
     app: AppHandle,
     username: String,
     request: login::LoginRequest,
-) -> Result<(), String> {
-    login::login(&state.0, request, Some(&username))
+) -> Result<OrgAuth, String> {
+    let org = login::login(&state.0, request, Some(&username))
         .await
         .map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
@@ -73,7 +73,7 @@ pub async fn reauthorize_org(
             eprintln!("[tray] rebuild_menu failed: {e}");
         }
     }
-    Ok(())
+    Ok(org)
 }
 
 #[tauri::command]
@@ -134,15 +134,23 @@ pub async fn update_tray_labels(_app: AppHandle, _labels: serde_json::Value) -> 
     Ok(())
 }
 
-/// Call `sync_orgs` after either login method to refresh DB and tray state.
+/// Authorize and return the single updated account, including its cached data.
 #[tauri::command]
 pub async fn login_org(
     state: State<'_, DbState>,
+    app: AppHandle,
     request: login::LoginRequest,
-) -> Result<(), String> {
-    login::login(&state.0, request, None)
+) -> Result<OrgAuth, String> {
+    let org = login::login(&state.0, request, None)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(e) = crate::tray::rebuild_menu(&app).await {
+            eprintln!("[tray] rebuild_menu failed: {e}");
+        }
+    }
+    Ok(org)
 }
 
 #[tauri::command]

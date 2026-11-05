@@ -9,6 +9,7 @@ use tokio::process::Command;
 
 use super::manager;
 use crate::cli::runner::{find_sf, run_command, SuppressConsole};
+use crate::db::models::OrgAuth;
 
 static LOGIN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static CANCELLED: AtomicBool = AtomicBool::new(false);
@@ -128,12 +129,17 @@ pub async fn login(
     pool: &SqlitePool,
     request: LoginRequest,
     expected_username: Option<&str>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<OrgAuth> {
     let _lock = LOGIN_LOCK
         .try_lock()
         .map_err(|_| anyhow::anyhow!("LOGIN_BUSY"))?;
     CANCELLED.store(false, Ordering::SeqCst);
     let _session = LoginSession;
+    let set_default = request.should_set_default(expected_username.is_some());
+    let (alias, auth_method) = match &request {
+        LoginRequest::Web { alias, .. } => (alias.clone(), "web"),
+        LoginRequest::Jwt { alias, .. } => (alias.clone(), "jwt"),
+    };
     let previous_default = if !request.should_set_default(expected_username.is_some()) {
         read_default_org(pool).await?
     } else {
@@ -156,7 +162,10 @@ pub async fn login(
             anyhow::bail!("LOGIN_DEFAULT_RESTORE_FAILED");
         }
     }
-    result
+    let username = result?;
+    manager::sync_authorized_org(pool, &username, alias.as_deref(), auth_method, set_default)
+        .await
+        .map_err(|_| anyhow::anyhow!("LOGIN_ORG_SYNC_FAILED"))
 }
 
 async fn read_default_org(pool: &SqlitePool) -> anyhow::Result<Option<(String, bool)>> {
@@ -198,7 +207,7 @@ async fn authorize(
     pool: &SqlitePool,
     request: LoginRequest,
     expected_username: Option<&str>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
     let set_default = request.should_set_default(expected_username.is_some());
     match request {
         LoginRequest::Web {
@@ -225,13 +234,14 @@ async fn authorize(
             }
             // Also clear a previous JWT preference when this user switches to
             // browser authorization, including via the Add Org dialog.
-            if let Some(username) = web_username(&output) {
-                if expected_username.is_some_and(|expected| expected != username) {
-                    anyhow::bail!("LOGIN_USERNAME_MISMATCH");
-                }
-                clear_profile(pool, &username).await?;
-                set_auth_method(pool, &username, "web").await?;
+            let username =
+                web_username(&output).ok_or_else(|| anyhow::anyhow!("LOGIN_NOT_COMPLETED"))?;
+            if expected_username.is_some_and(|expected| expected != username) {
+                anyhow::bail!("LOGIN_USERNAME_MISMATCH");
             }
+            clear_profile(pool, &username).await?;
+            set_auth_method(pool, &username, "web").await?;
+            Ok(username)
         }
         LoginRequest::Jwt {
             alias,
@@ -249,9 +259,9 @@ async fn authorize(
             run_jwt(&args, &profile.username).await?;
             save_profile(pool, &profile).await?;
             set_auth_method(pool, &profile.username, "jwt").await?;
+            Ok(profile.username)
         }
     }
-    Ok(())
 }
 
 async fn set_auth_method(pool: &SqlitePool, username: &str, method: &str) -> anyhow::Result<()> {

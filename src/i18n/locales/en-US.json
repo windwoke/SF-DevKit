@@ -459,6 +459,7 @@
     "loginErrors": {
       "defaultRead": "Could not read the current default org. Refresh the org list and try again.",
       "defaultRestore": "Could not restore the previous default org. Refresh the org list, check authorization status, and set the default org again.",
+      "orgSync": "Authorization succeeded, but this org could not be saved. Close this dialog and refresh the org list manually.",
       "busy": "Another authorization is in progress. Wait for it to finish or cancel it.",
       "cancelled": "Authorization cancelled.",
       "usernameMismatch": "The authorized username does not match this org. Check the username and try again.",
@@ -519,6 +520,7 @@
       "openIdeError": "Could not open in IDE: {{message}}",
       "openIdeSuccess": "Opened linked project in IDE.",
       "listRefreshed": "Org list refreshed.",
+      "orgAdded": "Org added: {{name}}.",
       "statusCheckFailed": "Could not complete the sign-in check. Confirm Salesforce CLI is available and retry.",
       "statusCheck": {
         "connected": "{{name}}: sign-in is valid.",
@@ -720,6 +722,10 @@
       "outputDir": "Output folder",
       "outputDirPlaceholder": "Choose an output folder…",
       "chooseDir": "Browse…",
+      "folderName": "Folder name",
+      "archiveName": "Archive name (without .zip)",
+      "outputNamePlaceholder": "Leave blank for org alias + timestamp",
+      "outputNameHint": "Choose a name; a number is appended if it already exists.",
       "outputFormat": "Output format",
       "extract": "Extract to folder",
       "keepZip": "Keep as zip",
@@ -739,11 +745,16 @@
       "errors": {
         "needOrg": "Select an org first",
         "needOutputDir": "Choose an output folder first",
-        "needSelection": "Select at least one component"
+        "needSelection": "Select at least one component",
+        "invalidOutputName": "Enter a name, without a path, / \\ : * ? \" < > |, control characters, a trailing period, or a reserved system name."
       }
     },
     "package": {
       "title": "package.xml preview",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Copy failed",
+      "copyTitle": "Copy the current package.xml content",
       "edit": "Edit package.xml",
       "exitEdit": "Exit edit",
       "dirty": "Draft not applied",

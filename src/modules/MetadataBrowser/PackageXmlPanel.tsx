@@ -19,8 +19,10 @@ export function PackageXmlPanel() {
   const [draftXml, setDraftXml] = useState(previewXml);
   const [lastSyncedXml, setLastSyncedXml] = useState(previewXml);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const modelRef = useRef<import("monaco-editor").editor.ITextModel | null>(null);
   const isEditModeRef = useRef(false);
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     isEditModeRef.current = isEditMode;
@@ -36,6 +38,29 @@ export function PackageXmlPanel() {
 
   const dirty = isEditMode && draftXml !== lastSyncedXml;
   const editorValue = isEditMode ? draftXml : previewXml;
+
+  useEffect(() => {
+    if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
+    copyResetTimerRef.current = null;
+    setCopyState("idle");
+    return () => {
+      if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
+    };
+  }, [editorValue]);
+
+  const copyEditorValue = async () => {
+    try {
+      await navigator.clipboard.writeText(editorValue);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+    if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
+    copyResetTimerRef.current = setTimeout(() => {
+      setCopyState("idle");
+      copyResetTimerRef.current = null;
+    }, 2200);
+  };
 
   const enterEditMode = () => {
     setDraftXml(previewXml);
@@ -94,9 +119,25 @@ export function PackageXmlPanel() {
       <header className="metadata-pane-header">
         <div className="metadata-package-header-row">
           <h3>{t("metadataBrowser.package.title")}</h3>
-          <button type="button" onClick={isEditMode ? exitEditMode : enterEditMode}>
-            {isEditMode ? t("metadataBrowser.package.exitEdit") : t("metadataBrowser.package.edit")}
-          </button>
+          <div className="metadata-package-header-actions">
+            <button
+              type="button"
+              className={`metadata-package-copy-button ${copyState}`}
+              title={t("metadataBrowser.package.copyTitle")}
+              onClick={() => void copyEditorValue()}
+            >
+              <span aria-live="polite">
+                {copyState === "copied"
+                  ? t("metadataBrowser.package.copied")
+                  : copyState === "failed"
+                    ? t("metadataBrowser.package.copyFailed")
+                    : t("metadataBrowser.package.copy")}
+              </span>
+            </button>
+            <button type="button" onClick={isEditMode ? exitEditMode : enterEditMode}>
+              {isEditMode ? t("metadataBrowser.package.exitEdit") : t("metadataBrowser.package.edit")}
+            </button>
+          </div>
         </div>
         {isEditMode ? (
           <div className="metadata-package-tools">

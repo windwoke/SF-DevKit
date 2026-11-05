@@ -124,6 +124,7 @@ const loginErrorKeys: Record<string, string> = {
   LOGIN_USERNAME_MISMATCH: "loginErrors.usernameMismatch",
   LOGIN_DEFAULT_READ_FAILED: "loginErrors.defaultRead",
   LOGIN_DEFAULT_RESTORE_FAILED: "loginErrors.defaultRestore",
+  LOGIN_ORG_SYNC_FAILED: "loginErrors.orgSync",
   JWT_INVALID_CREDENTIALS: "loginErrors.credentials",
   JWT_INVALID_URL: "loginErrors.url",
   JWT_KEY_UNREADABLE: "loginErrors.keyUnreadable",

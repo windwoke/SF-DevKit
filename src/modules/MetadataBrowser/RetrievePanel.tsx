@@ -26,6 +26,8 @@ export function RetrievePanel() {
     clearSelection,
     outputDir,
     setOutputDir,
+    outputName,
+    setOutputName,
     outputMode,
     setOutputMode,
     apiVersion,
@@ -80,6 +82,7 @@ export function RetrievePanel() {
         orgAlias,
         selections,
         outputDir,
+        outputName,
         outputMode,
         apiVersion,
         eventId,
@@ -88,7 +91,7 @@ export function RetrievePanel() {
     } finally {
       runningRef.current = false;
     }
-  }, [currentOrg, orgAlias, outputDir, outputMode, apiVersion, toSelectionList]);
+  }, [currentOrg, orgAlias, outputDir, outputName, outputMode, apiVersion, toSelectionList]);
 
   const retrieveMutation = useMutation({
     mutationFn: doRetrieve,
@@ -105,7 +108,9 @@ export function RetrievePanel() {
       ]);
     },
     onError: (e) => {
-      const message = e instanceof Error ? e.message : String(e);
+      const raw = e instanceof Error ? e.message : String(e);
+      const message = raw === "RETRIEVE_INVALID_OUTPUT_NAME"
+        ? String(i18n.t("metadataBrowser.retrieve.errors.invalidOutputName")) : raw;
       setLogs((prev) => [...prev, { type: "stderr", text: message }]);
     },
     onSettled: () => {
@@ -160,6 +165,25 @@ export function RetrievePanel() {
           <button type="button" onClick={() => void chooseDir()}>
             {t("metadataBrowser.retrieve.chooseDir")}
           </button>
+        </div>
+      </div>
+
+      <div className="metadata-field">
+        <label htmlFor="retrieve-output-name">
+          {t(outputMode === "zip" ? "metadataBrowser.retrieve.archiveName" : "metadataBrowser.retrieve.folderName")}
+        </label>
+        <div className="metadata-output-row">
+          <input
+            id="retrieve-output-name"
+            value={outputName}
+            onChange={(e) => setOutputName(e.target.value)}
+            placeholder={t("metadataBrowser.retrieve.outputNamePlaceholder")}
+            aria-describedby="retrieve-output-name-hint"
+            disabled={isRunning}
+          />
+        </div>
+        <div id="retrieve-output-name-hint" className="metadata-muted">
+          {t("metadataBrowser.retrieve.outputNameHint")}
         </div>
       </div>
 

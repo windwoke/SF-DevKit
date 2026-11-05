@@ -40,10 +40,17 @@ impl RetrieveRunner {
         org_alias: &str,
         selections: Vec<SelectionItem>,
         output_dir: &str,
+        output_name: Option<&str>,
         output_mode: &str,
         api_version: &str,
         event_id: &str,
     ) -> anyhow::Result<RetrieveResult> {
+        let output_name = build_output_name(org_alias, output_name)?;
+        let target_output_path = PathBuf::from(output_dir).join(if output_mode == "zip" {
+            format!("{output_name}.zip")
+        } else {
+            output_name.clone()
+        });
         let started_at = Instant::now();
         let component_count = selections.iter().map(|s| s.members.len()).sum();
 
@@ -58,27 +65,6 @@ impl RetrieveRunner {
         let internal_output_dir = workspace.join(".sfdevkit-output");
         let internal_output_arg = ".sfdevkit-output";
         tokio::fs::create_dir_all(&internal_output_dir).await?;
-        let output_token = build_output_token();
-        let safe_alias: String = org_alias
-            .chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == '-' || c == '_' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect();
-        let prefix = if safe_alias.is_empty() {
-            "retrieve".to_string()
-        } else {
-            safe_alias
-        };
-        let target_extract_dir =
-            PathBuf::from(output_dir).join(format!("{}-{}", prefix, output_token));
-        let target_zip_file =
-            PathBuf::from(output_dir).join(format!("{}-{}.zip", prefix, output_token));
-
         let mut cmd = Command::new(&sf_path);
         cmd.suppress_console();
         cmd.args([
@@ -215,28 +201,19 @@ impl RetrieveRunner {
         .await?;
 
         let output_path = if success {
+            let target =
+                reserve_output_path(output_dir, &output_name, output_mode == "zip").await?;
             if output_mode == "zip" {
                 let internal_zip = internal_output_dir.join("retrieve.zip");
-                tokio::fs::create_dir_all(output_dir).await?;
-                tokio::fs::copy(&internal_zip, &target_zip_file).await?;
-                target_zip_file.to_string_lossy().into_owned()
+                tokio::fs::copy(&internal_zip, &target).await?;
             } else {
-                tokio::fs::create_dir_all(&target_extract_dir).await?;
                 // Copy the entire .sfdevkit-output contents (same structure as diff retrieve)
-                copy_dir_recursive(&internal_output_dir, &target_extract_dir).await?;
-                tokio::fs::write(
-                    target_extract_dir.join("package.xml"),
-                    package_xml.as_bytes(),
-                )
-                .await?;
-                target_extract_dir.to_string_lossy().into_owned()
+                copy_dir_recursive(&internal_output_dir, &target).await?;
+                tokio::fs::write(target.join("package.xml"), package_xml.as_bytes()).await?;
             }
+            target.to_string_lossy().into_owned()
         } else {
-            if output_mode == "zip" {
-                target_zip_file.to_string_lossy().into_owned()
-            } else {
-                target_extract_dir.to_string_lossy().into_owned()
-            }
+            target_output_path.to_string_lossy().into_owned()
         };
         let _ = tokio::fs::remove_dir_all(&workspace).await;
 
@@ -282,6 +259,161 @@ async fn prepare_temp_sfdx_workspace(event_id: &str) -> anyhow::Result<PathBuf> 
 
 fn build_output_token() -> String {
     Local::now().format("%Y%m%d-%H%M%S-%3f").to_string()
+}
+
+fn build_output_name(org_alias: &str, custom_name: Option<&str>) -> anyhow::Result<String> {
+    if let Some(name) = custom_name.map(str::trim).filter(|name| !name.is_empty()) {
+        let device = name
+            .split('.')
+            .next()
+            .unwrap_or_default()
+            .to_ascii_uppercase();
+        if name == "."
+            || name == ".."
+            || name.ends_with('.')
+            || name
+                .chars()
+                .any(|c| c.is_control() || "/\\:*?\"<>|".contains(c))
+            || ["CON", "PRN", "AUX", "NUL"].contains(&device.as_str())
+            || (device.len() == 4
+                && (device.starts_with("COM") || device.starts_with("LPT"))
+                && matches!(device.as_bytes()[3], b'1'..=b'9'))
+        {
+            anyhow::bail!("RETRIEVE_INVALID_OUTPUT_NAME");
+        }
+        return Ok(name.to_owned());
+    }
+    let alias: String = org_alias
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let prefix = if alias.is_empty() { "retrieve" } else { &alias };
+    Ok(format!("{prefix}-{}", build_output_token()))
+}
+
+/// Atomically reserve an unused destination, including when two retrieves
+/// finish at the same time. Existing directories and archives stay intact.
+async fn reserve_output_path(output_dir: &str, name: &str, zip: bool) -> anyhow::Result<PathBuf> {
+    tokio::fs::create_dir_all(output_dir).await?;
+    for index in 1_u64.. {
+        let stem = if index == 1 {
+            name.to_owned()
+        } else {
+            format!("{name}-{index}")
+        };
+        let path = PathBuf::from(output_dir).join(if zip { format!("{stem}.zip") } else { stem });
+        let result = if zip {
+            tokio::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .await
+                .map(|_| ())
+        } else {
+            tokio::fs::create_dir(&path).await
+        };
+        match result {
+            Ok(()) => return Ok(path),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    }
+    unreachable!()
+}
+
+#[cfg(test)]
+mod output_name_tests {
+    use super::*;
+
+    #[test]
+    fn supports_custom_unicode_names_and_keeps_automatic_names_when_blank() {
+        assert_eq!(
+            build_output_name("Dev", Some("  发布备份 2026-11-05  ")).unwrap(),
+            "发布备份 2026-11-05"
+        );
+        for value in [None, Some(""), Some("   ")] {
+            assert!(build_output_name("Dev / One", value)
+                .unwrap()
+                .starts_with("Dev___One-"));
+            assert!(build_output_name("", value)
+                .unwrap()
+                .starts_with("retrieve-"));
+        }
+    }
+
+    #[test]
+    fn rejects_paths_and_names_that_are_invalid_on_supported_platforms() {
+        for value in [
+            ".",
+            "..",
+            "../outside",
+            "/tmp/output",
+            "a/b",
+            "a\\b",
+            "C:\\output",
+            "bad:name",
+            "bad*name",
+            "bad?name",
+            "bad\"name",
+            "bad<name",
+            "bad>name",
+            "bad|name",
+            "bad\nname",
+            "name.",
+            "CON",
+            "con.txt",
+            "NUL",
+            "COM1",
+            "LPT9.zip",
+        ] {
+            assert_eq!(
+                build_output_name("Dev", Some(value))
+                    .unwrap_err()
+                    .to_string(),
+                "RETRIEVE_INVALID_OUTPUT_NAME",
+                "{value}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn repeated_and_concurrent_retrieves_never_reuse_existing_outputs() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().to_str().unwrap();
+        for zip in [false, true] {
+            let first = reserve_output_path(dir, "Release", zip).await.unwrap();
+            let sentinel = if zip {
+                first.clone()
+            } else {
+                first.join("keep.txt")
+            };
+            tokio::fs::write(&sentinel, "original").await.unwrap();
+            let (second, third) = tokio::join!(
+                reserve_output_path(dir, "Release", zip),
+                reserve_output_path(dir, "Release", zip),
+            );
+            let second = second.unwrap();
+            let third = third.unwrap();
+            assert_ne!(first, second);
+            assert_ne!(first, third);
+            assert_ne!(second, third);
+            assert_eq!(
+                first.file_name().unwrap(),
+                if zip { "Release.zip" } else { "Release" }
+            );
+            assert!(second.exists() && third.exists());
+            assert_eq!(
+                tokio::fs::read_to_string(sentinel).await.unwrap(),
+                "original"
+            );
+        }
+    }
 }
 
 async fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> anyhow::Result<()> {
