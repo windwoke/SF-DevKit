@@ -125,18 +125,6 @@ pub async fn enable_trace(
 }
 
 #[tauri::command]
-pub async fn renew_trace(
-    state: State<'_, DbState>,
-    org_id: String,
-    trace_flag_id: String,
-    duration_minutes: u32,
-) -> Result<String, String> {
-    service::renew_trace(&state.0, &org_id, &trace_flag_id, duration_minutes)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub async fn disable_trace(
     state: State<'_, DbState>,
     org_id: String,

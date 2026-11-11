@@ -83,7 +83,6 @@ pub fn run() {
             commands::log_viewer::search_apex_classes,
             commands::log_viewer::ensure_debug_level,
             commands::log_viewer::enable_trace,
-            commands::log_viewer::renew_trace,
             commands::log_viewer::disable_trace,
             commands::log_viewer::pick_log_output_directory,
             commands::apex::run_apex,

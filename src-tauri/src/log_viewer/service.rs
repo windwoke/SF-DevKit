@@ -453,40 +453,6 @@ pub async fn enable_trace(
     })
 }
 
-pub async fn renew_trace(
-    pool: &SqlitePool,
-    org_id: &str,
-    trace_flag_id: &str,
-    duration_minutes: u32,
-) -> anyhow::Result<String> {
-    let session = get_org_session(org_id).await?;
-    let client = Client::new();
-    let new_expires = (Utc::now() + Duration::minutes(duration_minutes as i64)).to_rfc3339();
-    let url = format!(
-        "{}/services/data/v60.0/tooling/sobjects/TraceFlag/{}",
-        session.instance_url, trace_flag_id
-    );
-    let resp = client
-        .patch(url)
-        .bearer_auth(&session.access_token)
-        .json(&serde_json::json!({ "ExpirationDate": new_expires }))
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        anyhow::bail!("续期 TraceFlag 失败");
-    }
-
-    let _ = sqlx::query(
-        "UPDATE trace_targets SET expires_at = ?1, is_active = 1 WHERE trace_flag_id = ?2",
-    )
-    .bind(&new_expires)
-    .bind(trace_flag_id)
-    .execute(pool)
-    .await;
-
-    Ok(new_expires)
-}
-
 pub async fn disable_trace(
     pool: &SqlitePool,
     org_id: &str,

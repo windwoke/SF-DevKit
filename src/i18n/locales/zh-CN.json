@@ -232,7 +232,7 @@
       "presetStandard": "标准日志",
       "presetVerbose": "详细日志",
       "durationTitle": "追踪时长",
-      "duration30": "追踪 30 分钟",
+      "duration2h": "追踪 2 小时",
       "duration1d": "追踪 1 天",
       "feedbackWorking": "处理中，请稍候…",
       "stopTraceAria": "停止追踪 {{label}}"

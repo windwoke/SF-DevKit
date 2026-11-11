@@ -109,9 +109,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     addTarget,
     updateTarget,
     removeTarget,
-    startRenewTimer,
-    stopRenewTimer,
-    ensureRenewTimers,
+    expireTraceTargets,
     downloadConfig,
     setDownloadConfig,
   } = useLogStore();
@@ -178,9 +176,17 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
   }, [orgId]);
 
   useEffect(() => {
-    if (!orgId) return;
-    ensureRenewTimers(orgId);
-  }, [orgId, scopedTargets, ensureRenewTimers]);
+    // Expiration only updates local UI state, including after sleep or restart.
+    // Extending a trace requires the user to enable it again.
+    expireTraceTargets();
+    const nextExpiry = Math.min(...targets
+      .filter((target) => target.isActive && target.expiresAt)
+      .map((target) => Date.parse(target.expiresAt!))
+      .filter(Number.isFinite));
+    if (!Number.isFinite(nextExpiry)) return;
+    const timer = setTimeout(() => expireTraceTargets(), Math.min(2_147_483_647, Math.max(0, nextExpiry - Date.now())));
+    return () => clearTimeout(timer);
+  }, [targets, expireTraceTargets]);
 
   const enableTraceFor = async (
     target: Omit<TraceTarget, "traceFlagId" | "expiresAt" | "isActive">,
@@ -206,7 +212,6 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
       expiresAt: active.expires_at,
       isActive: true,
     });
-    startRenewTimer(orgId, target.id);
     onRefresh();
   };
 
@@ -228,7 +233,6 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
     await runTraceAction("self", async () => {
       if (selfTarget?.traceFlagId) {
         await invoke("disable_trace", { orgId, traceFlagId: selfTarget.traceFlagId });
-        stopRenewTimer(selfTarget.id);
         removeTarget(selfTarget.id);
         return;
       }
@@ -481,7 +485,6 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
           // Remote trace may already expire/deleted; always clear local state.
         }
       }
-      stopRenewTimer(target.id);
       removeTarget(target.id);
     });
   };
@@ -587,7 +590,7 @@ function TraceBar({ orgId, onRefresh }: { orgId: string | null; onRefresh: () =>
           onChange={(e) => setDownloadConfig({ durationMinutes: Number(e.target.value) })}
           title={t("logViewer.trace.durationTitle")}
         >
-          <option value={30}>{t("logViewer.trace.duration30")}</option>
+          <option value={120}>{t("logViewer.trace.duration2h")}</option>
           <option value={1440}>{t("logViewer.trace.duration1d")}</option>
         </select>
 

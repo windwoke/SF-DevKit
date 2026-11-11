@@ -236,7 +236,7 @@
       "presetStandard": "Standard",
       "presetVerbose": "Verbose",
       "durationTitle": "Trace duration",
-      "duration30": "30 minutes",
+      "duration2h": "2 hours",
       "duration1d": "1 day",
       "feedbackWorking": "Working, please wait…",
       "stopTraceAria": "Stop tracing {{label}}"

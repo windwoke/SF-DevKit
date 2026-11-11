@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -34,22 +33,18 @@ interface LogViewerState {
   setDownloadConfig: (patch: Partial<DownloadConfig>) => void;
   setUserFilter: (value: string) => void;
   setSelectedLogId: (value: string | null) => void;
-  startRenewTimer: (orgId: string, targetId: string) => void;
-  stopRenewTimer: (targetId: string) => void;
-  ensureRenewTimers: (orgId: string) => void;
+  expireTraceTargets: (now?: number) => void;
 }
-
-const renewTimers = new Map<string, ReturnType<typeof setInterval>>();
 
 export const useLogStore = create<LogViewerState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       targets: [],
       downloadConfig: {
         outputDir: "",
         autoOpenVscode: true,
         preset: "standard",
-        durationMinutes: 30,
+        durationMinutes: 120,
       },
       userFilter: "",
       selectedLogId: null,
@@ -60,14 +55,8 @@ export const useLogStore = create<LogViewerState>()(
             { ...target, traceFlagId: null, expiresAt: null, isActive: false },
           ],
         })),
-      removeTarget: (id) => {
-        const timer = renewTimers.get(id);
-        if (timer) {
-          clearInterval(timer);
-          renewTimers.delete(id);
-        }
-        set((state) => ({ targets: state.targets.filter((it) => it.id !== id) }));
-      },
+      removeTarget: (id) =>
+        set((state) => ({ targets: state.targets.filter((it) => it.id !== id) })),
       updateTarget: (id, patch) =>
         set((state) => ({
           targets: state.targets.map((it) => (it.id === id ? { ...it, ...patch } : it)),
@@ -78,84 +67,27 @@ export const useLogStore = create<LogViewerState>()(
         })),
       setUserFilter: (value) => set({ userFilter: value }),
       setSelectedLogId: (value) => set({ selectedLogId: value }),
-      startRenewTimer: (orgId, targetId) => {
-        const old = renewTimers.get(targetId);
-        if (old) clearInterval(old);
-        const timer = setInterval(async () => {
-          const target = get().targets.find((it) => it.id === targetId);
-          if (!target?.traceFlagId || !target.expiresAt) return;
-          const remainSec = (new Date(target.expiresAt).getTime() - Date.now()) / 1000;
-          if (remainSec > 120) return;
-          try {
-            const newExpires = await invoke<string>("renew_trace", {
-              orgId,
-              traceFlagId: target.traceFlagId,
-              durationMinutes: get().downloadConfig.durationMinutes,
-            });
-            get().updateTarget(targetId, { expiresAt: newExpires, isActive: true });
-          } catch {
-            get().updateTarget(targetId, { isActive: false, traceFlagId: null, expiresAt: null });
-          }
-        }, 30_000);
-        renewTimers.set(targetId, timer);
-      },
-      stopRenewTimer: (targetId) => {
-        const timer = renewTimers.get(targetId);
-        if (!timer) return;
-        clearInterval(timer);
-        renewTimers.delete(targetId);
-      },
-      ensureRenewTimers: (orgId) => {
-        const state = get();
-        const activeTargetIds = new Set<string>();
-
-        for (const target of state.targets) {
-          const belongsToOrg = (target.orgId ?? orgId) === orgId;
-          if (!belongsToOrg) {
-            const timer = renewTimers.get(target.id);
-            if (timer) {
-              clearInterval(timer);
-              renewTimers.delete(target.id);
-            }
-            continue;
-          }
-
-          if (!target.isActive || !target.traceFlagId || !target.expiresAt) {
-            const timer = renewTimers.get(target.id);
-            if (timer) {
-              clearInterval(timer);
-              renewTimers.delete(target.id);
-            }
-            continue;
-          }
-
-          const expiresAtMs = new Date(target.expiresAt).getTime();
-          if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
-            get().updateTarget(target.id, { isActive: false, traceFlagId: null, expiresAt: null });
-            const timer = renewTimers.get(target.id);
-            if (timer) {
-              clearInterval(timer);
-              renewTimers.delete(target.id);
-            }
-            continue;
-          }
-
-          activeTargetIds.add(target.id);
-          if (!renewTimers.has(target.id)) {
-            get().startRenewTimer(orgId, target.id);
-          }
-        }
-
-        for (const [targetId, timer] of renewTimers.entries()) {
-          if (!activeTargetIds.has(targetId)) {
-            clearInterval(timer);
-            renewTimers.delete(targetId);
-          }
-        }
-      },
+      expireTraceTargets: (now = Date.now()) =>
+        set((state) => {
+          const targets = state.targets.map((target) => {
+            if (!target.isActive) return target;
+            const expiresAt = target.expiresAt ? Date.parse(target.expiresAt) : Number.NaN;
+            if (target.traceFlagId && Number.isFinite(expiresAt) && expiresAt > now) return target;
+            return { ...target, isActive: false, traceFlagId: null, expiresAt: null };
+          });
+          return targets.some((target, index) => target !== state.targets[index]) ? { targets } : state;
+        }),
     }),
     {
       name: "log-viewer-store",
+      version: 1,
+      migrate: (persistedState) => {
+        const state = persistedState as Pick<LogViewerState, "targets" | "downloadConfig">;
+        if (state.downloadConfig?.durationMinutes === 30) {
+          return { ...state, downloadConfig: { ...state.downloadConfig, durationMinutes: 120 } };
+        }
+        return state;
+      },
       partialize: (state) => ({
         targets: state.targets,
         downloadConfig: state.downloadConfig,

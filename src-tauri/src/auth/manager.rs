@@ -204,27 +204,6 @@ async fn cli_auth_methods() -> Option<HashMap<String, String>> {
     }
 }
 
-/// This CLI command only reads local credentials; opening the list does not
-/// need a network connection to identify how each account was authorized.
-pub async fn refresh_auth_methods(pool: &SqlitePool) -> anyhow::Result<()> {
-    let Some(methods) = cli_auth_methods().await else {
-        return Ok(());
-    };
-    let mut tx = pool.begin().await?;
-    sqlx::query("UPDATE org_auth SET auth_method = 'unknown'")
-        .execute(&mut *tx)
-        .await?;
-    for (username, method) in methods {
-        sqlx::query("UPDATE org_auth SET auth_method = ?1 WHERE id = ?2")
-            .bind(method)
-            .bind(username)
-            .execute(&mut *tx)
-            .await?;
-    }
-    tx.commit().await?;
-    Ok(())
-}
-
 fn parse_auth_methods(json: &serde_json::Value) -> Option<HashMap<String, String>> {
     if json["status"].as_i64() != Some(0) {
         return None;

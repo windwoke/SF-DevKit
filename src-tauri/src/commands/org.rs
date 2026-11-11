@@ -20,9 +20,8 @@ pub async fn sync_orgs(state: State<'_, DbState>, app: AppHandle) -> Result<Vec<
 
 #[tauri::command]
 pub async fn list_orgs(state: State<'_, DbState>) -> Result<Vec<OrgAuth>, String> {
-    manager::refresh_auth_methods(&state.0)
-        .await
-        .map_err(|e| e.to_string())?;
+    // Ordinary list reads stay local. CLI discovery belongs to the explicit
+    // sync_orgs action so startup and UI updates never probe authorization.
     manager::list_orgs(&state.0)
         .await
         .map_err(|e| e.to_string())
